@@ -28,6 +28,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { cn } from "@/lib/utils"
+import { dataUriToFile, validateAvatarFile } from "@/lib/avatar"
 
 type AvatarStyle = {
   name: string
@@ -57,68 +58,112 @@ function getInitials(name: string) {
 type AvatarPickerProps = {
   value?: string
   name: string
-  onChange: (avatar: string) => void
+  onChange: (selection: AvatarSelection) => void
+}
+
+export type AvatarSelection = {
+  file: File
+  previewUrl: string
 }
 
 export function AvatarPicker({ value, name, onChange }: AvatarPickerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+
+    const validationError = validateAvatarFile(file)
+    if (validationError) {
+      setError(validationError)
+      e.target.value = ""
+      return
+    }
+
     const reader = new FileReader()
-    reader.onload = () => onChange(reader.result as string)
+    reader.onload = () => {
+      setError(null)
+      onChange({ file, previewUrl: reader.result as string })
+    }
     reader.readAsDataURL(file)
   }
 
+  const handlePresetSelect = async (dataUri: string, filename: string) => {
+    try {
+      const file = await dataUriToFile(dataUri, filename)
+      const validationError = validateAvatarFile(file)
+      if (validationError) {
+        setError(validationError)
+        return
+      }
+
+      setError(null)
+      onChange({ file, previewUrl: dataUri })
+      setSheetOpen(false)
+    } catch {
+      setError("Could not prepare the preset avatar. Please try again.")
+      setSheetOpen(false)
+    }
+  }
+
   return (
-    <div className="flex items-center gap-4">
-      <Avatar size="lg" className="size-20">
-        {value && (
-          <AvatarImage src={value} alt={name} className="object-contain" />
-        )}
-        <AvatarFallback className="text-2xl">
-          {getInitials(name || "?")}
-        </AvatarFallback>
-      </Avatar>
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-4">
+        <Avatar size="lg" className="size-20">
+          {value && (
+            <AvatarImage src={value} alt={name} className="object-contain" />
+          )}
+          <AvatarFallback className="text-2xl">
+            {getInitials(name || "?")}
+          </AvatarFallback>
+        </Avatar>
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={handleFileChange}
-      />
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml"
+          className="hidden"
+          onChange={handleFileChange}
+        />
 
-      <div className="flex flex-row gap-2">
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={() => setSheetOpen(true)}
-        >
-          Choose preset
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <HugeiconsIcon icon={Upload04Icon} strokeWidth={2} className="size-4" />
-          Upload image
-        </Button>
+        <div className="flex flex-row gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => setSheetOpen(true)}
+          >
+            Choose preset
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <HugeiconsIcon
+              icon={Upload04Icon}
+              strokeWidth={2}
+              className="size-4"
+            />
+            Upload image
+          </Button>
+        </div>
       </div>
+
+      {error && (
+        <p className="text-sm text-destructive" role="alert">
+          {error}
+        </p>
+      )}
 
       <PresetSheet
         open={sheetOpen}
         onOpenChange={setSheetOpen}
         value={value}
-        onSelect={(v) => {
-          onChange(v)
-          setSheetOpen(false)
-        }}
+        onSelect={handlePresetSelect}
       />
     </div>
   )
@@ -133,7 +178,7 @@ function PresetSheet({
   open: boolean
   onOpenChange: (open: boolean) => void
   value?: string
-  onSelect: (avatar: string) => void
+  onSelect: (avatar: string, filename: string) => Promise<void>
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -148,7 +193,7 @@ function PresetSheet({
         <div className="flex flex-col gap-6 overflow-y-auto px-6 pb-6">
           {AVATAR_STYLES.map((entry) => (
             <div key={entry.name} className="flex flex-col gap-2">
-              <span className="text-muted-foreground text-xs font-medium">
+              <span className="text-xs font-medium text-muted-foreground">
                 {entry.name}
               </span>
               <div className="grid grid-cols-4 gap-2">
@@ -162,7 +207,12 @@ function PresetSheet({
                     <button
                       key={`${entry.name}-${seed}`}
                       type="button"
-                      onClick={() => onSelect(dataUri)}
+                      onClick={() =>
+                        void onSelect(
+                          dataUri,
+                          `avatar-${entry.name.toLowerCase().replaceAll(" ", "-")}-${seed.toLowerCase()}.svg`
+                        )
+                      }
                       className={cn(
                         "flex items-center justify-center rounded-lg border-2 p-1 transition-all hover:bg-muted/50",
                         selected
