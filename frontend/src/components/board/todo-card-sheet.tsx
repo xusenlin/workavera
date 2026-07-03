@@ -3,8 +3,19 @@ import { useEffect, useState } from "react"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Delete02Icon } from "@hugeicons/core-free-icons"
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
+import { DatePicker } from "@/components/ui/date-picker"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -76,6 +87,7 @@ export function TodoCardSheet({
   const members = useBoardStore((s) => s.members)
 
   const [form, setForm] = useState<FormState>(emptyForm)
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   useEffect(() => {
     if (open) {
@@ -236,11 +248,9 @@ export function TodoCardSheet({
           {/* Due date */}
           <div className="flex flex-col gap-2">
             <Label htmlFor="todo-due">Due date</Label>
-            <Input
-              id="todo-due"
-              type="date"
+            <DatePicker
               value={form.dueDate}
-              onChange={(e) => setField("dueDate", e.target.value)}
+              onChange={(v) => setField("dueDate", v)}
             />
           </div>
 
@@ -314,7 +324,7 @@ export function TodoCardSheet({
             <Button
               variant="ghost"
               className="text-destructive hover:text-destructive"
-              onClick={handleDelete}
+              onClick={() => setConfirmDelete(true)}
             >
               <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
               Delete
@@ -332,6 +342,24 @@ export function TodoCardSheet({
           </div>
         </SheetFooter>
       </SheetContent>
+
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete task?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove "{todo?.title}" from the board. This
+              action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={handleDelete}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Sheet>
   )
 }

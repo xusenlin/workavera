@@ -12,36 +12,41 @@ tasks:
       - task --list
     silent: true
 
-  dev:
-    desc: 启动 PocketBase 开发服务器
-    deps:
-      - frontend:build
+  dev:ui:
+    desc: 启动前端开发服务器
+    dir: frontend
+    cmds:
+      - pnpm dev
+
+  dev:go:
+    desc: 启动 Go 后端开发服务器
     cmds:
       - go run -ldflags="-X main.version={{.VERSION}}" . serve
 
-  build:
-    desc: 构建应用
-    cmds:
-      - go build -trimpath -ldflags="-s -w -X main.version={{.VERSION}}" -o workavera .
-
-  docker:build:
-    desc: 构建带版本标签的 Docker 镜像
-    deps:
-      - frontend:build
-    cmds:
-      - docker build --build-arg VERSION={{.VERSION}} -t {{.IMAGE}}:{{.VERSION}} -t {{.IMAGE}}:latest .
-
-  frontend:build:
+  build:ui:
     desc: 在宿主机上构建前端资源
     dir: frontend
     cmds:
       - pnpm build
 
-  frontend:dev:
-    desc: 启动前端开发服务器
-    dir: frontend
+  build:go:
+    desc: 构建 Go 二进制
     cmds:
-      - pnpm dev
+      - go build -trimpath -ldflags="-s -w -X main.version={{.VERSION}}" -o workavera .
+
+  run:
+    desc: 编译并运行 Go 二进制
+    deps:
+      - build:go
+    cmds:
+      - ./workavera serve
+
+  build:docker:
+    desc: 打包前端并构建本地 Docker 镜像
+    deps:
+      - build:ui
+    cmds:
+      - docker build --build-arg VERSION={{.VERSION}}  -t {{.IMAGE}}:latest .
 
   test:
     desc: 运行测试
