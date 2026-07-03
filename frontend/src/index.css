@@ -128,3 +128,26 @@
     @apply font-sans;
     }
 }
+
+.logo .eye {
+  animation-duration: 4s;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  animation-name: marewood-running;
+}
+
+.logo:hover .eye {
+  fill: #4caf50;
+}
+
+@keyframes marewood-running {
+  0% {
+    fill: #4caf50;
+  }
+  50% {
+    fill: #ffeb3b;
+  }
+  100% {
+    fill: #e91e63;
+  }
+}

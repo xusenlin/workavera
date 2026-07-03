@@ -2,6 +2,8 @@
 
 基于 Go 和 PocketBase 的个人助理应用。
 
+Assistant App is an AI-native assistant platform built for modern independent professionals and small businesses. It deeply integrates AI into everyday workflows to help people organize information, automate repetitive work, make better decisions, and turn ideas into action—all from one focused workspace.
+
 ## 环境要求
 
 - Go 1.25+
