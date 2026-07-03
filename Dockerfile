@@ -35,7 +35,7 @@ RUN apk add --no-cache ca-certificates tzdata \
 WORKDIR /app
 
 COPY --chown=assistant:assistant --from=builder /out/assistant-app ./assistant-app
-COPY --chown=assistant:assistant frontend/dist ./dist
+COPY --chown=assistant:assistant frontend/dist ./frontend/dist
 
 USER assistant
 

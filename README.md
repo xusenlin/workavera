@@ -50,7 +50,7 @@ docker run --rm \
   ghcr.io/xusenlin/assistant-app:0.0.1
 ```
 
-`task docker:build` 每次都会先在宿主机打包前端资源。容器内的二进制位于 `/app/assistant-app`，前端产物位于同一工作目录下的 `/app/dist`，PocketBase 直接将其作为首页。容器使用非 root 用户运行，PocketBase 数据由 `assistant-app-data` 卷持久化。
+`task docker:build` 每次都会先在宿主机打包前端资源。容器内的二进制位于 `/app/assistant-app`，前端产物位于 `/app/frontend/dist`；本地与容器中的 PocketBase 都使用 `frontend/dist` 作为首页。容器使用非 root 用户运行，PocketBase 数据由 `assistant-app-data` 卷持久化。
 
 镜像会同时生成 `ghcr.io/xusenlin/assistant-app:0.0.1` 和 `ghcr.io/xusenlin/assistant-app:latest` 标签，并写入 OCI 版本标签与 `APP_VERSION` 环境变量。
 

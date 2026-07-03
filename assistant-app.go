@@ -24,7 +24,7 @@ func main() {
 	})
 
 	app.OnServe().BindFunc(func(event *core.ServeEvent) error {
-		event.Router.GET("/{path...}", apis.Static(os.DirFS("./dist"), true))
+		event.Router.GET("/{path...}", apis.Static(os.DirFS("./frontend/dist"), true))
 
 		return event.Next()
 	})
