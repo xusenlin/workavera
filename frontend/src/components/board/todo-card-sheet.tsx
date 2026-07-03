@@ -264,11 +264,12 @@ export function TodoCardSheet({
                     style={selected ? { backgroundColor: label.color } : undefined}
                   >
                     <span
-                      className={cn(
-                        "size-2 rounded-full",
-                        !selected && ""
-                      )}
-                      style={!selected ? { backgroundColor: label.color } : undefined}
+                      className="size-2 rounded-full"
+                      style={{
+                        backgroundColor: selected
+                          ? "rgba(255,255,255,0.5)"
+                          : label.color,
+                      }}
                     />
                     {label.name}
                   </button>

@@ -1,3 +1,5 @@
+import { useState } from "react"
+
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   ChevronDownIcon,
@@ -7,6 +9,16 @@ import {
   MoreHorizontalIcon,
 } from "@hugeicons/core-free-icons"
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -33,6 +45,7 @@ export function ProjectColumn({
 }: ProjectColumnProps) {
   const toggleCollapse = useBoardStore((s) => s.toggleProjectCollapse)
   const removeProject = useBoardStore((s) => s.removeProject)
+  const [deleteOpen, setDeleteOpen] = useState(false)
 
   const projectTodos = todos.filter((t) => t.projectId === project.id)
 
@@ -68,7 +81,7 @@ export function ProjectColumn({
             <DropdownMenuContent align="end">
               <DropdownMenuItem
                 variant="destructive"
-                onClick={() => removeProject(project.id)}
+                onClick={() => setDeleteOpen(true)}
               >
                 <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
                 Delete project
@@ -98,6 +111,30 @@ export function ProjectColumn({
           />
         ))}
       </div>
+
+      {/* Delete confirmation */}
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete project?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete <strong>{project.name}</strong> and
+              all {projectTodos.length} task
+              {projectTodos.length === 1 ? "" : "s"} inside it. This action
+              cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => removeProject(project.id)}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
