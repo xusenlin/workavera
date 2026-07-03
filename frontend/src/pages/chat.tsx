@@ -1,12 +1,5 @@
-import { Chat01Icon } from "@hugeicons/core-free-icons"
-import { PlaceholderPage } from "./placeholder"
+import { ChatLayout } from "@/components/chat/chat-layout"
 
 export function ChatPage() {
-  return (
-    <PlaceholderPage
-      title="Chat"
-      description="Converse with your Workavera assistant. Ask questions and get things done."
-      icon={Chat01Icon}
-    />
-  )
+  return <ChatLayout />
 }
