@@ -11,7 +11,6 @@ import {
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Separator } from "@/components/ui/separator"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Logo } from "@/components/logo"
 import { useAuthStore } from "@/store/auth"
@@ -20,8 +19,8 @@ export function LoginPage() {
   const navigate = useNavigate()
   const login = useAuthStore((s) => s.login)
 
-  const [email, setEmail] = useState("demo@workavera.com")
-  const [password, setPassword] = useState("password")
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -58,7 +57,7 @@ export function LoginPage() {
           <h1 className="text-2xl font-semibold tracking-tight">
             Welcome back
           </h1>
-          <p className="text-muted-foreground mt-1.5 text-sm">
+          <p className="mt-1.5 text-sm text-muted-foreground">
             Sign in to your personal workspace
           </p>
         </div>
@@ -76,7 +75,7 @@ export function LoginPage() {
                 <HugeiconsIcon
                   icon={Mail02Icon}
                   strokeWidth={2}
-                  className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2"
+                  className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
                 />
                 <Input
                   id="email"
@@ -92,22 +91,14 @@ export function LoginPage() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <label htmlFor="password" className="text-sm font-medium">
-                  Password
-                </label>
-                <button
-                  type="button"
-                  className="text-muted-foreground hover:text-foreground text-xs transition-colors"
-                >
-                  Forgot?
-                </button>
-              </div>
+              <label htmlFor="password" className="text-sm font-medium">
+                Password
+              </label>
               <div className="relative">
                 <HugeiconsIcon
                   icon={LockKeyIcon}
                   strokeWidth={2}
-                  className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2"
+                  className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
                 />
                 <Input
                   id="password"
@@ -122,7 +113,7 @@ export function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2 transition-colors"
+                  className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   <HugeiconsIcon
@@ -135,7 +126,7 @@ export function LoginPage() {
             </div>
 
             {error && (
-              <p className="text-destructive text-sm" role="alert">
+              <p className="text-sm text-destructive" role="alert">
                 {error}
               </p>
             )}
@@ -143,34 +134,12 @@ export function LoginPage() {
             <Button type="submit" className="mt-1 w-full" disabled={loading}>
               {loading ? "Signing in..." : "Sign in"}
             </Button>
-          </div>
 
-          <div className="my-5 flex items-center gap-3">
-            <Separator className="flex-1" />
-            <span className="text-muted-foreground text-xs">Demo</span>
-            <Separator className="flex-1" />
-          </div>
-
-          <div className="bg-muted/60 rounded-2xl px-3.5 py-2.5 text-xs text-muted-foreground">
-            <p className="flex items-center justify-between">
-              <span>Email</span>
-              <span className="text-foreground/80 font-medium">
-                demo@workavera.com
-              </span>
-            </p>
-            <p className="mt-1 flex items-center justify-between">
-              <span>Password</span>
-              <span className="text-foreground/80 font-medium">password</span>
+            <p className="text-center text-xs text-muted-foreground">
+              Accounts are created by your workspace administrator.
             </p>
           </div>
         </form>
-
-        <p className="text-muted-foreground mt-6 text-center text-sm">
-          Don&apos;t have an account?{" "}
-          <a href="#" className="text-foreground font-medium hover:underline">
-            Sign up
-          </a>
-        </p>
       </div>
     </div>
   )

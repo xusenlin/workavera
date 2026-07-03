@@ -4,7 +4,10 @@ import { useAuthStore } from "@/store/auth"
 
 export function ProtectedRoute() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const initialized = useAuthStore((s) => s.initialized)
   const location = useLocation()
+
+  if (!initialized) return null
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace state={{ from: location }} />
