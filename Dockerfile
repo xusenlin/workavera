@@ -15,29 +15,30 @@ RUN test -n "${VERSION}" \
     && CGO_ENABLED=0 GOOS=linux go build \
     -trimpath \
     -ldflags="-s -w -X main.version=${VERSION}" \
-    -o /out/assistant-app .
+    -o /out/workavera .
 
 FROM alpine:3.22
 
 ARG VERSION
 
-LABEL org.opencontainers.image.title="assistant-app" \
-      org.opencontainers.image.version="${VERSION}"
+LABEL org.opencontainers.image.title="workavera" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.source="https://github.com/xusenlin/workavera"
 
 ENV APP_VERSION="${VERSION}"
 
 RUN apk add --no-cache ca-certificates tzdata \
-    && addgroup -S assistant \
-    && adduser -S -G assistant assistant \
+    && addgroup -S workavera \
+    && adduser -S -G workavera workavera \
     && mkdir -p /app/pb_data \
-    && chown assistant:assistant /app/pb_data
+    && chown workavera:workavera /app/pb_data
 
 WORKDIR /app
 
-COPY --chown=assistant:assistant --from=builder /out/assistant-app ./assistant-app
-COPY --chown=assistant:assistant frontend/dist ./frontend/dist
+COPY --chown=workavera:workavera --from=builder /out/workavera ./workavera
+COPY --chown=workavera:workavera frontend/dist ./frontend/dist
 
-USER assistant
+USER workavera
 
 EXPOSE 8090
 VOLUME ["/app/pb_data"]
@@ -45,5 +46,5 @@ VOLUME ["/app/pb_data"]
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD wget -q -O /dev/null http://127.0.0.1:8090/api/health || exit 1
 
-ENTRYPOINT ["./assistant-app"]
+ENTRYPOINT ["./workavera"]
 CMD ["serve", "--http=0.0.0.0:8090"]

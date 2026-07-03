@@ -3,7 +3,7 @@
 .DS_Store
 .env
 
-assistant-app
+workavera
 pb_data
 coverage.out
 *.test

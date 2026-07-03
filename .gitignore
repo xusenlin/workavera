@@ -17,8 +17,8 @@ frontend/*.log
 
 # PocketBase runtime data and generated binaries
 pb_data/
-assistant-app
-assistant-app.exe
+workavera
+workavera.exe
 bin/
 dist/
 

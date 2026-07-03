@@ -10,13 +10,14 @@ import (
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
 	"github.com/pocketbase/pocketbase/tools/osutils"
 
-	_ "github.com/xusenlin/assistant-app/migrations"
+	_ "github.com/xusenlin/workavera/migrations"
 )
 
 var version = "dev"
 
 func main() {
 	app := pocketbase.New()
+	app.RootCmd.Use = "workavera"
 	app.RootCmd.Version = version
 
 	migratecmd.MustRegister(app, app.RootCmd, migratecmd.Config{

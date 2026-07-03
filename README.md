@@ -1,8 +1,8 @@
-# Assistant App
+# Workavera
 
 基于 Go 和 PocketBase 的个人助理应用。
 
-Assistant App is an AI-native assistant platform built for modern independent professionals and small businesses. It deeply integrates AI into everyday workflows to help people organize information, automate repetitive work, make better decisions, and turn ideas into action—all from one focused workspace.
+Workavera is an AI-native assistant platform built for modern independent professionals and small businesses. It deeply integrates AI into everyday workflows to help people organize information, automate repetitive work, make better decisions, and turn ideas into action—all from one focused workspace.
 
 ## 环境要求
 
@@ -38,7 +38,7 @@ task test   # 运行测试
 task tidy   # 整理 Go 依赖
 ```
 
-应用版本由根目录的 `VERSION` 文件统一维护。构建后的程序可通过 `./assistant-app --version` 查看版本。
+应用版本由根目录的 `VERSION` 文件统一维护。构建后的程序可通过 `./workavera --version` 查看版本。
 
 PocketBase 的运行数据保存在 `pb_data/`，该目录不会提交到 Git。数据库结构变更会在使用 `go run` 开发时自动生成 Go 迁移文件并保存在 `migrations/`。
 
@@ -48,19 +48,19 @@ PocketBase 的运行数据保存在 `pb_data/`，该目录不会提交到 Git。
 task docker:build
 docker run --rm \
   -p 8090:8090 \
-  -v assistant-app-data:/app/pb_data \
-  ghcr.io/xusenlin/assistant-app:0.0.1
+  -v workavera-data:/app/pb_data \
+  ghcr.io/xusenlin/workavera:0.0.1
 ```
 
-`task docker:build` 每次都会先在宿主机打包前端资源。容器内的二进制位于 `/app/assistant-app`，前端产物位于 `/app/frontend/dist`；本地与容器中的 PocketBase 都使用 `frontend/dist` 作为首页。容器使用非 root 用户运行，PocketBase 数据由 `assistant-app-data` 卷持久化。
+`task docker:build` 每次都会先在宿主机打包前端资源。容器内的二进制位于 `/app/workavera`，前端产物位于 `/app/frontend/dist`；本地与容器中的 PocketBase 都使用 `frontend/dist` 作为首页。容器使用非 root 用户运行，PocketBase 数据由 `workavera-data` 卷持久化。
 
-镜像会同时生成 `ghcr.io/xusenlin/assistant-app:0.0.1` 和 `ghcr.io/xusenlin/assistant-app:latest` 标签，并写入 OCI 版本标签与 `APP_VERSION` 环境变量。
+镜像会同时生成 `ghcr.io/xusenlin/workavera:0.0.1` 和 `ghcr.io/xusenlin/workavera:latest` 标签，并写入 OCI 版本标签与 `APP_VERSION` 环境变量。
 
 ## 项目结构
 
 ```text
 .
-├── assistant-app.go # PocketBase 启动入口与自定义路由
+├── workavera.go     # PocketBase 启动入口与自定义路由
 ├── Dockerfile       # 多阶段容器构建
 ├── VERSION          # 应用版本
 ├── frontend/        # Vite 前端项目，构建产物为 dist/

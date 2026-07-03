@@ -1,4 +1,4 @@
-module github.com/xusenlin/assistant-app
+module github.com/xusenlin/workavera
 
 go 1.25.0
 

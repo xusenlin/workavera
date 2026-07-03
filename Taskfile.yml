@@ -1,7 +1,7 @@
 version: "3"
 
 vars:
-  IMAGE: ghcr.io/xusenlin/assistant-app
+  IMAGE: ghcr.io/xusenlin/workavera
   VERSION:
     sh: cat VERSION
 
@@ -22,7 +22,7 @@ tasks:
   build:
     desc: 构建应用
     cmds:
-      - go build -trimpath -ldflags="-s -w -X main.version={{.VERSION}}" -o assistant-app .
+      - go build -trimpath -ldflags="-s -w -X main.version={{.VERSION}}" -o workavera .
 
   docker:build:
     desc: 构建带版本标签的 Docker 镜像
