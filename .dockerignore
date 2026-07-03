@@ -1,0 +1,14 @@
+.git
+.gitignore
+.DS_Store
+.env
+
+assistant-app
+pb_data
+coverage.out
+*.test
+
+# The frontend is built on the host; only its dist output enters Docker.
+frontend/**
+!frontend/dist/
+!frontend/dist/**

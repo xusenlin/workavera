@@ -1,0 +1,27 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+.idea/
+.vscode/
+
+# Frontend dependencies and generated files
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+frontend/.vite/
+frontend/*.tsbuildinfo
+frontend/*.local
+frontend/logs/
+frontend/*.log
+
+# PocketBase runtime data and generated binaries
+pb_data/
+assistant-app
+assistant-app.exe
+bin/
+dist/
+
+# Test and coverage output
+coverage.out
+*.test

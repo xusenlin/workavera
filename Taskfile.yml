@@ -1,0 +1,54 @@
+version: "3"
+
+vars:
+  IMAGE: ghcr.io/xusenlin/assistant-app
+  VERSION:
+    sh: cat VERSION
+
+tasks:
+  default:
+    desc: 显示可用任务
+    cmds:
+      - task --list
+    silent: true
+
+  dev:
+    desc: 启动 PocketBase 开发服务器
+    deps:
+      - frontend:build
+    cmds:
+      - go run -ldflags="-X main.version={{.VERSION}}" . serve
+
+  build:
+    desc: 构建应用
+    cmds:
+      - go build -trimpath -ldflags="-s -w -X main.version={{.VERSION}}" -o assistant-app .
+
+  docker:build:
+    desc: 构建带版本标签的 Docker 镜像
+    deps:
+      - frontend:build
+    cmds:
+      - docker build --build-arg VERSION={{.VERSION}} -t {{.IMAGE}}:{{.VERSION}} -t {{.IMAGE}}:latest .
+
+  frontend:build:
+    desc: 在宿主机上构建前端资源
+    dir: frontend
+    cmds:
+      - pnpm build
+
+  frontend:dev:
+    desc: 启动前端开发服务器
+    dir: frontend
+    cmds:
+      - pnpm dev
+
+  test:
+    desc: 运行测试
+    cmds:
+      - go test ./...
+
+  tidy:
+    desc: 整理 Go 模块依赖
+    cmds:
+      - go mod tidy
