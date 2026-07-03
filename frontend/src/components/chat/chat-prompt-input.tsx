@@ -8,7 +8,13 @@ import {
   PromptInputBody,
   PromptInputFooter,
   PromptInputTools,
+  PromptInputSelect,
+  PromptInputSelectTrigger,
+  PromptInputSelectValue,
+  PromptInputSelectContent,
+  PromptInputSelectItem,
 } from "@/components/ai-elements/prompt-input"
+import { CHAT_MODELS } from "@/lib/chat-utils"
 import { useChatStore } from "@/store/chat"
 import { BlockType } from "@/types/chat"
 
@@ -18,6 +24,10 @@ export function ChatPromptInput({
   conversationId: string
 }) {
   const addMessage = useChatStore((s) => s.addMessage)
+  const setConversationModel = useChatStore((s) => s.setConversationModel)
+  const modelId = useChatStore(
+    (s) => s.conversations.find((c) => c.id === conversationId)?.modelId ?? ""
+  )
   const [text, setText] = useState("")
 
   const handleSubmit = (message: PromptInputMessage) => {
@@ -64,22 +74,36 @@ export function ChatPromptInput({
   }
 
   return (
-    <div className="border-t p-3">
-      <div className="mx-auto max-w-3xl">
-        <PromptInput onSubmit={handleSubmit} className="rounded-xl">
-          <PromptInputBody>
-            <PromptInputTextarea
-              placeholder="Send a message..."
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-            />
-          </PromptInputBody>
-          <PromptInputFooter>
-            <PromptInputTools />
-            <PromptInputSubmit disabled={!text.trim()} status="ready" />
-          </PromptInputFooter>
-        </PromptInput>
-      </div>
+    <div className="p-3 px-4 md:px-16 lg:px-24">
+      <PromptInput onSubmit={handleSubmit} className="rounded-xl">
+        <PromptInputBody>
+          <PromptInputTextarea
+            placeholder="Send a message..."
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+        </PromptInputBody>
+        <PromptInputFooter>
+          <PromptInputTools>
+            <PromptInputSelect
+              value={modelId}
+              onValueChange={(value) => setConversationModel(conversationId, value)}
+            >
+              <PromptInputSelectTrigger>
+                <PromptInputSelectValue placeholder="Select model" />
+              </PromptInputSelectTrigger>
+              <PromptInputSelectContent>
+                {CHAT_MODELS.map((model) => (
+                  <PromptInputSelectItem key={model.id} value={model.id}>
+                    {model.name}
+                  </PromptInputSelectItem>
+                ))}
+              </PromptInputSelectContent>
+            </PromptInputSelect>
+          </PromptInputTools>
+          <PromptInputSubmit disabled={!text.trim()} status="ready" />
+        </PromptInputFooter>
+      </PromptInput>
     </div>
   )
 }

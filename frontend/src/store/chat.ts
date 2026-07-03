@@ -28,6 +28,7 @@ type ChatState = {
   togglePin: (id: string) => void
   renameConversation: (id: string, title: string) => void
   archiveConversation: (id: string) => void
+  setConversationModel: (id: string, modelId: string) => void
 
   addMessage: (
     conversationId: string,
@@ -118,10 +119,20 @@ export const useChatStore = create<ChatState>()(
           ),
         })),
 
+      setConversationModel: (id, modelId) =>
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c.id === id
+              ? { ...c, modelId, updatedAt: new Date().toISOString() }
+              : c
+          ),
+        })),
+
       addMessage: (conversationId, role, blocks) => {
         const msgId = generateId("msg")
         const nowIso = new Date().toISOString()
         const existing = get().messagesByConversation[conversationId] ?? []
+        const conversation = get().conversations.find((c) => c.id === conversationId)
         const fullBlocks: MessageBlock[] = blocks.map((b, i) => ({
           ...b,
           id: generateId("blk"),
@@ -134,7 +145,7 @@ export const useChatStore = create<ChatState>()(
           id: msgId,
           conversationId,
           role,
-          modelName: role === "assistant" ? "claude-sonnet-4-20250514" : "",
+          modelName: role === "assistant" ? (conversation?.modelId ?? "") : "",
           inputTokens: 0,
           outputTokens: 0,
           createdAt: nowIso,

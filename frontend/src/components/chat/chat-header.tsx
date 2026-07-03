@@ -12,7 +12,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { formatTokenCount } from "@/lib/chat-utils"
+import { formatTokenCount, getModelName } from "@/lib/chat-utils"
 import { useChatStore } from "@/store/chat"
 import type { Conversation } from "@/types/chat"
 
@@ -80,7 +80,7 @@ export function ChatHeader({ conversation }: { conversation: Conversation }) {
                 {formatTokenCount(conversation.outputTokens)} out tokens
               </span>
               <span className="text-muted-foreground">
-                Model: {conversation.modelId}
+                Model: {getModelName(conversation.modelId)}
               </span>
             </div>
           </TooltipContent>
