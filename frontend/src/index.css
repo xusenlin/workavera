@@ -151,3 +151,38 @@
     fill: #e91e63;
   }
 }
+
+/*
+ * Streamdown code block layout overrides
+ *
+ * Default layout: header (language label) and actions (copy/download buttons)
+ * are stacked vertically — the header occupies its own row while the actions
+ * float over the top-right via a sticky wrapper with a negative margin.
+ *
+ * These overrides merge them into a single row: language label on the left,
+ * action buttons on the right, code body below. A two-column grid ensures the
+ * header and actions never overlap, so button clicks are not intercepted.
+ */
+[data-streamdown="code-block"] {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto 1fr;
+}
+
+[data-streamdown="code-block-header"] {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+[data-streamdown="code-block"] > div:has([data-streamdown="code-block-actions"]) {
+  grid-column: 2;
+  grid-row: 1;
+  margin-top: 0;
+  position: static;
+  justify-self: end;
+}
+
+[data-streamdown="code-block-body"] {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
