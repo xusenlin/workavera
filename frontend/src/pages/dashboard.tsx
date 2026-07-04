@@ -3,9 +3,9 @@ import { NavLink } from "react-router"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   Task01Icon,
-  Notebook01Icon,
+  ContactBookIcon,
   Chat01Icon,
-  BloggerIcon,
+  DocumentAttachmentIcon,
   CheckmarkCircle04Icon,
   ArrowUpRight01Icon,
   SparklesIcon,
@@ -38,11 +38,11 @@ const stats: Stat[] = [
     url: "/board",
   },
   {
-    label: "Notes",
+    label: "Contacts",
     value: "48",
     change: "+6 this week",
-    icon: Notebook01Icon,
-    url: "/notes",
+    icon: ContactBookIcon,
+    url: "/contacts",
   },
   {
     label: "Chats",
@@ -52,18 +52,22 @@ const stats: Stat[] = [
     url: "/chat",
   },
   {
-    label: "Blog Posts",
+    label: "Documents",
     value: "9",
     change: "+1 this week",
-    icon: BloggerIcon,
-    url: "/blog",
+    icon: DocumentAttachmentIcon,
+    url: "/docs",
   },
 ]
 
 const recentActivity = [
   { action: "Completed task", target: "Review Q3 roadmap", time: "2h ago" },
-  { action: "Created note", target: "Meeting notes — sync", time: "5h ago" },
-  { action: "Published blog", target: "Getting started with Workavera", time: "1d ago" },
+  { action: "Added contact", target: "Alice Chen — Acme", time: "5h ago" },
+  {
+    action: "Updated document",
+    target: "Getting started with Workavera",
+    time: "1d ago",
+  },
   { action: "Started chat", target: "Trip planning", time: "2d ago" },
 ]
 
@@ -79,7 +83,7 @@ export function DashboardPage() {
         <h1 className="text-2xl font-semibold tracking-tight">
           Hello, {user?.name?.split(" ")[0] ?? "there"} 👋
         </h1>
-        <p className="text-muted-foreground text-sm">
+        <p className="text-sm text-muted-foreground">
           Here&apos;s what&apos;s happening in your workspace today.
         </p>
       </div>
@@ -92,8 +96,12 @@ export function DashboardPage() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardDescription>{stat.label}</CardDescription>
-                  <div className="bg-muted text-muted-foreground flex size-8 items-center justify-center rounded-lg">
-                    <HugeiconsIcon icon={stat.icon} strokeWidth={2} className="size-4" />
+                  <div className="flex size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                    <HugeiconsIcon
+                      icon={stat.icon}
+                      strokeWidth={2}
+                      className="size-4"
+                    />
                   </div>
                 </div>
                 <CardTitle className="text-3xl font-semibold tracking-tight tabular-nums">
@@ -101,7 +109,7 @@ export function DashboardPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-muted-foreground flex items-center gap-1 text-xs">
+                <p className="flex items-center gap-1 text-xs text-muted-foreground">
                   <HugeiconsIcon
                     icon={ArrowUpRight01Icon}
                     strokeWidth={2}
@@ -120,7 +128,9 @@ export function DashboardPage() {
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Recent activity</CardTitle>
-            <CardDescription>Your latest actions across the app</CardDescription>
+            <CardDescription>
+              Your latest actions across the app
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <ul className="flex flex-col gap-1">
@@ -129,7 +139,7 @@ export function DashboardPage() {
                   key={idx}
                   className="flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-muted/50"
                 >
-                  <div className="bg-primary/10 text-primary flex size-8 shrink-0 items-center justify-center rounded-lg">
+                  <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                     <HugeiconsIcon
                       icon={CheckmarkCircle04Icon}
                       strokeWidth={2}
@@ -138,11 +148,13 @@ export function DashboardPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm">
-                      <span className="text-muted-foreground">{item.action}: </span>
+                      <span className="text-muted-foreground">
+                        {item.action}:{" "}
+                      </span>
                       <span className="font-medium">{item.target}</span>
                     </p>
                   </div>
-                  <span className="text-muted-foreground shrink-0 text-xs">
+                  <span className="shrink-0 text-xs text-muted-foreground">
                     {item.time}
                   </span>
                 </li>
@@ -165,19 +177,23 @@ export function DashboardPage() {
                     to={item.url}
                     className="group/quick flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-muted/50"
                   >
-                    <div className="bg-muted text-muted-foreground group-hover/quick:text-foreground flex size-8 items-center justify-center rounded-lg transition-colors">
-                      <HugeiconsIcon icon={item.icon} strokeWidth={2} className="size-4" />
+                    <div className="flex size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground transition-colors group-hover/quick:text-foreground">
+                      <HugeiconsIcon
+                        icon={item.icon}
+                        strokeWidth={2}
+                        className="size-4"
+                      />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium">{item.title}</p>
-                      <p className="text-muted-foreground truncate text-xs">
+                      <p className="truncate text-xs text-muted-foreground">
                         {item.description}
                       </p>
                     </div>
                     <HugeiconsIcon
                       icon={ArrowUpRight01Icon}
                       strokeWidth={2}
-                      className="text-muted-foreground group-hover/quick:text-foreground size-4 transition-colors"
+                      className="size-4 text-muted-foreground transition-colors group-hover/quick:text-foreground"
                     />
                   </NavLink>
                 </li>
@@ -190,13 +206,20 @@ export function DashboardPage() {
       {/* Tip */}
       <Card>
         <CardContent className="flex items-center gap-3 py-4">
-          <div className="bg-primary text-primary-foreground flex size-9 shrink-0 items-center justify-center rounded-lg">
-            <HugeiconsIcon icon={SparklesIcon} strokeWidth={2} className="size-4" />
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <HugeiconsIcon
+              icon={SparklesIcon}
+              strokeWidth={2}
+              className="size-4"
+            />
           </div>
           <div className="flex-1">
-            <p className="text-sm font-medium">Tip: Press ⌘B to toggle the sidebar</p>
-            <p className="text-muted-foreground text-xs">
-              You can also press <kbd className="text-foreground">d</kbd> to switch between light and dark themes.
+            <p className="text-sm font-medium">
+              Tip: Press ⌘B to toggle the sidebar
+            </p>
+            <p className="text-xs text-muted-foreground">
+              You can also press <kbd className="text-foreground">d</kbd> to
+              switch between light and dark themes.
             </p>
           </div>
         </CardContent>

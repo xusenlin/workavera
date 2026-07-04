@@ -1,8 +1,8 @@
 # Workavera
 
-基于 Go 和 PocketBase 的个人助理应用。
+Workavera 是一个可自托管的 AI 团队工作台，让聊天直接变成任务、文档、联系人和可发布内容。
 
-Workavera is an AI-native assistant platform built for modern independent professionals and small businesses. It deeply integrates AI into everyday workflows to help people organize information, automate repetitive work, make better decisions, and turn ideas into action—all from one focused workspace.
+基于 Go 和 PocketBase 构建，免费、开源，并支持自行部署。
 
 ## 环境要求
 

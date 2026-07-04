@@ -4,10 +4,10 @@ import { DashboardLayout } from "@/components/dashboard-layout"
 import { ProtectedRoute } from "@/components/protected-route"
 import { LoginPage } from "@/pages/login"
 import { DashboardPage } from "@/pages/dashboard"
-import { BoardPage } from "@/pages/board"
-import { NotesPage } from "@/pages/notes"
 import { ChatPage } from "@/pages/chat"
-import { BlogPage } from "@/pages/blog"
+import { BoardPage } from "@/pages/board"
+import { DocsPage } from "@/pages/docs"
+import { ContactsPage } from "@/pages/contacts"
 import { CalendarPage } from "@/pages/calendar"
 import { ReadingPage } from "@/pages/reading"
 import { SettingsPage } from "@/pages/settings"
@@ -22,10 +22,10 @@ export function AppRouter() {
         <Route element={<ProtectedRoute />}>
           <Route element={<DashboardLayout />}>
             <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/board" element={<BoardPage />} />
-            <Route path="/notes" element={<NotesPage />} />
             <Route path="/chat" element={<ChatPage />} />
-            <Route path="/blog" element={<BlogPage />} />
+            <Route path="/board" element={<BoardPage />} />
+            <Route path="/docs" element={<DocsPage />} />
+            <Route path="/contacts" element={<ContactsPage />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/reading" element={<ReadingPage />} />
             <Route path="/settings" element={<SettingsPage />} />
