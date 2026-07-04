@@ -1,18 +1,62 @@
 import { create } from "zustand"
-import { persist } from "zustand/middleware"
+import { ClientResponseError, type RecordModel } from "pocketbase"
+
+import { pb } from "@/lib/pocketbase"
 
 export type Priority = "low" | "medium" | "high" | "urgent"
+export type StateCategory = "pending" | "active" | "completed"
+export type ProjectRole = "owner" | "admin" | "member" | "viewer"
 
-export type TodoStatus = "todo" | "in_progress" | "testing" | "done"
+export type TemplateState = {
+  name: string
+  color: string
+  category: StateCategory
+}
+
+export type TemplateLabel = {
+  name: string
+  color: string
+}
+
+export type BoardTemplate = {
+  id: string
+  name: string
+  description?: string
+  ownerId?: string
+  states: TemplateState[]
+  labels: TemplateLabel[]
+}
+
+export type Project = {
+  id: string
+  name: string
+  description?: string
+  ownerId: string
+  archived: boolean
+  collapsed: boolean
+}
+
+export type ProjectState = {
+  id: string
+  projectId: string
+  name: string
+  color: string
+  category: StateCategory
+  sortOrder: number
+}
 
 export type Label = {
   id: string
+  projectId: string
   name: string
   color: string
 }
 
 export type Member = {
   id: string
+  projectId: string
+  userId: string
+  role: ProjectRole
   name: string
   avatar?: string
 }
@@ -20,518 +64,508 @@ export type Member = {
 export type Todo = {
   id: string
   projectId: string
-  status: TodoStatus
+  stateId: string
   title: string
   description?: string
   priority: Priority
   labels: string[]
   members: string[]
   dueDate?: string
-  order: number
+  rank: number
 }
 
-export type Project = {
-  id: string
-  name: string
-  collapsed: boolean
-}
+type TodoInput = Omit<Todo, "id" | "rank">
+type StateInput = Pick<ProjectState, "name" | "color" | "category">
 
-type TodoState = {
+type BoardState = {
+  templates: BoardTemplate[]
   projects: Project[]
+  states: ProjectState[]
   todos: Todo[]
   labels: Label[]
   members: Member[]
-  addProject: (name: string) => void
-  removeProject: (id: string) => void
+  loading: boolean
+  initialized: boolean
+  error: string | null
+  initialize: () => Promise<void>
+  dispose: () => void
+  clearError: () => void
+  addProject: (input: {
+    name: string
+    description?: string
+    templateId?: string
+  }) => Promise<void>
+  removeProject: (id: string) => Promise<void>
   toggleProjectCollapse: (id: string) => void
-  addTodo: (todo: Omit<Todo, "id" | "order">) => void
-  updateTodo: (id: string, patch: Partial<Omit<Todo, "id">>) => void
-  removeTodo: (id: string) => void
-  moveTodo: (id: string, toStatus: TodoStatus, toIndex: number) => void
+  addState: (projectId: string, input: StateInput) => Promise<void>
+  updateState: (id: string, patch: Partial<StateInput>) => Promise<void>
+  removeState: (id: string) => Promise<void>
+  reorderState: (id: string, direction: -1 | 1) => Promise<void>
+  addTodo: (todo: TodoInput) => Promise<void>
+  updateTodo: (id: string, patch: Partial<Omit<Todo, "id">>) => Promise<void>
+  removeTodo: (id: string) => Promise<void>
+  moveTodo: (id: string, toStateId: string, toIndex: number) => Promise<void>
 }
 
-function generateId(prefix: string) {
-  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
+type TemplateRecord = RecordModel & {
+  name: string
+  description: string
+  owner: string
+  states: TemplateState[]
+  labels: TemplateLabel[]
 }
 
-// Seed data for first-time users
-const seedLabels: Label[] = [
-  { id: "label_bug", name: "Bug", color: "#ef4444" },
-  { id: "label_feature", name: "Feature", color: "#3b82f6" },
-  { id: "label_design", name: "Design", color: "#a855f7" },
-  { id: "label_urgent", name: "Urgent", color: "#f59e0b" },
-  { id: "label_docs", name: "Docs", color: "#14b8a6" },
-  { id: "label_refactor", name: "Refactor", color: "#6366f1" },
-  { id: "label_api", name: "API", color: "#ec4899" },
-  { id: "label_perf", name: "Performance", color: "#22c55e" },
-]
+type ProjectRecord = RecordModel & {
+  name: string
+  description: string
+  owner: string
+  archived: boolean
+}
 
-const seedMembers: Member[] = [
-  { id: "member_1", name: "Senlin Xu" },
-  { id: "member_2", name: "Alice Chen" },
-  { id: "member_3", name: "Bob Wang" },
-  { id: "member_4", name: "Diana Liu" },
-  { id: "member_5", name: "Eric Zhang" },
-]
-
-const seedProjects: Project[] = [
-  {
-    id: "project_seed",
-    name: "Workavera Platform",
-    collapsed: false,
-  },
-  {
-    id: "project_mobile",
-    name: "Mobile App",
-    collapsed: false,
-  },
-  {
-    id: "project_infra",
-    name: "Infrastructure",
-    collapsed: false,
-  },
-]
-
-const day = 86400000
-const today = Date.now()
-const dateIn = (days: number) => new Date(today + day * days).toISOString().slice(0, 10)
-
-const seedTodos: Todo[] = [
-  // === Workavera Platform ===
-  {
-    id: "todo_1",
-    projectId: "project_seed",
-    status: "todo",
-    title: "Design landing page hero",
-    description: "Create a hero section with the new brand identity and CTA.",
-    priority: "high",
-    labels: ["label_design", "label_feature"],
-    members: ["member_1"],
-    dueDate: dateIn(3),
-    order: 0,
-  },
-  {
-    id: "todo_2",
-    projectId: "project_seed",
-    status: "todo",
-    title: "Fix login redirect loop",
-    description: "Users get stuck in a redirect loop after OAuth callback.",
-    priority: "urgent",
-    labels: ["label_bug"],
-    members: ["member_2"],
-    dueDate: dateIn(1),
-    order: 1,
-  },
-  {
-    id: "todo_3",
-    projectId: "project_seed",
-    status: "todo",
-    title: "Write API documentation for v2 endpoints",
-    priority: "low",
-    labels: ["label_docs", "label_api"],
-    members: ["member_4"],
-    dueDate: dateIn(10),
-    order: 2,
-  },
-  {
-    id: "todo_2b",
-    projectId: "project_seed",
-    status: "todo",
-    title: "Add dark mode toggle to settings page",
-    description: "Wire up the existing theme toggle into the settings UI.",
-    priority: "medium",
-    labels: ["label_feature", "label_design"],
-    members: ["member_3"],
-    dueDate: dateIn(8),
-    order: 3,
-  },
-  {
-    id: "todo_2c",
-    projectId: "project_seed",
-    status: "todo",
-    title: "Implement search across all pages",
-    description: "Global search with keyboard shortcut Cmd+K.",
-    priority: "medium",
-    labels: ["label_feature"],
-    members: ["member_1", "member_4"],
-    dueDate: dateIn(12),
-    order: 4,
-  },
-  {
-    id: "todo_2d",
-    projectId: "project_seed",
-    status: "todo",
-    title: "Add email notification preferences",
-    priority: "low",
-    labels: ["label_feature", "label_api"],
-    members: ["member_2"],
-    order: 5,
-  },
-  {
-    id: "todo_2e",
-    projectId: "project_seed",
-    status: "todo",
-    title: "Fix avatar fallback initials",
-    description: "Single-letter initial shows but should be capitalized consistently.",
-    priority: "low",
-    labels: ["label_bug", "label_design"],
-    members: ["member_4"],
-    dueDate: dateIn(2),
-    order: 6,
-  },
-  {
-    id: "todo_4",
-    projectId: "project_seed",
-    status: "in_progress",
-    title: "Implement Kanban drag-and-drop",
-    description: "Use @dnd-kit for cross-column card movement.",
-    priority: "high",
-    labels: ["label_feature"],
-    members: ["member_1", "member_3"],
-    dueDate: dateIn(5),
-    order: 0,
-  },
-  {
-    id: "todo_5",
-    projectId: "project_seed",
-    status: "in_progress",
-    title: "Refactor auth middleware",
-    description: "Simplify token refresh logic and extract shared guards.",
-    priority: "medium",
-    labels: ["label_refactor"],
-    members: ["member_2"],
-    order: 1,
-  },
-  {
-    id: "todo_6",
-    projectId: "project_seed",
-    status: "testing",
-    title: "Test model settings persistence",
-    priority: "medium",
-    labels: ["label_bug"],
-    members: ["member_2"],
-    order: 0,
-  },
-  {
-    id: "todo_7",
-    projectId: "project_seed",
-    status: "testing",
-    title: "E2E test for settings flow",
-    description: "Cover add/edit/remove model scenarios.",
-    priority: "medium",
-    labels: ["label_docs", "label_feature"],
-    members: ["member_3"],
-    order: 1,
-  },
-  {
-    id: "todo_8",
-    projectId: "project_seed",
-    status: "done",
-    title: "Set up project scaffolding",
-    priority: "medium",
-    labels: ["label_feature"],
-    members: ["member_1"],
-    order: 0,
-  },
-  {
-    id: "todo_9",
-    projectId: "project_seed",
-    status: "done",
-    title: "Configure CI/CD pipeline",
-    priority: "high",
-    labels: ["label_feature", "label_api"],
-    members: ["member_5"],
-    order: 1,
-  },
-
-  // === Mobile App ===
-  {
-    id: "todo_10",
-    projectId: "project_mobile",
-    status: "todo",
-    title: "Design onboarding flow",
-    description: "3-step onboarding with animated illustrations.",
-    priority: "high",
-    labels: ["label_design"],
-    members: ["member_4"],
-    dueDate: dateIn(4),
-    order: 0,
-  },
-  {
-    id: "todo_11",
-    projectId: "project_mobile",
-    status: "todo",
-    title: "Push notification service",
-    description: "Integrate FCM for Android and APNs for iOS.",
-    priority: "medium",
-    labels: ["label_feature", "label_api"],
-    members: ["member_3", "member_5"],
-    dueDate: dateIn(7),
-    order: 1,
-  },
-  {
-    id: "todo_12",
-    projectId: "project_mobile",
-    status: "in_progress",
-    title: "Offline mode sync logic",
-    description: "Queue mutations and sync when connection restores.",
-    priority: "urgent",
-    labels: ["label_feature", "label_perf"],
-    members: ["member_5"],
-    dueDate: dateIn(2),
-    order: 0,
-  },
-  {
-    id: "todo_13",
-    projectId: "project_mobile",
-    status: "in_progress",
-    title: "Dark mode theme tokens",
-    priority: "low",
-    labels: ["label_design", "label_refactor"],
-    members: ["member_4"],
-    order: 1,
-  },
-  {
-    id: "todo_14",
-    projectId: "project_mobile",
-    status: "testing",
-    title: "Crash on Android 12 startup",
-    priority: "urgent",
-    labels: ["label_bug"],
-    members: ["member_5"],
-    dueDate: dateIn(1),
-    order: 0,
-  },
-  {
-    id: "todo_15",
-    projectId: "project_mobile",
-    status: "done",
-    title: "App icon and splash screen",
-    priority: "low",
-    labels: ["label_design"],
-    members: ["member_4"],
-    order: 0,
-  },
-
-  // === Infrastructure ===
-  {
-    id: "todo_16",
-    projectId: "project_infra",
-    status: "todo",
-    title: "Migrate database to PostgreSQL 16",
-    description: "Plan downtime window and run migration scripts.",
-    priority: "high",
-    labels: ["label_feature", "label_perf"],
-    members: ["member_2", "member_5"],
-    dueDate: dateIn(14),
-    order: 0,
-  },
-  {
-    id: "todo_17",
-    projectId: "project_infra",
-    status: "todo",
-    title: "Set up monitoring dashboards",
-    description: "Grafana panels for CPU, memory, and request latency.",
-    priority: "medium",
-    labels: ["label_feature", "label_docs"],
-    members: ["member_3"],
-    dueDate: dateIn(6),
-    order: 1,
-  },
-  {
-    id: "todo_18",
-    projectId: "project_infra",
-    status: "in_progress",
-    title: "Optimize CDN cache rules",
-    description: "Reduce cache miss rate for static assets.",
-    priority: "medium",
-    labels: ["label_perf"],
-    members: ["member_5"],
-    dueDate: dateIn(3),
-    order: 0,
-  },
-  {
-    id: "todo_19",
-    projectId: "project_infra",
-    status: "testing",
-    title: "Load test API gateway",
-    description: "Run 10k concurrent requests and measure p99 latency.",
-    priority: "high",
-    labels: ["label_perf", "label_api"],
-    members: ["member_2"],
-    dueDate: dateIn(2),
-    order: 0,
-  },
-  {
-    id: "todo_20",
-    projectId: "project_infra",
-    status: "done",
-    title: "Provision staging environment",
-    priority: "medium",
-    labels: ["label_feature"],
-    members: ["member_5"],
-    order: 0,
-  },
-  {
-    id: "todo_21",
-    projectId: "project_infra",
-    status: "done",
-    title: "Configure secrets management",
-    description: "Set up Vault for storing API keys and certificates.",
-    priority: "high",
-    labels: ["label_feature", "label_refactor"],
-    members: ["member_2"],
-    order: 1,
-  },
-]
-
-export const useBoardStore = create<TodoState>()(
-  persist(
-    (set) => ({
-      projects: seedProjects,
-      todos: seedTodos,
-      labels: seedLabels,
-      members: seedMembers,
-
-      addProject: (name) =>
-        set((state) => ({
-          projects: [
-            ...state.projects,
-            {
-              id: generateId("project"),
-              name,
-              collapsed: false,
-            },
-          ],
-        })),
-
-      removeProject: (id) =>
-        set((state) => ({
-          projects: state.projects.filter((p) => p.id !== id),
-          todos: state.todos.filter((t) => t.projectId !== id),
-        })),
-
-      toggleProjectCollapse: (id) =>
-        set((state) => ({
-          projects: state.projects.map((p) =>
-            p.id === id ? { ...p, collapsed: !p.collapsed } : p
-          ),
-        })),
-
-      addTodo: (todo) =>
-        set((state) => {
-          const sameColumn = state.todos.filter(
-            (t) => t.projectId === todo.projectId && t.status === todo.status
-          )
-          const order = sameColumn.length
-          return {
-            todos: [
-              ...state.todos,
-              { ...todo, id: generateId("todo"), order },
-            ],
-          }
-        }),
-
-      updateTodo: (id, patch) =>
-        set((state) => ({
-          todos: state.todos.map((t) =>
-            t.id === id ? { ...t, ...patch } : t
-          ),
-        })),
-
-      removeTodo: (id) =>
-        set((state) => ({
-          todos: state.todos
-            .filter((t) => t.id !== id)
-            .map((t) => ({ ...t })),
-        })),
-
-      moveTodo: (id, toStatus, toIndex) =>
-        set((state) => {
-          const dragged = state.todos.find((t) => t.id === id)
-          if (!dragged) return state
-
-          const fromStatus = dragged.status
-          const projectId = dragged.projectId
-
-          // Get all todos in the target column (excluding the dragged one)
-          const targetColumn = state.todos
-            .filter(
-              (t) =>
-                t.projectId === projectId &&
-                t.status === toStatus &&
-                t.id !== id
-            )
-            .sort((a, b) => a.order - b.order)
-
-          // Insert at the target index
-          targetColumn.splice(toIndex, 0, {
-            ...dragged,
-            status: toStatus,
-          })
-
-          // Reassign orders in target column
-          const updatedTarget = targetColumn.map((t, idx) => ({
-            ...t,
-            order: idx,
-          }))
-
-          // Reassign orders in source column if different
-          let updatedTodos = state.todos
-          if (fromStatus !== toStatus) {
-            const sourceColumn = state.todos
-              .filter(
-                (t) =>
-                  t.projectId === projectId &&
-                  t.status === fromStatus &&
-                  t.id !== id
-              )
-              .sort((a, b) => a.order - b.order)
-              .map((t, idx) => ({ ...t, order: idx }))
-
-            updatedTodos = state.todos.map((t) => {
-              if (t.id === id) {
-                return updatedTarget.find((u) => u.id === id)!
-              }
-              const sourceUpdated = sourceColumn.find((s) => s.id === t.id)
-              if (sourceUpdated) return sourceUpdated
-              const targetUpdated = updatedTarget.find((u) => u.id === t.id)
-              if (targetUpdated) return targetUpdated
-              return t
-            })
-          } else {
-            updatedTodos = state.todos.map((t) => {
-              const targetUpdated = updatedTarget.find((u) => u.id === t.id)
-              return targetUpdated ?? t
-            })
-          }
-
-          return { todos: updatedTodos }
-        }),
-    }),
-    {
-      name: "todo-storage",
-      version: 3,
-      migrate: () => ({
-        projects: seedProjects,
-        todos: seedTodos,
-        labels: seedLabels,
-        members: seedMembers,
-      }),
-    }
-  )
-)
-
-export const STATUS_META: {
-  value: TodoStatus
-  label: string
+type StateRecord = RecordModel & {
+  project: string
+  name: string
   color: string
-}[] = [
-  { value: "todo", label: "Todo", color: "#64748b" },
-  { value: "in_progress", label: "In Progress", color: "#3b82f6" },
-  { value: "testing", label: "Testing", color: "#f59e0b" },
-  { value: "done", label: "Done", color: "#22c55e" },
-]
+  category: StateCategory
+  sort_order: number
+}
+
+type LabelRecord = RecordModel & {
+  project: string
+  name: string
+  color: string
+}
+
+type UserRecord = RecordModel & {
+  name: string
+  email: string
+  avatar: string
+}
+
+type MemberRecord = RecordModel & {
+  project: string
+  user: string
+  role: ProjectRole
+  expand?: { user?: UserRecord }
+}
+
+type TodoRecord = RecordModel & {
+  project: string
+  state: string
+  title: string
+  description: string
+  priority: Priority
+  labels: string[]
+  assignees: string[]
+  due_date: string
+  rank: number
+}
+
+const COLLECTIONS = {
+  templates: "board_templates",
+  projects: "board_projects",
+  states: "board_project_states",
+  members: "board_project_members",
+  labels: "board_project_labels",
+  tasks: "board_tasks",
+} as const
+
+const collapsedProjects = new Set<string>()
+let realtimeUnsubscribers: Array<() => void> = []
+let connectionWanted = false
+
+function toTemplate(record: TemplateRecord): BoardTemplate {
+  return {
+    id: record.id,
+    name: record.name,
+    description: record.description || undefined,
+    ownerId: record.owner || undefined,
+    states: Array.isArray(record.states) ? record.states : [],
+    labels: Array.isArray(record.labels) ? record.labels : [],
+  }
+}
+
+function toProject(record: ProjectRecord): Project {
+  return {
+    id: record.id,
+    name: record.name,
+    description: record.description || undefined,
+    ownerId: record.owner,
+    archived: record.archived,
+    collapsed: collapsedProjects.has(record.id),
+  }
+}
+
+function toState(record: StateRecord): ProjectState {
+  return {
+    id: record.id,
+    projectId: record.project,
+    name: record.name,
+    color: record.color,
+    category: record.category,
+    sortOrder: record.sort_order,
+  }
+}
+
+function toLabel(record: LabelRecord): Label {
+  return {
+    id: record.id,
+    projectId: record.project,
+    name: record.name,
+    color: record.color,
+  }
+}
+
+function toMember(record: MemberRecord): Member {
+  const user = record.expand?.user
+  return {
+    id: record.id,
+    projectId: record.project,
+    userId: record.user,
+    role: record.role,
+    name: user?.name || user?.email || "Unknown member",
+    avatar:
+      user?.avatar && user
+        ? pb.files.getURL(user, user.avatar)
+        : undefined,
+  }
+}
+
+function toTodo(record: TodoRecord): Todo {
+  return {
+    id: record.id,
+    projectId: record.project,
+    stateId: record.state,
+    title: record.title,
+    description: record.description || undefined,
+    priority: record.priority,
+    labels: record.labels || [],
+    members: record.assignees || [],
+    dueDate: record.due_date ? record.due_date.slice(0, 10) : undefined,
+    rank: record.rank,
+  }
+}
+
+function upsertById<T extends { id: string }>(items: T[], item: T) {
+  const index = items.findIndex((current) => current.id === item.id)
+  if (index === -1) return [...items, item]
+  const next = [...items]
+  next[index] = item
+  return next
+}
+
+function messageFromError(error: unknown, fallback: string) {
+  if (error instanceof ClientResponseError) {
+    return error.response?.message || fallback
+  }
+  return error instanceof Error ? error.message : fallback
+}
+
+function todoPatchToRecord(patch: Partial<Omit<Todo, "id">>) {
+  const body: Record<string, unknown> = {}
+  if (patch.projectId !== undefined) body.project = patch.projectId
+  if (patch.stateId !== undefined) body.state = patch.stateId
+  if (patch.title !== undefined) body.title = patch.title
+  if (patch.description !== undefined) body.description = patch.description || ""
+  if (patch.priority !== undefined) body.priority = patch.priority
+  if (patch.labels !== undefined) body.labels = patch.labels
+  if (patch.members !== undefined) body.assignees = patch.members
+  if (patch.dueDate !== undefined) body.due_date = patch.dueDate || ""
+  if (patch.rank !== undefined) body.rank = patch.rank
+  return body
+}
+
+async function loadBoardSnapshot() {
+  const [templates, projects, states, todos, labels, members] = await Promise.all([
+    pb.collection(COLLECTIONS.templates).getFullList<TemplateRecord>({ sort: "name" }),
+    pb.collection(COLLECTIONS.projects).getFullList<ProjectRecord>({
+      filter: "archived = false",
+      sort: "created",
+    }),
+    pb.collection(COLLECTIONS.states).getFullList<StateRecord>({ sort: "sort_order" }),
+    pb.collection(COLLECTIONS.tasks).getFullList<TodoRecord>({ sort: "rank" }),
+    pb.collection(COLLECTIONS.labels).getFullList<LabelRecord>({ sort: "name" }),
+    pb.collection(COLLECTIONS.members).getFullList<MemberRecord>({
+      expand: "user",
+      sort: "created",
+    }),
+  ])
+
+  return {
+    templates: templates.map(toTemplate),
+    projects: projects.map(toProject),
+    states: states.map(toState),
+    todos: todos.map(toTodo),
+    labels: labels.map(toLabel),
+    members: members.map(toMember),
+  }
+}
+
+async function connectRealtime(set: (patch: Partial<BoardState> | ((state: BoardState) => Partial<BoardState>)) => void) {
+  realtimeUnsubscribers.forEach((unsubscribe) => unsubscribe())
+  realtimeUnsubscribers = []
+
+  const subscribe = async <T extends RecordModel>(
+    collection: string,
+    key: "projects" | "states" | "todos" | "labels" | "members",
+    mapRecord: (record: T) => Project | ProjectState | Todo | Label | Member
+  ) => {
+    const unsubscribe = await pb.collection(collection).subscribe<T>("*", (event) => {
+      set((state) => {
+        const current = state[key] as Array<{ id: string }>
+        if (event.action === "delete") {
+          return { [key]: current.filter((item) => item.id !== event.record.id) } as Partial<BoardState>
+        }
+        return { [key]: upsertById(current, mapRecord(event.record)) } as Partial<BoardState>
+      })
+    }, key === "members"
+      ? { expand: "user" }
+      : key === "projects"
+        ? { filter: "archived = false" }
+        : undefined)
+    realtimeUnsubscribers.push(unsubscribe)
+  }
+
+  await Promise.all([
+    subscribe<ProjectRecord>(COLLECTIONS.projects, "projects", toProject),
+    subscribe<StateRecord>(COLLECTIONS.states, "states", toState),
+    subscribe<TodoRecord>(COLLECTIONS.tasks, "todos", toTodo),
+    subscribe<LabelRecord>(COLLECTIONS.labels, "labels", toLabel),
+    subscribe<MemberRecord>(COLLECTIONS.members, "members", toMember),
+  ])
+}
+
+export const useBoardStore = create<BoardState>((set, get) => ({
+  templates: [],
+  projects: [],
+  states: [],
+  todos: [],
+  labels: [],
+  members: [],
+  loading: false,
+  initialized: false,
+  error: null,
+
+  initialize: async () => {
+    connectionWanted = true
+    if (get().loading || get().initialized) return
+    set({ loading: true, error: null })
+    try {
+      const snapshot = await loadBoardSnapshot()
+      set({ ...snapshot, initialized: true })
+      if (connectionWanted) await connectRealtime(set)
+    } catch (error) {
+      set({ error: messageFromError(error, "Could not load the board") })
+    } finally {
+      set({ loading: false })
+    }
+  },
+
+  dispose: () => {
+    connectionWanted = false
+    realtimeUnsubscribers.forEach((unsubscribe) => unsubscribe())
+    realtimeUnsubscribers = []
+    set({ initialized: false })
+  },
+
+  clearError: () => set({ error: null }),
+
+  addProject: async (input) => {
+    set({ error: null })
+    try {
+      await pb.send("/api/board/projects", {
+        method: "POST",
+        body: {
+          name: input.name,
+          description: input.description || "",
+          templateId: input.templateId || "",
+        },
+      })
+      const snapshot = await loadBoardSnapshot()
+      set(snapshot)
+    } catch (error) {
+      const message = messageFromError(error, "Could not create the project")
+      set({ error: message })
+      throw new Error(message, { cause: error })
+    }
+  },
+
+  removeProject: async (id) => {
+    try {
+      await pb.collection(COLLECTIONS.projects).delete(id)
+      set((state) => ({
+        projects: state.projects.filter((project) => project.id !== id),
+        states: state.states.filter((item) => item.projectId !== id),
+        todos: state.todos.filter((todo) => todo.projectId !== id),
+        labels: state.labels.filter((label) => label.projectId !== id),
+        members: state.members.filter((member) => member.projectId !== id),
+      }))
+    } catch (error) {
+      const message = messageFromError(error, "Could not delete the project")
+      set({ error: message })
+      throw new Error(message, { cause: error })
+    }
+  },
+
+  toggleProjectCollapse: (id) =>
+    set((state) => {
+      const project = state.projects.find((item) => item.id === id)
+      if (project?.collapsed) collapsedProjects.delete(id)
+      else collapsedProjects.add(id)
+      return {
+        projects: state.projects.map((item) =>
+          item.id === id ? { ...item, collapsed: !item.collapsed } : item
+        ),
+      }
+    }),
+
+  addState: async (projectId, input) => {
+    const sameProject = get().states.filter((state) => state.projectId === projectId)
+    const sortOrder = Math.max(0, ...sameProject.map((state) => state.sortOrder)) + 1024
+    try {
+      const record = await pb.collection(COLLECTIONS.states).create<StateRecord>({
+        project: projectId,
+        name: input.name,
+        color: input.color,
+        category: input.category,
+        sort_order: sortOrder,
+      })
+      set((state) => ({ states: upsertById(state.states, toState(record)) }))
+    } catch (error) {
+      const message = messageFromError(error, "Could not add the state")
+      set({ error: message })
+      throw new Error(message, { cause: error })
+    }
+  },
+
+  updateState: async (id, patch) => {
+    try {
+      const record = await pb.collection(COLLECTIONS.states).update<StateRecord>(id, patch)
+      set((state) => ({ states: upsertById(state.states, toState(record)) }))
+    } catch (error) {
+      const message = messageFromError(error, "Could not update the state")
+      set({ error: message })
+      throw new Error(message, { cause: error })
+    }
+  },
+
+  removeState: async (id) => {
+    try {
+      await pb.collection(COLLECTIONS.states).delete(id)
+      set((state) => ({ states: state.states.filter((item) => item.id !== id) }))
+    } catch (error) {
+      const message = messageFromError(error, "Move or delete the tasks in this state first")
+      set({ error: message })
+      throw new Error(message, { cause: error })
+    }
+  },
+
+  reorderState: async (id, direction) => {
+    const state = get().states.find((item) => item.id === id)
+    if (!state) return
+    const ordered = get().states
+      .filter((item) => item.projectId === state.projectId)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+    const from = ordered.findIndex((item) => item.id === id)
+    const to = from + direction
+    if (from < 0 || to < 0 || to >= ordered.length) return
+    ;[ordered[from], ordered[to]] = [ordered[to], ordered[from]]
+    const updates = ordered.map((item, index) => ({ ...item, sortOrder: (index + 1) * 1024 }))
+    set((current) => ({
+      states: current.states.map((item) => updates.find((next) => next.id === item.id) || item),
+    }))
+    try {
+      await Promise.all(
+        updates.map((item) =>
+          pb.collection(COLLECTIONS.states).update(item.id, { sort_order: item.sortOrder })
+        )
+      )
+    } catch (error) {
+      const snapshot = await loadBoardSnapshot()
+      set({ ...snapshot, error: messageFromError(error, "Could not reorder states") })
+    }
+  },
+
+  addTodo: async (todo) => {
+    const sameState = get().todos.filter(
+      (item) => item.projectId === todo.projectId && item.stateId === todo.stateId
+    )
+    const rank = Math.max(0, ...sameState.map((item) => item.rank)) + 1024
+    try {
+      const record = await pb.collection(COLLECTIONS.tasks).create<TodoRecord>({
+        project: todo.projectId,
+        state: todo.stateId,
+        title: todo.title,
+        description: todo.description || "",
+        priority: todo.priority,
+        labels: todo.labels,
+        assignees: todo.members,
+        due_date: todo.dueDate || "",
+        rank,
+      })
+      set((state) => ({ todos: upsertById(state.todos, toTodo(record)) }))
+    } catch (error) {
+      const message = messageFromError(error, "Could not create the task")
+      set({ error: message })
+      throw new Error(message, { cause: error })
+    }
+  },
+
+  updateTodo: async (id, patch) => {
+    try {
+      const record = await pb
+        .collection(COLLECTIONS.tasks)
+        .update<TodoRecord>(id, todoPatchToRecord(patch))
+      set((state) => ({ todos: upsertById(state.todos, toTodo(record)) }))
+    } catch (error) {
+      const message = messageFromError(error, "Could not update the task")
+      set({ error: message })
+      throw new Error(message, { cause: error })
+    }
+  },
+
+  removeTodo: async (id) => {
+    try {
+      await pb.collection(COLLECTIONS.tasks).delete(id)
+      set((state) => ({ todos: state.todos.filter((item) => item.id !== id) }))
+    } catch (error) {
+      const message = messageFromError(error, "Could not delete the task")
+      set({ error: message })
+      throw new Error(message, { cause: error })
+    }
+  },
+
+  moveTodo: async (id, toStateId, toIndex) => {
+    const dragged = get().todos.find((todo) => todo.id === id)
+    if (!dragged) return
+    const target = get().todos
+      .filter((todo) => todo.stateId === toStateId && todo.id !== id)
+      .sort((a, b) => a.rank - b.rank)
+    const before = target[toIndex - 1]
+    const after = target[toIndex]
+    const rank = before && after
+      ? (before.rank + after.rank) / 2
+      : before
+        ? before.rank + 1024
+        : after
+          ? after.rank - 1024
+          : 1024
+    const optimistic = { ...dragged, stateId: toStateId, rank }
+    set((state) => ({ todos: upsertById(state.todos, optimistic) }))
+    try {
+      const record = await pb.collection(COLLECTIONS.tasks).update<TodoRecord>(id, {
+        state: toStateId,
+        rank,
+      })
+      set((state) => ({ todos: upsertById(state.todos, toTodo(record)) }))
+    } catch (error) {
+      set((state) => ({
+        todos: upsertById(state.todos, dragged),
+        error: messageFromError(error, "Could not move the task"),
+      }))
+    }
+  },
+}))
 
 export const PRIORITY_META: {
   value: Priority
@@ -542,4 +576,13 @@ export const PRIORITY_META: {
   { value: "medium", label: "Medium", color: "#3b82f6" },
   { value: "high", label: "High", color: "#f59e0b" },
   { value: "urgent", label: "Urgent", color: "#ef4444" },
+]
+
+export const STATE_CATEGORY_META: {
+  value: StateCategory
+  label: string
+}[] = [
+  { value: "pending", label: "Pending" },
+  { value: "active", label: "Active" },
+  { value: "completed", label: "Completed" },
 ]

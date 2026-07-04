@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Delete02Icon } from "@hugeicons/core-free-icons"
@@ -13,7 +13,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { DatePicker } from "@/components/ui/date-picker"
 import { Input } from "@/components/ui/input"
@@ -38,11 +38,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import {
   PRIORITY_META,
-  STATUS_META,
   useBoardStore,
   type Priority,
   type Todo,
-  type TodoStatus,
 } from "@/store/board"
 
 type TodoCardSheetProps = {
@@ -50,14 +48,14 @@ type TodoCardSheetProps = {
   onOpenChange: (open: boolean) => void
   todo: Todo | null
   projectId: string
-  defaultStatus?: TodoStatus
+  defaultStateId?: string
 }
 
 type FormState = {
   title: string
   description: string
   priority: Priority
-  status: TodoStatus
+  stateId: string
   labels: string[]
   members: string[]
   dueDate: string
@@ -67,10 +65,23 @@ const emptyForm: FormState = {
   title: "",
   description: "",
   priority: "medium",
-  status: "todo",
+  stateId: "",
   labels: [],
   members: [],
   dueDate: "",
+}
+
+function initialForm(todo: Todo | null, defaultStateId?: string): FormState {
+  if (!todo) return { ...emptyForm, stateId: defaultStateId ?? "" }
+  return {
+    title: todo.title,
+    description: todo.description ?? "",
+    priority: todo.priority,
+    stateId: todo.stateId,
+    labels: [...todo.labels],
+    members: [...todo.members],
+    dueDate: todo.dueDate ?? "",
+  }
 }
 
 export function TodoCardSheet({
@@ -78,37 +89,17 @@ export function TodoCardSheet({
   onOpenChange,
   todo,
   projectId,
-  defaultStatus,
+  defaultStateId,
 }: TodoCardSheetProps) {
   const addTodo = useBoardStore((s) => s.addTodo)
   const updateTodo = useBoardStore((s) => s.updateTodo)
   const removeTodo = useBoardStore((s) => s.removeTodo)
   const labels = useBoardStore((s) => s.labels)
   const members = useBoardStore((s) => s.members)
+  const states = useBoardStore((s) => s.states)
 
-  const [form, setForm] = useState<FormState>(emptyForm)
+  const [form, setForm] = useState<FormState>(() => initialForm(todo, defaultStateId))
   const [confirmDelete, setConfirmDelete] = useState(false)
-
-  useEffect(() => {
-    if (open) {
-      if (todo) {
-        setForm({
-          title: todo.title,
-          description: todo.description ?? "",
-          priority: todo.priority,
-          status: todo.status,
-          labels: [...todo.labels],
-          members: [...todo.members],
-          dueDate: todo.dueDate ?? "",
-        })
-      } else {
-        setForm({
-          ...emptyForm,
-          status: defaultStatus ?? "todo",
-        })
-      }
-    }
-  }, [open, todo, defaultStatus])
 
   const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -126,31 +117,46 @@ export function TodoCardSheet({
     })
   }
 
-  const handleSave = () => {
-    if (!form.title.trim()) return
+  const currentProjectId = todo?.projectId || projectId
+  const projectStates = states
+    .filter((state) => state.projectId === currentProjectId)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+  const projectLabels = labels.filter((label) => label.projectId === currentProjectId)
+  const projectMembers = members.filter((member) => member.projectId === currentProjectId)
+
+  const handleSave = async () => {
+    if (!form.title.trim() || !form.stateId) return
 
     const data = {
       title: form.title.trim(),
       description: form.description.trim() || undefined,
       priority: form.priority,
-      status: form.status,
+      stateId: form.stateId,
       labels: form.labels,
       members: form.members,
       dueDate: form.dueDate || undefined,
     }
 
-    if (todo) {
-      updateTodo(todo.id, data)
-    } else {
-      addTodo({ projectId, ...data })
+    try {
+      if (todo) {
+        await updateTodo(todo.id, data)
+      } else {
+        await addTodo({ projectId, ...data })
+      }
+      onOpenChange(false)
+    } catch {
+      // The board error banner displays the server response.
     }
-    onOpenChange(false)
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (todo) {
-      removeTodo(todo.id)
-      onOpenChange(false)
+      try {
+        await removeTodo(todo.id)
+        onOpenChange(false)
+      } catch {
+        // The board error banner displays the server response.
+      }
     }
   }
 
@@ -201,20 +207,20 @@ export function TodoCardSheet({
             <div className="flex flex-col gap-2">
               <Label>Status</Label>
               <Select
-                value={form.status}
-                onValueChange={(v) => setField("status", v as TodoStatus)}
+                value={form.stateId}
+                onValueChange={(value) => setField("stateId", value)}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {STATUS_META.map((s) => (
-                    <SelectItem key={s.value} value={s.value}>
+                  {projectStates.map((state) => (
+                    <SelectItem key={state.id} value={state.id}>
                       <span
                         className="size-2 rounded-full"
-                        style={{ backgroundColor: s.color }}
+                        style={{ backgroundColor: state.color }}
                       />
-                      {s.label}
+                      {state.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -258,7 +264,7 @@ export function TodoCardSheet({
           <div className="flex flex-col gap-2">
             <Label>Labels</Label>
             <div className="flex flex-wrap gap-2">
-              {labels.map((label) => {
+              {projectLabels.map((label) => {
                 const selected = form.labels.includes(label.id)
                 return (
                   <button
@@ -292,13 +298,13 @@ export function TodoCardSheet({
           <div className="flex flex-col gap-2">
             <Label>Members</Label>
             <div className="flex flex-wrap gap-2">
-              {members.map((member) => {
-                const selected = form.members.includes(member.id)
+              {projectMembers.map((member) => {
+                const selected = form.members.includes(member.userId)
                 return (
                   <button
                     key={member.id}
                     type="button"
-                    onClick={() => toggleArrayItem("members", member.id)}
+                    onClick={() => toggleArrayItem("members", member.userId)}
                     className={cn(
                       "flex items-center gap-2 rounded-lg border px-2 py-1 text-xs transition-all",
                       selected
@@ -307,6 +313,13 @@ export function TodoCardSheet({
                     )}
                   >
                     <Avatar size="sm">
+                      {member.avatar && (
+                        <AvatarImage
+                          src={member.avatar}
+                          alt={member.name}
+                          className="object-cover"
+                        />
+                      )}
                       <AvatarFallback className="text-[9px]">
                         {member.name.charAt(0).toUpperCase()}
                       </AvatarFallback>
@@ -336,7 +349,7 @@ export function TodoCardSheet({
             <SheetClose asChild>
               <Button variant="ghost">Cancel</Button>
             </SheetClose>
-            <Button onClick={handleSave} disabled={!form.title.trim()}>
+            <Button onClick={() => void handleSave()} disabled={!form.title.trim() || !form.stateId}>
               {todo ? "Save changes" : "Add task"}
             </Button>
           </div>
@@ -354,7 +367,7 @@ export function TodoCardSheet({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={handleDelete}>
+            <AlertDialogAction variant="destructive" onClick={() => void handleDelete()}>
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

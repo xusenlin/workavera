@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 
 import {
   DndContext,
@@ -10,92 +10,97 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core"
 
-import { useBoardStore, type Todo, type TodoStatus } from "@/store/board"
+import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
+import { useBoardStore, type Todo } from "@/store/board"
 import { ProjectColumn } from "./project-column"
 import { TodoCard } from "./todo-card"
 import { TodoCardSheet } from "./todo-card-sheet"
 
 export function KanbanBoard() {
-  const projects = useBoardStore((s) => s.projects)
-  const todos = useBoardStore((s) => s.todos)
-  const moveTodo = useBoardStore((s) => s.moveTodo)
+  const projects = useBoardStore((store) => store.projects)
+  const states = useBoardStore((store) => store.states)
+  const todos = useBoardStore((store) => store.todos)
+  const loading = useBoardStore((store) => store.loading)
+  const initialized = useBoardStore((store) => store.initialized)
+  const error = useBoardStore((store) => store.error)
+  const initialize = useBoardStore((store) => store.initialize)
+  const dispose = useBoardStore((store) => store.dispose)
+  const clearError = useBoardStore((store) => store.clearError)
+  const moveTodo = useBoardStore((store) => store.moveTodo)
 
   const [activeTodo, setActiveTodo] = useState<Todo | null>(null)
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
-  const [addStatus, setAddStatus] = useState<TodoStatus>("todo")
+  const [addStateId, setAddStateId] = useState("")
   const [addProjectId, setAddProjectId] = useState("")
+
+  useEffect(() => {
+    void initialize()
+    return dispose
+  }, [dispose, initialize])
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
   )
 
   const handleDragStart = (event: DragStartEvent) => {
-    const todo = todos.find((t) => t.id === event.active.id)
-    setActiveTodo(todo ?? null)
+    setActiveTodo(todos.find((todo) => todo.id === event.active.id) ?? null)
   }
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
     setActiveTodo(null)
-
     if (!over) return
 
-    const activeId = active.id as string
-    const overId = over.id as string
+    const dragged = todos.find((todo) => todo.id === active.id)
+    if (!dragged) return
 
-    const draggedTodo = todos.find((t) => t.id === activeId)
-    if (!draggedTodo) return
+    const targetProjectId = over.data.current?.projectId as string | undefined
+    const targetStateId = over.data.current?.stateId as string | undefined
+    if (!targetStateId || targetProjectId !== dragged.projectId) return
 
-    // Determine target status and index from the over.id
-    // over.id can be either a droppable column id ("projectId__status")
-    // or a sortable todo id
-    if (overId.includes("__")) {
-      // Dropped on a column (empty area or directly on the droppable)
-      const [, toStatus] = overId.split("__") as [string, TodoStatus]
-      const columnTodos = todos
-        .filter(
-          (t) =>
-            t.projectId === draggedTodo.projectId &&
-            t.status === toStatus &&
-            t.id !== activeId
-        )
-        .sort((a, b) => a.order - b.order)
-      moveTodo(activeId, toStatus, columnTodos.length)
-    } else {
-      // Dropped on another todo card
-      const overTodo = todos.find((t) => t.id === overId)
-      if (!overTodo) return
+    const targetTodos = todos
+      .filter((todo) => todo.stateId === targetStateId && todo.id !== dragged.id)
+      .sort((a, b) => a.rank - b.rank)
+    const overIndex = over.data.current?.type === "todo"
+      ? targetTodos.findIndex((todo) => todo.id === over.id)
+      : targetTodos.length
 
-      const toStatus = overTodo.status
-      const columnTodos = todos
-        .filter(
-          (t) =>
-            t.projectId === overTodo.projectId &&
-            t.status === toStatus &&
-            t.id !== activeId
-        )
-        .sort((a, b) => a.order - b.order)
-
-      const overIndex = columnTodos.findIndex((t) => t.id === overId)
-      moveTodo(activeId, toStatus, overIndex)
-    }
+    void moveTodo(dragged.id, targetStateId, Math.max(0, overIndex))
   }
 
-  const handleAddTask = (projectId: string, status: TodoStatus) => {
+  const handleAddTask = (projectId: string, stateId: string) => {
     setAddProjectId(projectId)
-    setAddStatus(status)
+    setAddStateId(stateId)
     setEditingTodo(null)
     setSheetOpen(true)
   }
 
   const handleEditTask = (todo: Todo) => {
+    setAddProjectId(todo.projectId)
+    setAddStateId(todo.stateId)
     setEditingTodo(todo)
     setSheetOpen(true)
   }
 
+  if (loading && !initialized) {
+    return (
+      <div className="flex min-h-48 items-center justify-center">
+        <Spinner className="size-6" />
+      </div>
+    )
+  }
+
   return (
     <>
+      {error && (
+        <div className="border-destructive/30 bg-destructive/5 text-destructive mb-4 flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm">
+          <span>{error}</span>
+          <Button variant="ghost" size="sm" onClick={clearError}>Dismiss</Button>
+        </div>
+      )}
+
       <DndContext
         sensors={sensors}
         onDragStart={handleDragStart}
@@ -107,11 +112,21 @@ export function KanbanBoard() {
             <ProjectColumn
               key={project.id}
               project={project}
+              states={states}
               todos={todos}
               onAddTask={handleAddTask}
               onEditTask={handleEditTask}
             />
           ))}
+
+          {projects.length === 0 && initialized && (
+            <div className="bg-muted/20 flex min-h-48 flex-col items-center justify-center rounded-xl border border-dashed p-8 text-center">
+              <p className="text-sm font-medium">No projects yet</p>
+              <p className="text-muted-foreground mt-1 text-xs">
+                Create a project from a template to start planning work.
+              </p>
+            </div>
+          )}
         </div>
 
         <DragOverlay>
@@ -124,11 +139,12 @@ export function KanbanBoard() {
       </DndContext>
 
       <TodoCardSheet
+        key={`${sheetOpen ? "open" : "closed"}:${editingTodo?.id || "new"}:${addStateId}`}
         open={sheetOpen}
         onOpenChange={setSheetOpen}
         todo={editingTodo}
         projectId={addProjectId}
-        defaultStatus={addStatus}
+        defaultStateId={addStateId}
       />
     </>
   )

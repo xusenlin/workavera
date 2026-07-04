@@ -19,6 +19,7 @@ func main() {
 	app := pocketbase.New()
 	app.RootCmd.Use = "workavera"
 	app.RootCmd.Version = version
+	registerBoard(app)
 
 	migratecmd.MustRegister(app, app.RootCmd, migratecmd.Config{
 		Automigrate: osutils.IsProbablyGoRun(),

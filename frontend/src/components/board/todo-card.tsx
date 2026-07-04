@@ -4,7 +4,7 @@ import { CSS } from "@dnd-kit/utilities"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Calendar03Icon, TextAlignLeftIcon } from "@hugeicons/core-free-icons"
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import {
@@ -44,7 +44,14 @@ export function TodoCard({ todo, onEdit }: TodoCardProps) {
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: todo.id })
+  } = useSortable({
+    id: todo.id,
+    data: {
+      type: "todo",
+      projectId: todo.projectId,
+      stateId: todo.stateId,
+    },
+  })
 
   const style = {
     transform: CSS.Translate.toString(transform),
@@ -52,7 +59,10 @@ export function TodoCard({ todo, onEdit }: TodoCardProps) {
   }
 
   const todoLabels = labels.filter((l) => todo.labels.includes(l.id))
-  const todoMembers = members.filter((m) => todo.members.includes(m.id))
+  const todoMembers = members.filter(
+    (member) =>
+      member.projectId === todo.projectId && todo.members.includes(member.userId)
+  )
   const priorityMeta = PRIORITY_META.find((p) => p.value === todo.priority)
   const overdue = isOverdue(todo.dueDate)
 
@@ -135,6 +145,13 @@ export function TodoCard({ todo, onEdit }: TodoCardProps) {
                 size="sm"
                 className="ring-2 ring-card"
               >
+                {member.avatar && (
+                  <AvatarImage
+                    src={member.avatar}
+                    alt={member.name}
+                    className="object-cover"
+                  />
+                )}
                 <AvatarFallback className="text-[9px]">
                   {member.name.charAt(0).toUpperCase()}
                 </AvatarFallback>
