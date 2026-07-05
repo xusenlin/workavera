@@ -1,8 +1,14 @@
 import { useState } from "react"
 
 import { HugeiconsIcon } from "@hugeicons/react"
-import { EyeIcon, EyeOffIcon } from "@hugeicons/core-free-icons"
+import {
+  AlertCircleIcon,
+  EyeIcon,
+  EyeOffIcon,
+  Key01Icon,
+} from "@hugeicons/core-free-icons"
 
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -16,111 +22,232 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
-import { useLlmSettingsStore, type LlmProtocol } from "@/store/llm-settings"
+import {
+  useLlmSettingsStore,
+  type LlmModelConfig,
+  type LlmModelInput,
+  type LlmProtocol,
+} from "@/store/llm-settings"
 
 type ModelSheetProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
+  model?: LlmModelConfig | null
 }
 
-const emptyForm = {
-  name: "",
-  modelId: "",
-  baseUrl: "https://api.openai.com/v1",
-  apiKey: "",
-  protocol: "openai" as LlmProtocol,
+const DEFAULT_BASE_URLS: Record<LlmProtocol, string> = {
+  openai: "https://api.openai.com/v1",
+  anthropic: "https://api.anthropic.com/v1",
+  google: "https://generativelanguage.googleapis.com/v1beta",
 }
 
-export function ModelSheet({ open, onOpenChange }: ModelSheetProps) {
-  const addModel = useLlmSettingsStore((s) => s.addModel)
+const PROTOCOLS: Array<{
+  value: LlmProtocol
+  label: string
+  description: string
+}> = [
+  { value: "openai", label: "OpenAI", description: "Chat Completions API" },
+  { value: "anthropic", label: "Anthropic", description: "Messages API" },
+  {
+    value: "google",
+    label: "Google",
+    description: "Gemini generateContent API",
+  },
+]
 
-  const [form, setForm] = useState(emptyForm)
+function createForm(model?: LlmModelConfig | null) {
+  return {
+    name: model?.name ?? "",
+    modelId: model?.modelId ?? "",
+    baseUrl: model?.baseUrl ?? DEFAULT_BASE_URLS.openai,
+    apiKey: "",
+    protocol: model?.protocol ?? ("openai" as LlmProtocol),
+  }
+}
+
+function isValidBaseUrl(value: string) {
+  try {
+    const parsed = new URL(value)
+    return parsed.protocol === "http:" || parsed.protocol === "https:"
+  } catch {
+    return false
+  }
+}
+
+export function ModelSheet({ open, onOpenChange, model }: ModelSheetProps) {
+  const addModel = useLlmSettingsStore((state) => state.addModel)
+  const updateModel = useLlmSettingsStore((state) => state.updateModel)
+
+  const [form, setForm] = useState(() => createForm(model))
   const [showToken, setShowToken] = useState(false)
+  const [clearSavedKey, setClearSavedKey] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const setField = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => {
-    setForm((prev) => ({ ...prev, [key]: value }))
+  const setField = <K extends keyof typeof form>(
+    key: K,
+    value: (typeof form)[K]
+  ) => setForm((current) => ({ ...current, [key]: value }))
+
+  const handleProtocolChange = (protocol: LlmProtocol) => {
+    setForm((current) => {
+      const knownDefault = Object.values(DEFAULT_BASE_URLS).includes(
+        current.baseUrl.trim()
+      )
+      return {
+        ...current,
+        protocol,
+        baseUrl:
+          !current.baseUrl.trim() || knownDefault
+            ? DEFAULT_BASE_URLS[protocol]
+            : current.baseUrl,
+      }
+    })
   }
 
-  const handleSave = () => {
-    addModel(form)
-    setForm(emptyForm)
-    setShowToken(false)
-    onOpenChange(false)
-  }
-
-  const handleOpenChange = (value: boolean) => {
-    if (!value) {
-      setForm(emptyForm)
-      setShowToken(false)
+  const handleSave = async () => {
+    setError(null)
+    const name = form.name.trim()
+    const modelId = form.modelId.trim()
+    const baseUrl = form.baseUrl.trim()
+    if (!name || !modelId || !baseUrl) {
+      setError("Name, model ID, and base URL are required.")
+      return
     }
-    onOpenChange(value)
+    if (!isValidBaseUrl(baseUrl)) {
+      setError("Base URL must be an absolute HTTP or HTTPS URL.")
+      return
+    }
+
+    setSaving(true)
+    try {
+      const input: LlmModelInput = {
+        name,
+        modelId,
+        baseUrl,
+        protocol: form.protocol,
+      }
+      if (!model || form.apiKey.trim() || clearSavedKey) {
+        input.apiKey = clearSavedKey ? "" : form.apiKey.trim()
+      }
+      if (model) await updateModel(model.id, input)
+      else await addModel(input)
+      onOpenChange(false)
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Could not save model configuration"
+      )
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
-    <Sheet open={open} onOpenChange={handleOpenChange}>
+    <Sheet
+      open={open}
+      onOpenChange={(value) => {
+        if (!value) {
+          setForm(createForm(model))
+          setShowToken(false)
+          setClearSavedKey(false)
+          setError(null)
+        }
+        onOpenChange(value)
+      }}
+    >
       <SheetContent side="right" className="w-full sm:max-w-md">
         <SheetHeader>
-          <SheetTitle>Add model</SheetTitle>
+          <SheetTitle>{model ? "Edit model" : "Add model"}</SheetTitle>
           <SheetDescription>
-            Configure a new language model provider. Fields are saved to your
-            browser locally.
+            {model
+              ? "Update this model configuration. The saved API key is never displayed."
+              : "Configure a language model provider for your account."}
           </SheetDescription>
         </SheetHeader>
 
         <div className="flex flex-col gap-5 overflow-y-auto px-6">
-          {/* Name */}
+          {error && (
+            <div className="flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+              <HugeiconsIcon
+                icon={AlertCircleIcon}
+                strokeWidth={2}
+                className="mt-0.5 size-4 shrink-0"
+              />
+              <span>{error}</span>
+            </div>
+          )}
+
           <div className="flex flex-col gap-2">
             <Label htmlFor="model-name">Name</Label>
             <Input
               id="model-name"
+              maxLength={120}
               placeholder="My GPT-4o"
               value={form.name}
-              onChange={(e) => setField("name", e.target.value)}
+              onChange={(event) => setField("name", event.target.value)}
             />
-            <p className="text-muted-foreground text-xs">
-              A friendly name to identify this model.
+            <p className="text-xs text-muted-foreground">
+              A friendly name to identify this configuration.
             </p>
           </div>
 
-          {/* Model ID */}
           <div className="flex flex-col gap-2">
             <Label htmlFor="model-id">Model ID</Label>
             <Input
               id="model-id"
-              placeholder="gpt-4o, claude-sonnet-4-20250514, ..."
+              maxLength={255}
+              placeholder="gpt-4o, claude-sonnet-4, gemini-2.5-flash, ..."
               value={form.modelId}
-              onChange={(e) => setField("modelId", e.target.value)}
+              onChange={(event) => setField("modelId", event.target.value)}
             />
           </div>
 
-          {/* Base URL */}
           <div className="flex flex-col gap-2">
             <Label htmlFor="base-url">Base URL</Label>
             <Input
               id="base-url"
-              placeholder="https://api.openai.com/v1"
+              type="url"
+              maxLength={2048}
+              placeholder={DEFAULT_BASE_URLS[form.protocol]}
               value={form.baseUrl}
-              onChange={(e) => setField("baseUrl", e.target.value)}
+              onChange={(event) => setField("baseUrl", event.target.value)}
             />
           </div>
 
-          {/* API Token */}
           <div className="flex flex-col gap-2">
-            <Label htmlFor="api-key">API Token</Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="api-key">API Key</Label>
+              {model?.hasApiKey && !clearSavedKey && (
+                <Badge variant="secondary" className="gap-1">
+                  <HugeiconsIcon icon={Key01Icon} strokeWidth={2} />
+                  Configured
+                </Badge>
+              )}
+            </div>
             <div className="relative">
               <Input
                 id="api-key"
                 type={showToken ? "text" : "password"}
-                placeholder="sk-..."
+                maxLength={4096}
+                placeholder={
+                  model?.hasApiKey && !clearSavedKey
+                    ? "Enter a new key to replace the saved key"
+                    : "Optional API key"
+                }
                 value={form.apiKey}
-                onChange={(e) => setField("apiKey", e.target.value)}
-                className="px-9"
+                onChange={(event) => {
+                  setField("apiKey", event.target.value)
+                  if (event.target.value) setClearSavedKey(false)
+                }}
+                className="pr-9"
               />
               <button
                 type="button"
-                onClick={() => setShowToken((v) => !v)}
-                className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2 transition-colors"
-                aria-label={showToken ? "Hide token" : "Show token"}
+                onClick={() => setShowToken((value) => !value)}
+                className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
+                aria-label={showToken ? "Hide key" : "Show key"}
               >
                 <HugeiconsIcon
                   icon={showToken ? EyeOffIcon : EyeIcon}
@@ -129,58 +256,70 @@ export function ModelSheet({ open, onOpenChange }: ModelSheetProps) {
                 />
               </button>
             </div>
+            {model?.hasApiKey && (
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs text-muted-foreground">
+                  {clearSavedKey
+                    ? "The saved key will be removed when you save."
+                    : "Leave this blank to keep the saved key."}
+                </p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setForm((current) => ({ ...current, apiKey: "" }))
+                    setClearSavedKey((value) => !value)
+                  }}
+                >
+                  {clearSavedKey ? "Keep key" : "Remove key"}
+                </Button>
+              </div>
+            )}
           </div>
 
-          {/* Protocol */}
           <div className="flex flex-col gap-2">
             <Label>Protocol</Label>
             <RadioGroup
               value={form.protocol}
-              onValueChange={(v) => setField("protocol", v as LlmProtocol)}
-              className="grid gap-3 sm:grid-cols-2"
+              onValueChange={(value) =>
+                handleProtocolChange(value as LlmProtocol)
+              }
+              className="grid gap-3"
             >
-              <Label
-                htmlFor="protocol-openai"
-                className="hover:bg-muted/50 flex cursor-pointer items-start gap-3 rounded-xl border border-input p-3 has-data-[state=checked]:border-primary has-data-[state=checked]:bg-primary/5"
-              >
-                <RadioGroupItem
-                  id="protocol-openai"
-                  value="openai"
-                  className="mt-0.5"
-                />
-                <div className="grid gap-0.5">
-                  <span className="text-sm font-medium">OpenAI</span>
-                  <span className="text-muted-foreground text-xs">
-                    Chat completions API
-                  </span>
-                </div>
-              </Label>
-              <Label
-                htmlFor="protocol-anthropic"
-                className="hover:bg-muted/50 flex cursor-pointer items-start gap-3 rounded-xl border border-input p-3 has-data-[state=checked]:border-primary has-data-[state=checked]:bg-primary/5"
-              >
-                <RadioGroupItem
-                  id="protocol-anthropic"
-                  value="anthropic"
-                  className="mt-0.5"
-                />
-                <div className="grid gap-0.5">
-                  <span className="text-sm font-medium">Anthropic</span>
-                  <span className="text-muted-foreground text-xs">
-                    Messages API
-                  </span>
-                </div>
-              </Label>
+              {PROTOCOLS.map((protocol) => (
+                <Label
+                  key={protocol.value}
+                  htmlFor={`protocol-${protocol.value}`}
+                  className="flex cursor-pointer items-start gap-3 rounded-xl border border-input p-3 hover:bg-muted/50 has-data-[state=checked]:border-primary has-data-[state=checked]:bg-primary/5"
+                >
+                  <RadioGroupItem
+                    id={`protocol-${protocol.value}`}
+                    value={protocol.value}
+                    className="mt-0.5"
+                  />
+                  <div className="grid gap-0.5">
+                    <span className="text-sm font-medium">
+                      {protocol.label}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {protocol.description}
+                    </span>
+                  </div>
+                </Label>
+              ))}
             </RadioGroup>
           </div>
         </div>
 
         <SheetFooter className="flex-row justify-end gap-2">
           <SheetClose asChild>
-            <Button variant="ghost">Cancel</Button>
+            <Button variant="ghost" disabled={saving}>
+              Cancel
+            </Button>
           </SheetClose>
-          <Button onClick={handleSave} disabled={!form.name || !form.modelId}>
-            Add model
+          <Button onClick={() => void handleSave()} disabled={saving}>
+            {saving ? "Saving..." : model ? "Save changes" : "Add model"}
           </Button>
         </SheetFooter>
       </SheetContent>

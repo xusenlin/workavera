@@ -1,63 +1,217 @@
 import { create } from "zustand"
-import { persist } from "zustand/middleware"
+import { ClientResponseError } from "pocketbase"
 
-export type LlmProtocol = "openai" | "anthropic"
+import { pb } from "@/lib/pocketbase"
+
+export type LlmProtocol = "openai" | "anthropic" | "google"
 
 export type LlmModelConfig = {
   id: string
   name: string
   modelId: string
   baseUrl: string
-  apiKey: string
   protocol: LlmProtocol
+  isDefault: boolean
+  hasApiKey: boolean
+  created: string
+  updated: string
+}
+
+export type LlmModelInput = {
+  name: string
+  modelId: string
+  baseUrl: string
+  protocol: LlmProtocol
+  apiKey?: string
+}
+
+export type LlmShareTarget = {
+  id: string
+  name: string
 }
 
 type LlmSettingsState = {
   models: LlmModelConfig[]
-  activeModelId: string | null
-  addModel: (config: Omit<LlmModelConfig, "id">) => void
-  updateModel: (id: string, patch: Partial<Omit<LlmModelConfig, "id">>) => void
-  removeModel: (id: string) => void
-  setActiveModel: (id: string) => void
+  shareTargets: LlmShareTarget[]
+  loading: boolean
+  initialized: boolean
+  error: string | null
+  initialize: (force?: boolean) => Promise<void>
+  clearError: () => void
+  addModel: (input: LlmModelInput) => Promise<LlmModelConfig>
+  updateModel: (
+    id: string,
+    patch: Partial<LlmModelInput>
+  ) => Promise<LlmModelConfig>
+  removeModel: (id: string) => Promise<void>
+  setDefaultModel: (id: string) => Promise<void>
+  loadShareTargets: () => Promise<LlmShareTarget[]>
+  copyModel: (id: string, userIds: string[]) => Promise<number>
 }
 
-function generateId() {
-  return `model_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
+let initializationPromise: Promise<void> | null = null
+let loadedUserId: string | null = null
+
+function messageFromError(error: unknown, fallback: string) {
+  if (error instanceof ClientResponseError) {
+    return error.response?.message || fallback
+  }
+  return error instanceof Error ? error.message : fallback
 }
 
-export const useLlmSettingsStore = create<LlmSettingsState>()(
-  persist(
-    (set) => ({
-      models: [],
-      activeModelId: null,
-      addModel: (config) =>
-        set((state) => {
-          const model: LlmModelConfig = { ...config, id: generateId() }
-          const isFirst = state.models.length === 0
-          return {
-            models: [...state.models, model],
-            activeModelId: isFirst ? model.id : state.activeModelId,
-          }
-        }),
-      updateModel: (id, patch) =>
-        set((state) => ({
-          models: state.models.map((m) =>
-            m.id === id ? { ...m, ...patch } : m
-          ),
-        })),
-      removeModel: (id) =>
-        set((state) => {
-          const models = state.models.filter((m) => m.id !== id)
-          const activeModelId =
-            state.activeModelId === id
-              ? (models[0]?.id ?? null)
-              : state.activeModelId
-          return { models, activeModelId }
-        }),
-      setActiveModel: (id) => set({ activeModelId: id }),
-    }),
-    {
-      name: "llm-models-storage",
+function sortModels(models: LlmModelConfig[]) {
+  return [...models].sort((a, b) => a.created.localeCompare(b.created))
+}
+
+export const useLlmSettingsStore = create<LlmSettingsState>((set, get) => ({
+  models: [],
+  shareTargets: [],
+  loading: false,
+  initialized: false,
+  error: null,
+
+  initialize: async (force = false) => {
+    const userId = pb.authStore.record?.id ?? null
+    if (!force && get().initialized && loadedUserId === userId) return
+    if (initializationPromise) return initializationPromise
+
+    initializationPromise = (async () => {
+      set({ loading: true, error: null })
+      try {
+        const models = await pb.send<LlmModelConfig[]>("/api/llm/models", {
+          method: "GET",
+          requestKey: null,
+        })
+        loadedUserId = userId
+        localStorage.removeItem("llm-models-storage")
+        set({ models: sortModels(models), initialized: true })
+      } catch (error) {
+        set({
+          error: messageFromError(error, "Could not load model configurations"),
+          initialized: false,
+        })
+      } finally {
+        set({ loading: false })
+      }
+    })()
+
+    try {
+      await initializationPromise
+    } finally {
+      initializationPromise = null
     }
-  )
-)
+  },
+
+  clearError: () => set({ error: null }),
+
+  addModel: async (input) => {
+    set({ error: null })
+    try {
+      const model = await pb.send<LlmModelConfig>("/api/llm/models", {
+        method: "POST",
+        body: input,
+      })
+      set((state) => ({ models: sortModels([...state.models, model]) }))
+      return model
+    } catch (error) {
+      const message = messageFromError(
+        error,
+        "Could not add model configuration"
+      )
+      set({ error: message })
+      throw new Error(message, { cause: error })
+    }
+  },
+
+  updateModel: async (id, patch) => {
+    set({ error: null })
+    try {
+      const model = await pb.send<LlmModelConfig>(`/api/llm/models/${id}`, {
+        method: "PATCH",
+        body: patch,
+      })
+      set((state) => ({
+        models: sortModels(
+          state.models.map((current) => (current.id === id ? model : current))
+        ),
+      }))
+      return model
+    } catch (error) {
+      const message = messageFromError(
+        error,
+        "Could not update model configuration"
+      )
+      set({ error: message })
+      throw new Error(message, { cause: error })
+    }
+  },
+
+  removeModel: async (id) => {
+    set({ error: null })
+    try {
+      await pb.send(`/api/llm/models/${id}`, { method: "DELETE" })
+      await get().initialize(true)
+    } catch (error) {
+      const message = messageFromError(
+        error,
+        "Could not delete model configuration"
+      )
+      set({ error: message })
+      throw new Error(message, { cause: error })
+    }
+  },
+
+  setDefaultModel: async (id) => {
+    set({ error: null })
+    try {
+      await pb.send<LlmModelConfig>(`/api/llm/models/${id}/default`, {
+        method: "POST",
+      })
+      set((state) => ({
+        models: sortModels(
+          state.models.map((model) => ({
+            ...model,
+            isDefault: model.id === id,
+          }))
+        ),
+      }))
+    } catch (error) {
+      const message = messageFromError(error, "Could not set the default model")
+      set({ error: message })
+      throw new Error(message, { cause: error })
+    }
+  },
+
+  loadShareTargets: async () => {
+    try {
+      const shareTargets = await pb.send<LlmShareTarget[]>(
+        "/api/llm/share-targets",
+        { method: "GET", requestKey: null }
+      )
+      set({ shareTargets })
+      return shareTargets
+    } catch (error) {
+      const message = messageFromError(error, "Could not load users")
+      set({ error: message })
+      throw new Error(message, { cause: error })
+    }
+  },
+
+  copyModel: async (id, userIds) => {
+    set({ error: null })
+    try {
+      const response = await pb.send<{ copied: number }>(
+        `/api/llm/models/${id}/copy`,
+        { method: "POST", body: { userIds } }
+      )
+      return response.copied
+    } catch (error) {
+      const message = messageFromError(
+        error,
+        "Could not copy model configuration"
+      )
+      set({ error: message })
+      throw new Error(message, { cause: error })
+    }
+  },
+}))
