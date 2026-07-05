@@ -50,7 +50,7 @@ export function StatusColumn({
       <div
         ref={setNodeRef}
         className={cn(
-          "bg-muted/30 flex max-h-[28rem] min-h-24 flex-1 flex-col gap-2 overflow-y-auto rounded-xl p-2 transition-colors",
+          "bg-muted/30 no-scrollbar flex max-h-[calc(100vh-24rem)] min-h-24 flex-1 flex-col gap-2 overflow-y-auto rounded-xl p-2 transition-colors",
           isOver && "bg-primary/5 ring-1 ring-primary/20"
         )}
       >

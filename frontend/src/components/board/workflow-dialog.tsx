@@ -123,7 +123,7 @@ export function WorkflowDialog({
 
         <div className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto pr-1">
           {states.map((state, index) => {
-            const draft = drafts[state.id] || state
+            const draft = { ...state, ...drafts[state.id] }
             const taskCount = todos.filter((todo) => todo.stateId === state.id).length
             return (
               <div key={state.id} className="grid gap-2 rounded-xl border p-3 md:grid-cols-[1fr_9rem_auto]">

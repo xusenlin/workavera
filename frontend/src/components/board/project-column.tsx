@@ -121,7 +121,7 @@ export function ProjectColumn({
 
       <div
         className={cn(
-          "flex gap-4 overflow-x-auto pb-2 transition-all",
+          "no-scrollbar flex gap-4 overflow-x-auto pb-2 transition-all",
           project.collapsed && "hidden"
         )}
       >
