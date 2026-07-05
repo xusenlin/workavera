@@ -281,18 +281,18 @@ function todoPatchToRecord(patch: Partial<Omit<Todo, "id">>) {
 
 async function loadBoardSnapshot() {
   const [templates, projects, states, todos, labels, members] = await Promise.all([
-    pb.collection(COLLECTIONS.templates).getFullList<TemplateRecord>({ sort: "name" }),
+    pb.collection(COLLECTIONS.templates).getFullList<TemplateRecord>({ sort: "name" }, { requestKey: null }),
     pb.collection(COLLECTIONS.projects).getFullList<ProjectRecord>({
       filter: "archived = false",
       sort: "created",
-    }),
-    pb.collection(COLLECTIONS.states).getFullList<StateRecord>({ sort: "sort_order" }),
-    pb.collection(COLLECTIONS.tasks).getFullList<TodoRecord>({ sort: "rank" }),
-    pb.collection(COLLECTIONS.labels).getFullList<LabelRecord>({ sort: "name" }),
+    }, { requestKey: null }),
+    pb.collection(COLLECTIONS.states).getFullList<StateRecord>({ sort: "sort_order" }, { requestKey: null }),
+    pb.collection(COLLECTIONS.tasks).getFullList<TodoRecord>({ sort: "rank" }, { requestKey: null }),
+    pb.collection(COLLECTIONS.labels).getFullList<LabelRecord>({ sort: "name" }, { requestKey: null }),
     pb.collection(COLLECTIONS.members).getFullList<MemberRecord>({
       expand: "user",
       sort: "created",
-    }),
+    }, { requestKey: null }),
   ])
 
   return {
@@ -314,20 +314,28 @@ async function connectRealtime(set: (patch: Partial<BoardState> | ((state: Board
     key: "projects" | "states" | "todos" | "labels" | "members",
     mapRecord: (record: T) => Project | ProjectState | Todo | Label | Member
   ) => {
-    const unsubscribe = await pb.collection(collection).subscribe<T>("*", (event) => {
-      set((state) => {
-        const current = state[key] as Array<{ id: string }>
-        if (event.action === "delete") {
-          return { [key]: current.filter((item) => item.id !== event.record.id) } as Partial<BoardState>
-        }
-        return { [key]: upsertById(current, mapRecord(event.record)) } as Partial<BoardState>
-      })
-    }, key === "members"
-      ? { expand: "user" }
-      : key === "projects"
-        ? { filter: "archived = false" }
-        : undefined)
-    realtimeUnsubscribers.push(unsubscribe)
+    try {
+      const options =
+        key === "members"
+          ? { expand: "user", requestKey: null }
+          : key === "projects"
+            ? { filter: "archived = false", requestKey: null }
+            : { requestKey: null }
+      const unsubscribe = await pb.collection(collection).subscribe<T>("*", (event) => {
+        set((state) => {
+          const current = state[key] as Array<{ id: string }>
+          if (event.action === "delete") {
+            return { [key]: current.filter((item) => item.id !== event.record.id) } as Partial<BoardState>
+          }
+          return { [key]: upsertById(current, mapRecord(event.record)) } as Partial<BoardState>
+        })
+      }, options)
+      realtimeUnsubscribers.push(unsubscribe)
+    } catch (err) {
+      // 组件卸载或被新请求替代时，静默忽略 PocketBase 自动取消产生的 abort 错误
+      if (err instanceof ClientResponseError && err.isAbort) return
+      throw err
+    }
   }
 
   await Promise.all([

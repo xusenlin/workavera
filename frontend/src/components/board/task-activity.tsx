@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 
-import type { RecordModel } from "pocketbase"
+import { ClientResponseError, type RecordModel } from "pocketbase"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { pb } from "@/lib/pocketbase"
@@ -117,7 +117,10 @@ export function TaskActivity({ taskId }: { taskId: string }) {
       try {
         const records = await pb
           .collection("board_task_operation_logs")
-          .getFullList<OperationLogRecord>({ filter, sort: "-created", expand: "actor" })
+          .getFullList<OperationLogRecord>(
+            { filter, sort: "-created", expand: "actor" },
+            { requestKey: null }
+          )
         if (active) setLogs(records.map(toOperationLog))
 
         unsubscribe = await pb
@@ -132,8 +135,12 @@ export function TaskActivity({ taskId }: { taskId: string }) {
                 setLogs((current) => upsertLog(current, toOperationLog(event.record)))
               }
             },
-            { filter, expand: "actor" }
+            { filter, expand: "actor", requestKey: null }
           )
+      } catch (err) {
+        // 组件卸载或被新请求替代时，静默忽略 PocketBase 自动取消产生的 abort 错误
+        if (err instanceof ClientResponseError && err.isAbort) return
+        throw err
       } finally {
         if (active) setLoading(false)
       }
