@@ -10,6 +10,7 @@ import (
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
 	"github.com/pocketbase/pocketbase/tools/osutils"
 
+	"github.com/xusenlin/workavera/internal/board"
 	_ "github.com/xusenlin/workavera/migrations"
 )
 
@@ -19,7 +20,7 @@ func main() {
 	app := pocketbase.New()
 	app.RootCmd.Use = "workavera"
 	app.RootCmd.Version = version
-	registerBoard(app)
+	board.Register(app)
 
 	migratecmd.MustRegister(app, app.RootCmd, migratecmd.Config{
 		Automigrate: osutils.IsProbablyGoRun(),

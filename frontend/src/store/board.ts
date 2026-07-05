@@ -76,6 +76,7 @@ export type Todo = {
 
 type TodoInput = Omit<Todo, "id" | "rank">
 type StateInput = Pick<ProjectState, "name" | "color" | "category">
+type LabelInput = Pick<Label, "name" | "color">
 
 type BoardState = {
   templates: BoardTemplate[]
@@ -101,6 +102,9 @@ type BoardState = {
   updateState: (id: string, patch: Partial<StateInput>) => Promise<void>
   removeState: (id: string) => Promise<void>
   reorderState: (id: string, direction: -1 | 1) => Promise<void>
+  addLabel: (projectId: string, input: LabelInput) => Promise<void>
+  updateLabel: (id: string, patch: Partial<LabelInput>) => Promise<void>
+  removeLabel: (id: string) => Promise<void>
   addTodo: (todo: TodoInput) => Promise<void>
   updateTodo: (id: string, patch: Partial<Omit<Todo, "id">>) => Promise<void>
   removeTodo: (id: string) => Promise<void>
@@ -483,6 +487,57 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     } catch (error) {
       const snapshot = await loadBoardSnapshot()
       set({ ...snapshot, error: messageFromError(error, "Could not reorder states") })
+    }
+  },
+
+  addLabel: async (projectId, input) => {
+    try {
+      const record = await pb.collection(COLLECTIONS.labels).create<LabelRecord>({
+        project: projectId,
+        name: input.name,
+        color: input.color,
+      })
+      set((state) => ({ labels: upsertById(state.labels, toLabel(record)) }))
+    } catch (error) {
+      const message = messageFromError(error, "Could not add the label")
+      set({ error: message })
+      throw new Error(message, { cause: error })
+    }
+  },
+
+  updateLabel: async (id, patch) => {
+    try {
+      const record = await pb.collection(COLLECTIONS.labels).update<LabelRecord>(id, patch)
+      set((state) => ({ labels: upsertById(state.labels, toLabel(record)) }))
+    } catch (error) {
+      const message = messageFromError(error, "Could not update the label")
+      set({ error: message })
+      throw new Error(message, { cause: error })
+    }
+  },
+
+  removeLabel: async (id) => {
+    try {
+      const affected = get().todos.filter((todo) => todo.labels.includes(id))
+      await Promise.all(
+        affected.map((todo) =>
+          get().updateTodo(todo.id, {
+            labels: todo.labels.filter((labelId) => labelId !== id),
+          })
+        )
+      )
+      await pb.collection(COLLECTIONS.labels).delete(id)
+      set((state) => ({
+        labels: state.labels.filter((label) => label.id !== id),
+        todos: state.todos.map((todo) => ({
+          ...todo,
+          labels: todo.labels.filter((labelId) => labelId !== id),
+        })),
+      }))
+    } catch (error) {
+      const message = messageFromError(error, "Could not delete the label")
+      set({ error: message })
+      throw new Error(message, { cause: error })
     }
   },
 

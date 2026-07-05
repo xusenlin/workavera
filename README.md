@@ -64,6 +64,7 @@ docker run --rm \
 ├── Dockerfile       # 多阶段容器构建
 ├── VERSION          # 应用版本
 ├── frontend/        # Vite 前端项目，构建产物为 dist/
+├── internal/board/  # Board 路由、领域校验与操作日志 Hook
 ├── migrations/      # 数据库迁移
 ├── go.mod
 └── Taskfile.yml

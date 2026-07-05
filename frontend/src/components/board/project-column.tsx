@@ -8,6 +8,7 @@ import {
   Layers02Icon,
   MoreHorizontalIcon,
   Settings02Icon,
+  Tag01Icon,
 } from "@hugeicons/core-free-icons"
 
 import {
@@ -36,6 +37,7 @@ import {
 } from "@/store/board"
 import { StatusColumn } from "./status-column"
 import { WorkflowDialog } from "./workflow-dialog"
+import { LabelsDialog } from "./labels-dialog"
 
 type ProjectColumnProps = {
   project: Project
@@ -54,13 +56,18 @@ export function ProjectColumn({
 }: ProjectColumnProps) {
   const toggleCollapse = useBoardStore((store) => store.toggleProjectCollapse)
   const removeProject = useBoardStore((store) => store.removeProject)
+  const labels = useBoardStore((store) => store.labels)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [workflowOpen, setWorkflowOpen] = useState(false)
+  const [labelsOpen, setLabelsOpen] = useState(false)
 
   const projectTodos = todos.filter((todo) => todo.projectId === project.id)
   const projectStates = [...states]
     .filter((state) => state.projectId === project.id)
     .sort((a, b) => a.sortOrder - b.sortOrder)
+  const projectLabels = labels
+    .filter((label) => label.projectId === project.id)
+    .sort((a, b) => a.name.localeCompare(b.name))
 
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-card/50 p-4">
@@ -94,6 +101,10 @@ export function ProjectColumn({
               <DropdownMenuItem onClick={() => setWorkflowOpen(true)}>
                 <HugeiconsIcon icon={Settings02Icon} strokeWidth={2} />
                 Configure workflow
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setLabelsOpen(true)}>
+                <HugeiconsIcon icon={Tag01Icon} strokeWidth={2} />
+                Manage labels
               </DropdownMenuItem>
               <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
                 <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
@@ -146,6 +157,13 @@ export function ProjectColumn({
         onOpenChange={setWorkflowOpen}
         project={project}
         states={projectStates}
+        todos={projectTodos}
+      />
+      <LabelsDialog
+        open={labelsOpen}
+        onOpenChange={setLabelsOpen}
+        project={project}
+        labels={projectLabels}
         todos={projectTodos}
       />
 

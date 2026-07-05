@@ -51,6 +51,9 @@ func TestBoardCollectionsMigration(t *testing.T) {
 		t.Fatal("board collections must expose created and updated timestamps")
 	}
 
+	if err := dropBoardTaskOperationLogs(app); err != nil {
+		t.Fatalf("drop task operation logs: %v", err)
+	}
 	if err := dropBoardCollections(app); err != nil {
 		t.Fatalf("drop board collections: %v", err)
 	}

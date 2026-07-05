@@ -42,6 +42,7 @@ import {
   type Priority,
   type Todo,
 } from "@/store/board"
+import { TaskActivity } from "./task-activity"
 
 type TodoCardSheetProps = {
   open: boolean
@@ -330,6 +331,8 @@ export function TodoCardSheet({
               })}
             </div>
           </div>
+
+          {todo && <TaskActivity taskId={todo.id} />}
         </div>
 
         <SheetFooter className="flex-row items-center justify-between gap-2">

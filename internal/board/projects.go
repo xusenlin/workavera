@@ -1,23 +1,11 @@
-package main
+package board
 
 import (
 	"encoding/json"
 	"net/http"
 	"strings"
 
-	"github.com/pocketbase/dbx"
-	"github.com/pocketbase/pocketbase"
-	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
-)
-
-const (
-	boardTemplatesCollection      = "board_templates"
-	boardProjectsCollection       = "board_projects"
-	boardProjectStatesCollection  = "board_project_states"
-	boardProjectMembersCollection = "board_project_members"
-	boardProjectLabelsCollection  = "board_project_labels"
-	boardTasksCollection          = "board_tasks"
 )
 
 type createBoardProjectRequest struct {
@@ -35,18 +23,6 @@ type boardTemplateState struct {
 type boardTemplateLabel struct {
 	Name  string `json:"name"`
 	Color string `json:"color"`
-}
-
-func registerBoard(app *pocketbase.PocketBase) {
-	app.OnServe().BindFunc(func(event *core.ServeEvent) error {
-		event.Router.POST("/api/board/projects", createBoardProject).
-			Bind(apis.RequireAuth("users"))
-		return event.Next()
-	})
-
-	app.OnRecordCreateRequest(boardTasksCollection).BindFunc(validateBoardTaskRequest)
-	app.OnRecordUpdateRequest(boardTasksCollection).BindFunc(validateBoardTaskRequest)
-	app.OnRecordDeleteRequest(boardProjectStatesCollection).BindFunc(preventDeletingUsedBoardState)
 }
 
 func createBoardProject(event *core.RequestEvent) error {
@@ -160,75 +136,4 @@ func decodeBoardTemplateField(value any, target any) error {
 		return err
 	}
 	return json.Unmarshal(raw, target)
-}
-
-func validateBoardTaskRequest(event *core.RecordRequestEvent) error {
-	projectID := event.Record.GetString("project")
-	stateID := event.Record.GetString("state")
-	if projectID == "" || stateID == "" {
-		return event.BadRequestError("Project and state are required.", nil)
-	}
-
-	state, err := event.App.FindRecordById(boardProjectStatesCollection, stateID)
-	if err != nil || state.GetString("project") != projectID {
-		return event.BadRequestError("The selected state does not belong to this project.", err)
-	}
-
-	if event.Record.IsNew() && event.Auth != nil {
-		event.Record.Set("created_by", event.Auth.Id)
-	}
-
-	for _, labelID := range event.Record.GetStringSlice("labels") {
-		label, err := event.App.FindRecordById(boardProjectLabelsCollection, labelID)
-		if err != nil || label.GetString("project") != projectID {
-			return event.BadRequestError("A selected label does not belong to this project.", err)
-		}
-	}
-	for _, userID := range event.Record.GetStringSlice("assignees") {
-		_, err := event.App.FindFirstRecordByFilter(
-			boardProjectMembersCollection,
-			"project = {:project} && user = {:user}",
-			dbx.Params{"project": projectID, "user": userID},
-		)
-		if err != nil {
-			return event.BadRequestError("Every assignee must be a project member.", err)
-		}
-	}
-
-	if event.Auth != nil {
-		project, err := event.App.FindRecordById(boardProjectsCollection, projectID)
-		if err != nil {
-			return event.BadRequestError("Project not found.", err)
-		}
-		if project.GetString("owner") != event.Auth.Id {
-			member, err := event.App.FindFirstRecordByFilter(
-				boardProjectMembersCollection,
-				"project = {:project} && user = {:user}",
-				dbx.Params{"project": projectID, "user": event.Auth.Id},
-			)
-			if err != nil || member.GetString("role") == "viewer" {
-				return event.ForbiddenError("You cannot edit tasks in this project.", err)
-			}
-		}
-	}
-
-	return event.Next()
-}
-
-func preventDeletingUsedBoardState(event *core.RecordRequestEvent) error {
-	tasks, err := event.App.FindRecordsByFilter(
-		boardTasksCollection,
-		"state = {:state}",
-		"",
-		1,
-		0,
-		dbx.Params{"state": event.Record.Id},
-	)
-	if err != nil {
-		return event.BadRequestError("Could not check state usage.", err)
-	}
-	if len(tasks) > 0 {
-		return event.BadRequestError("Move or delete the tasks in this state before deleting it.", nil)
-	}
-	return event.Next()
 }
