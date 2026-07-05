@@ -182,7 +182,7 @@ function PresetSheet({
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-md">
+      <SheetContent side="right" className="w-full sm:max-w-lg!">
         <SheetHeader>
           <SheetTitle>Choose avatar</SheetTitle>
           <SheetDescription>

@@ -1,11 +1,10 @@
-// Chat domain types — mirror the backend GORM models.
+import type { UIMessage } from "ai"
 
-export type ConversationStatus = "active" | "archived" | "deleted"
+export type ConversationStatus = "active" | "archived"
 
 export type Conversation = {
   id: string
   title: string
-  modelId: string
   status: ConversationStatus
   pinned: boolean
   messageCount: number
@@ -13,48 +12,37 @@ export type Conversation = {
   totalTokens: number
   inputTokens: number
   outputTokens: number
+  lastMessageAt: string
   createdAt: string
   updatedAt: string
 }
 
-export type MessageRole = "user" | "assistant"
-
-export type MessageStatus = "pending" | "streaming" | "complete" | "error"
-
-export type Message = {
-  id: string
-  conversationId: string
-  role: MessageRole
-  modelName: string
-  inputTokens: number
-  outputTokens: number
-  createdAt: string
-  updatedAt: string
-  status: MessageStatus
-  sequenceOrder: number
-  blocks: MessageBlock[]
+export type ChatMessageMetadata = {
+  conversationId?: string
+  status?: "pending" | "streaming" | "complete" | "error" | "cancelled"
+  runId?: string
+  model?: {
+    configId: string
+    modelId: string
+    name: string
+    protocol: string
+  }
+  usage?: {
+    inputTokens: number
+    outputTokens: number
+    totalTokens: number
+    reasoningTokens: number
+    cacheCreationTokens: number
+    cacheReadTokens: number
+  }
+  finishReason?: string
+  stepCount?: number
+  createdAt?: string
+  updatedAt?: string
+  error?: {
+    code: string
+    message: string
+  }
 }
 
-export const BlockType = {
-  Text: "text",
-  Thinking: "thinking",
-  ToolUse: "tool_use",
-  ToolResult: "tool_result",
-} as const
-
-export type BlockTypeValue = (typeof BlockType)[keyof typeof BlockType]
-
-export type MessageBlock = {
-  id: string
-  messageId: string
-  blockType: BlockTypeValue
-  sequenceOrder: number
-  content: string
-  toolUseId: string
-  toolName: string
-  toolInput: string
-  toolResult: string
-  isError: boolean
-  createdAt: string
-  updatedAt: string
-}
+export type ChatUIMessage = UIMessage<ChatMessageMetadata>

@@ -1,99 +1,120 @@
-import { useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
+
+import type { UseChatHelpers } from "@ai-sdk/react"
+import type { ChatStatus } from "ai"
 
 import {
   PromptInput,
-  type PromptInputMessage,
-  PromptInputSubmit,
-  PromptInputTextarea,
   PromptInputBody,
   PromptInputFooter,
-  PromptInputTools,
+  type PromptInputMessage,
   PromptInputSelect,
-  PromptInputSelectTrigger,
-  PromptInputSelectValue,
   PromptInputSelectContent,
   PromptInputSelectItem,
+  PromptInputSelectTrigger,
+  PromptInputSelectValue,
+  PromptInputSubmit,
+  PromptInputTextarea,
+  PromptInputTools,
 } from "@/components/ai-elements/prompt-input"
-import { CHAT_MODELS } from "@/lib/chat-utils"
-import { useChatStore } from "@/store/chat"
-import { BlockType } from "@/types/chat"
+import { pb } from "@/lib/pocketbase"
+import { useLlmSettingsStore } from "@/store/llm-settings"
+import type { ChatUIMessage } from "@/types/chat"
+
+type Props = {
+  conversationId: string
+  disabled?: boolean
+  sendMessage: UseChatHelpers<ChatUIMessage>["sendMessage"]
+  status: ChatStatus
+  stop: UseChatHelpers<ChatUIMessage>["stop"]
+}
 
 export function ChatPromptInput({
   conversationId,
-}: {
-  conversationId: string
-}) {
-  const addMessage = useChatStore((s) => s.addMessage)
-  const setConversationModel = useChatStore((s) => s.setConversationModel)
-  const modelId = useChatStore(
-    (s) => s.conversations.find((c) => c.id === conversationId)?.modelId ?? ""
+  disabled = false,
+  sendMessage,
+  status,
+  stop,
+}: Props) {
+  const models = useLlmSettingsStore((state) => state.models)
+  const defaultModelId = useMemo(
+    () => models.find((model) => model.isDefault)?.id ?? "",
+    [models]
   )
+  const [selectedModelConfigId, setSelectedModelConfigId] = useState<
+    string | null
+  >(null)
+  const modelConfigId = selectedModelConfigId ?? defaultModelId
   const [text, setText] = useState("")
+  const activeRunId = useRef<string | null>(null)
 
-  const handleSubmit = (message: PromptInputMessage) => {
+  useEffect(() => {
+    if (status === "ready" || status === "error") activeRunId.current = null
+  }, [status])
+
+  const handleSubmit = async (message: PromptInputMessage) => {
     const content = message.text.trim()
-    if (!content) return
-
-    // Add the user message
-    addMessage(conversationId, "user", [
-      {
-        blockType: BlockType.Text,
-        content,
-        toolUseId: "",
-        toolName: "",
-        toolInput: "",
-        toolResult: "",
-        isError: false,
-      },
-    ])
-
-    // Simulate an assistant response acknowledging the message
-    addMessage(conversationId, "assistant", [
-      {
-        blockType: BlockType.Thinking,
-        content:
-          "The user sent a message. In a real implementation, this would stream a response from the configured LLM model. For now, this is a simulated reply to demonstrate the chat UI.",
-        toolUseId: "",
-        toolName: "",
-        toolInput: "",
-        toolResult: "",
-        isError: false,
-      },
-      {
-        blockType: BlockType.Text,
-        content: `I received your message: "${content}". This is a simulated response — connect a backend API to enable real AI-powered replies.`,
-        toolUseId: "",
-        toolName: "",
-        toolInput: "",
-        toolResult: "",
-        isError: false,
-      },
-    ])
-
+    if (
+      !content ||
+      !modelConfigId ||
+      status === "submitted" ||
+      status === "streaming"
+    ) {
+      return
+    }
+    const runId = crypto.randomUUID()
+    activeRunId.current = runId
     setText("")
+    await sendMessage(
+      { text: content },
+      { body: { runId, conversationId, modelConfigId } }
+    )
   }
+
+  const handleStop = async () => {
+    const runId = activeRunId.current
+    try {
+      if (runId) {
+        await pb.send(`/api/chat/runs/${runId}/stop`, {
+          method: "POST",
+          requestKey: null,
+        })
+      }
+    } finally {
+      await stop()
+    }
+  }
+
+  const generating = status === "submitted" || status === "streaming"
+  const canSend =
+    !disabled && !!text.trim() && !!modelConfigId && models.length > 0
 
   return (
     <div className="p-3 px-4 md:px-16 lg:px-24">
       <PromptInput onSubmit={handleSubmit} className="rounded-xl">
         <PromptInputBody>
           <PromptInputTextarea
-            placeholder="Send a message..."
+            placeholder={
+              models.length === 0
+                ? "Configure a model to start chatting"
+                : "Send a message..."
+            }
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(event) => setText(event.target.value)}
+            disabled={disabled || models.length === 0}
           />
         </PromptInputBody>
         <PromptInputFooter>
           <PromptInputTools>
             <PromptInputSelect
-              value={modelId}
-              onValueChange={(value) => setConversationModel(conversationId, value)}
+              value={modelConfigId}
+              onValueChange={setSelectedModelConfigId}
             >
-              <PromptInputSelectTrigger>
+              <PromptInputSelectTrigger disabled={models.length === 0}>
                 <PromptInputSelectValue placeholder="Select model" />
               </PromptInputSelectTrigger>
               <PromptInputSelectContent>
-                {CHAT_MODELS.map((model) => (
+                {models.map((model) => (
                   <PromptInputSelectItem key={model.id} value={model.id}>
                     {model.name}
                   </PromptInputSelectItem>
@@ -101,7 +122,11 @@ export function ChatPromptInput({
               </PromptInputSelectContent>
             </PromptInputSelect>
           </PromptInputTools>
-          <PromptInputSubmit disabled={!text.trim()} status="ready" />
+          <PromptInputSubmit
+            disabled={!generating && !canSend}
+            status={status}
+            onStop={() => void handleStop()}
+          />
         </PromptInputFooter>
       </PromptInput>
     </div>

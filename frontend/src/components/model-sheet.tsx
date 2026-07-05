@@ -37,8 +37,9 @@ type ModelSheetProps = {
 
 const DEFAULT_BASE_URLS: Record<LlmProtocol, string> = {
   openai: "https://api.openai.com/v1",
-  anthropic: "https://api.anthropic.com/v1",
-  google: "https://generativelanguage.googleapis.com/v1beta",
+  "openai-compatible": "https://api.openai.com/v1",
+  anthropic: "https://api.anthropic.com",
+  google: "https://generativelanguage.googleapis.com/",
 }
 
 const PROTOCOLS: Array<{
@@ -47,6 +48,11 @@ const PROTOCOLS: Array<{
   description: string
 }> = [
   { value: "openai", label: "OpenAI", description: "Chat Completions API" },
+  {
+    value: "openai-compatible",
+    label: "OpenAI compatible",
+    description: "Third-party Chat Completions API",
+  },
   { value: "anthropic", label: "Anthropic", description: "Messages API" },
   {
     value: "google",
@@ -157,7 +163,7 @@ export function ModelSheet({ open, onOpenChange, model }: ModelSheetProps) {
         onOpenChange(value)
       }}
     >
-      <SheetContent side="right" className="w-full sm:max-w-md">
+      <SheetContent side="right" className="w-full sm:max-w-lg!">
         <SheetHeader>
           <SheetTitle>{model ? "Edit model" : "Add model"}</SheetTitle>
           <SheetDescription>

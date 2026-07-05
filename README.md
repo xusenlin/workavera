@@ -6,7 +6,7 @@ Workavera 是一个可自托管的 AI 团队工作台，让聊天直接变成任
 
 ## 环境要求
 
-- Go 1.25+
+- Go 1.26.4+
 - [Task](https://taskfile.dev/) 3+
 - PocketBase v0.39.4（已作为 Go 模块依赖）
 
@@ -65,6 +65,8 @@ docker run --rm \
 ├── VERSION          # 应用版本
 ├── frontend/        # Vite 前端项目，构建产物为 dist/
 ├── internal/board/  # Board 路由、领域校验与操作日志 Hook
+├── internal/agent/  # Fantasy 封装与 AI SDK UI 兼容流
+├── internal/chat/   # 会话持久化、后台运行与 SSE API
 ├── migrations/      # 数据库迁移
 ├── go.mod
 └── Taskfile.yml

@@ -69,9 +69,7 @@ function ConversationItem({
       <div
         className={cn(
           "group relative flex cursor-pointer flex-col gap-1 rounded-lg px-3 py-2.5 transition-colors",
-          isActive
-            ? "bg-muted"
-            : "hover:bg-muted/60"
+          isActive ? "bg-muted" : "hover:bg-muted/60"
         )}
         onClick={onSelect}
       >
@@ -105,7 +103,7 @@ function ConversationItem({
               <HugeiconsIcon
                 icon={Pin02Icon}
                 strokeWidth={2}
-                className="text-muted-foreground mt-0.5 size-3 shrink-0"
+                className="mt-0.5 size-3 shrink-0 text-muted-foreground"
               />
             )}
           </div>
@@ -143,7 +141,10 @@ function ConversationItem({
                 <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+            <DropdownMenuContent
+              align="end"
+              onClick={(e) => e.stopPropagation()}
+            >
               <DropdownMenuItem onClick={() => togglePin(conversation.id)}>
                 <HugeiconsIcon icon={Pin02Icon} strokeWidth={2} />
                 {conversation.pinned ? "Unpin" : "Pin"}
@@ -216,7 +217,7 @@ function ConversationGroup({
   return (
     <div className="flex flex-col gap-1">
       <div className="px-3 pt-2 pb-1">
-        <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+        <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
           {label}
         </span>
       </div>
@@ -243,11 +244,7 @@ export function ConversationList() {
   const { pinned, recent } = useMemo(() => {
     const q = query.trim().toLowerCase()
     const filtered = q
-      ? conversations.filter(
-          (c) =>
-            c.title.toLowerCase().includes(q) ||
-            c.modelId.toLowerCase().includes(q)
-        )
+      ? conversations.filter((c) => c.title.toLowerCase().includes(q))
       : conversations
 
     const sorted = [...filtered].sort(
@@ -262,13 +259,13 @@ export function ConversationList() {
   }, [conversations, query])
 
   const handleNew = () => {
-    createConversation()
+    void createConversation()
   }
 
   const hasResults = pinned.length > 0 || recent.length > 0
 
   return (
-    <div className="bg-sidebar flex h-full w-72 shrink-0 flex-col border-r">
+    <div className="flex h-full w-72 shrink-0 flex-col border-r bg-sidebar">
       {/* Header */}
       <div className="flex flex-col gap-2 border-b p-3">
         <div className="flex items-center justify-between">
@@ -286,7 +283,7 @@ export function ConversationList() {
           <HugeiconsIcon
             icon={Search02Icon}
             strokeWidth={2}
-            className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2"
+            className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
           />
           <Input
             placeholder="Search conversations..."
@@ -315,7 +312,7 @@ export function ConversationList() {
             />
           </div>
         ) : (
-          <div className="text-muted-foreground flex flex-col items-center gap-2 py-12 text-center text-sm">
+          <div className="flex flex-col items-center gap-2 py-12 text-center text-sm text-muted-foreground">
             <HugeiconsIcon
               icon={Search02Icon}
               strokeWidth={2}
@@ -323,11 +320,7 @@ export function ConversationList() {
             />
             <p>No conversations found</p>
             {query && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setQuery("")}
-              >
+              <Button variant="ghost" size="sm" onClick={() => setQuery("")}>
                 Clear search
               </Button>
             )}

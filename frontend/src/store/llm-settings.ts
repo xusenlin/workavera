@@ -3,7 +3,8 @@ import { ClientResponseError } from "pocketbase"
 
 import { pb } from "@/lib/pocketbase"
 
-export type LlmProtocol = "openai" | "anthropic" | "google"
+export type LlmProtocol =
+  "openai" | "openai-compatible" | "anthropic" | "google"
 
 export type LlmModelConfig = {
   id: string

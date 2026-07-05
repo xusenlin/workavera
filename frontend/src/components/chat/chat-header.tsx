@@ -12,7 +12,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { formatTokenCount, getModelName } from "@/lib/chat-utils"
+import { formatTokenCount } from "@/lib/chat-utils"
 import { useChatStore } from "@/store/chat"
 import type { Conversation } from "@/types/chat"
 
@@ -30,7 +30,7 @@ export function ChatHeader({ conversation }: { conversation: Conversation }) {
           <HugeiconsIcon
             icon={Pin02Icon}
             strokeWidth={2}
-            className="text-muted-foreground size-3.5 shrink-0"
+            className="size-3.5 shrink-0 text-muted-foreground"
           />
         )}
       </div>
@@ -44,7 +44,7 @@ export function ChatHeader({ conversation }: { conversation: Conversation }) {
               className="hidden cursor-default gap-1 sm:flex"
             >
               <span className="text-muted-foreground">ID</span>
-              <code className="text-foreground text-[11px]">
+              <code className="text-[11px] text-foreground">
                 {conversation.id.slice(-8)}
               </code>
             </Badge>
@@ -56,17 +56,14 @@ export function ChatHeader({ conversation }: { conversation: Conversation }) {
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <Badge
-              variant="secondary"
-              className="cursor-default gap-1"
-            >
+            <Badge variant="secondary" className="cursor-default gap-1">
               <HugeiconsIcon
                 icon={InformationCircleIcon}
                 strokeWidth={2}
                 className="size-3"
               />
               {conversation.messageCount}
-              <span className="text-muted-foreground hidden md:inline">
+              <span className="hidden text-muted-foreground md:inline">
                 messages
               </span>
             </Badge>
@@ -78,9 +75,6 @@ export function ChatHeader({ conversation }: { conversation: Conversation }) {
               <span>
                 {formatTokenCount(conversation.inputTokens)} in /{" "}
                 {formatTokenCount(conversation.outputTokens)} out tokens
-              </span>
-              <span className="text-muted-foreground">
-                Model: {getModelName(conversation.modelId)}
               </span>
             </div>
           </TooltipContent>

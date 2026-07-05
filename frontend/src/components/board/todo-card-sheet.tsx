@@ -170,7 +170,7 @@ export function TodoCardSheet({
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-md">
+      <SheetContent side="right" className="w-full sm:max-w-lg!">
         <SheetHeader>
           <SheetTitle>{todo ? "Edit task" : "Add task"}</SheetTitle>
           <SheetDescription>

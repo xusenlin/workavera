@@ -164,7 +164,7 @@ export function ContactDetailSheet({
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-md">
+      <SheetContent side="right" className="w-full sm:max-w-lg!">
         <SheetHeader>
           <SheetTitle>{contact ? "Contact details" : "Add contact"}</SheetTitle>
           <SheetDescription>

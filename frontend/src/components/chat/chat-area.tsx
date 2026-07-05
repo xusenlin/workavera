@@ -1,5 +1,9 @@
-import { HugeiconsIcon } from "@hugeicons/react"
+import { useEffect, useMemo, useState } from "react"
+
 import { Chat01Icon, SparklesIcon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
+import { useChat } from "@ai-sdk/react"
+import { DefaultChatTransport } from "ai"
 
 import {
   Conversation,
@@ -8,25 +12,30 @@ import {
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation"
 import { Button } from "@/components/ui/button"
+import { pb } from "@/lib/pocketbase"
 import { useChatStore } from "@/store/chat"
+import type {
+  ChatUIMessage,
+  Conversation as ChatConversation,
+} from "@/types/chat"
 
 import { ChatHeader } from "./chat-header"
-import { ChatPromptInput } from "./chat-prompt-input"
 import { ChatMessageItem } from "./chat-message"
+import { ChatPromptInput } from "./chat-prompt-input"
 
 function ChatEmptyState({ onCreate }: { onCreate: () => void }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8">
-      <div className="bg-primary text-primary-foreground flex size-12 items-center justify-center rounded-xl">
+      <div className="flex size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
         <HugeiconsIcon icon={Chat01Icon} strokeWidth={2} className="size-6" />
       </div>
       <div className="flex flex-col items-center gap-1 text-center">
         <h3 className="text-lg font-semibold tracking-tight">
           Start a conversation
         </h3>
-        <p className="text-muted-foreground text-sm">
+        <p className="text-sm text-muted-foreground">
           Select a conversation from the sidebar, or create a new one to begin
-          chatting with your assistant.
+          chatting.
         </p>
       </div>
       <Button onClick={onCreate} className="gap-2">
@@ -37,33 +46,59 @@ function ChatEmptyState({ onCreate }: { onCreate: () => void }) {
   )
 }
 
-export function ChatArea() {
-  const conversations = useChatStore((s) => s.conversations)
-  const activeConversationId = useChatStore((s) => s.activeConversationId)
-  const messagesByConversation = useChatStore((s) => s.messagesByConversation)
-  const createConversation = useChatStore((s) => s.createConversation)
+function ActiveChat({ conversation }: { conversation: ChatConversation }) {
+  const refreshConversations = useChatStore((state) => state.refresh)
+  const [loadingMessages, setLoadingMessages] = useState(true)
 
-  const activeConversation = conversations.find(
-    (c) => c.id === activeConversationId
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport<ChatUIMessage>({
+        api: `${pb.baseURL}/api/chat/stream`,
+        headers: () => ({ Authorization: pb.authStore.token }),
+        prepareSendMessagesRequest: ({ messages, body, headers }) => ({
+          headers,
+          body: {
+            ...body,
+            message: messages.at(-1),
+          },
+        }),
+      }),
+    []
   )
 
-  if (!activeConversation) {
-    return (
-      <div className="flex flex-1 flex-col">
-        <ChatEmptyState onCreate={createConversation} />
-      </div>
-    )
-  }
+  const { messages, setMessages, sendMessage, status, stop, error } =
+    useChat<ChatUIMessage>({
+      id: conversation.id,
+      transport,
+      onFinish: () => {
+        void refreshConversations()
+      },
+    })
 
-  const messages = messagesByConversation[activeConversation.id] ?? []
+  useEffect(() => {
+    let active = true
+    void pb
+      .send<ChatUIMessage[]>(
+        `/api/chat/conversations/${conversation.id}/messages`,
+        { method: "GET", requestKey: null }
+      )
+      .then((loaded) => {
+        if (active) setMessages(loaded)
+      })
+      .finally(() => {
+        if (active) setLoadingMessages(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [conversation.id, setMessages])
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <ChatHeader conversation={activeConversation} />
-
+      <ChatHeader conversation={conversation} />
       <Conversation>
         <ConversationContent className="w-full px-4 md:px-16 lg:px-24">
-          {messages.length === 0 ? (
+          {!loadingMessages && messages.length === 0 ? (
             <ConversationEmptyState
               title="No messages yet"
               description="Send a message below to start the conversation."
@@ -73,11 +108,39 @@ export function ChatArea() {
               <ChatMessageItem key={message.id} message={message} />
             ))
           )}
+          {error && <p className="text-sm text-destructive">{error.message}</p>}
         </ConversationContent>
         <ConversationScrollButton />
       </Conversation>
-
-      <ChatPromptInput conversationId={activeConversation.id} />
+      <ChatPromptInput
+        conversationId={conversation.id}
+        disabled={loadingMessages}
+        sendMessage={sendMessage}
+        status={status}
+        stop={stop}
+      />
     </div>
+  )
+}
+
+export function ChatArea() {
+  const conversations = useChatStore((state) => state.conversations)
+  const activeConversationId = useChatStore(
+    (state) => state.activeConversationId
+  )
+  const createConversation = useChatStore((state) => state.createConversation)
+  const activeConversation = conversations.find(
+    (conversation) => conversation.id === activeConversationId
+  )
+
+  if (!activeConversation) {
+    return (
+      <div className="flex flex-1 flex-col">
+        <ChatEmptyState onCreate={() => void createConversation()} />
+      </div>
+    )
+  }
+  return (
+    <ActiveChat key={activeConversation.id} conversation={activeConversation} />
   )
 }

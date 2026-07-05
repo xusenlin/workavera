@@ -1,18 +1,3 @@
-// Available chat models.
-
-export const CHAT_MODELS = [
-  { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4" },
-  { id: "claude-opus-4-20250514", name: "Claude Opus 4" },
-  { id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku" },
-  { id: "gpt-4o", name: "GPT-4o" },
-  { id: "gpt-4o-mini", name: "GPT-4o mini" },
-  { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash" },
-] as const
-
-export function getModelName(modelId: string): string {
-  return CHAT_MODELS.find((m) => m.id === modelId)?.name ?? modelId
-}
-
 // Lightweight relative-time formatter for the chat UI.
 
 export function formatRelativeTime(iso: string): string {

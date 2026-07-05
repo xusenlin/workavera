@@ -11,9 +11,10 @@ import (
 )
 
 var supportedProtocols = map[string]struct{}{
-	"openai":    {},
-	"anthropic": {},
-	"google":    {},
+	"openai":            {},
+	"openai-compatible": {},
+	"anthropic":         {},
+	"google":            {},
 }
 
 type modelResponse struct {
@@ -376,7 +377,7 @@ func validateModel(name, modelID, baseURL, protocol string) error {
 		return errors.New("Model ID is required.")
 	}
 	if _, ok := supportedProtocols[protocol]; !ok {
-		return errors.New("Protocol must be openai, anthropic, or google.")
+		return errors.New("Protocol must be openai, openai-compatible, anthropic, or google.")
 	}
 	parsed, err := url.ParseRequestURI(baseURL)
 	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {

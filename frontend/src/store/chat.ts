@@ -1,179 +1,134 @@
 import { create } from "zustand"
-import { persist } from "zustand/middleware"
 
-import {
-  seedConversations,
-  seedMessages,
-} from "@/data/chat-seed"
-import type {
-  Conversation,
-  Message,
-  MessageBlock,
-} from "@/types/chat"
-
-function generateId(prefix: string) {
-  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
-}
+import { pb } from "@/lib/pocketbase"
+import type { Conversation } from "@/types/chat"
 
 type ChatState = {
   conversations: Conversation[]
-  messagesByConversation: Record<string, Message[]>
   activeConversationId: string | null
-
-  // selectors / actions
+  loading: boolean
+  initialized: boolean
+  error: string | null
+  initialize: (force?: boolean) => Promise<void>
+  refresh: () => Promise<void>
   setActiveConversation: (id: string | null) => void
-  getMessages: (conversationId: string) => Message[]
-  createConversation: (title?: string, modelId?: string) => string
-  deleteConversation: (id: string) => void
-  togglePin: (id: string) => void
-  renameConversation: (id: string, title: string) => void
-  archiveConversation: (id: string) => void
-  setConversationModel: (id: string, modelId: string) => void
-
-  addMessage: (
-    conversationId: string,
-    role: Message["role"],
-    blocks: Omit<
-      MessageBlock,
-      "id" | "messageId" | "sequenceOrder" | "createdAt" | "updatedAt"
-    >[]
-  ) => string
+  createConversation: (title?: string) => Promise<string>
+  deleteConversation: (id: string) => Promise<void>
+  togglePin: (id: string) => Promise<void>
+  renameConversation: (id: string, title: string) => Promise<void>
+  archiveConversation: (id: string) => Promise<void>
 }
 
-export const useChatStore = create<ChatState>()(
-  persist(
-    (set, get) => ({
-      conversations: seedConversations,
-      messagesByConversation: seedMessages,
-      activeConversationId: seedConversations[0]?.id ?? null,
+let initializationPromise: Promise<void> | null = null
 
-      setActiveConversation: (id) => set({ activeConversationId: id }),
+function messageFromError(error: unknown) {
+  return error instanceof Error ? error.message : "Chat request failed"
+}
 
-      getMessages: (conversationId) =>
-        get().messagesByConversation[conversationId] ?? [],
+export const useChatStore = create<ChatState>((set, get) => ({
+  conversations: [],
+  activeConversationId: null,
+  loading: false,
+  initialized: false,
+  error: null,
 
-      createConversation: (title = "New conversation", modelId = "claude-sonnet-4-20250514") => {
-        const id = generateId("conv")
-        const nowIso = new Date().toISOString()
-        const conversation: Conversation = {
-          id,
-          title,
-          modelId,
-          status: "active",
-          pinned: false,
-          messageCount: 0,
-          toolCallCount: 0,
-          totalTokens: 0,
-          inputTokens: 0,
-          outputTokens: 0,
-          createdAt: nowIso,
-          updatedAt: nowIso,
-        }
+  initialize: async (force = false) => {
+    if (!force && get().initialized) return
+    if (initializationPromise) return initializationPromise
+    initializationPromise = (async () => {
+      set({ loading: true, error: null })
+      try {
+        const conversations = await pb.send<Conversation[]>(
+          "/api/chat/conversations",
+          { method: "GET", requestKey: null }
+        )
         set((state) => ({
-          conversations: [conversation, ...state.conversations],
-          messagesByConversation: {
-            ...state.messagesByConversation,
-            [id]: [],
-          },
-          activeConversationId: id,
+          conversations,
+          initialized: true,
+          activeConversationId:
+            state.activeConversationId &&
+            conversations.some((item) => item.id === state.activeConversationId)
+              ? state.activeConversationId
+              : (conversations[0]?.id ?? null),
         }))
-        return id
-      },
-
-      deleteConversation: (id) =>
-        set((state) => {
-          const rest = { ...state.messagesByConversation }
-          delete rest[id]
-          const conversations = state.conversations.filter((c) => c.id !== id)
-          const activeConversationId =
-            state.activeConversationId === id
-              ? (conversations[0]?.id ?? null)
-              : state.activeConversationId
-          return {
-            conversations,
-            messagesByConversation: rest,
-            activeConversationId,
-          }
-        }),
-
-      togglePin: (id) =>
-        set((state) => ({
-          conversations: state.conversations.map((c) =>
-            c.id === id ? { ...c, pinned: !c.pinned, updatedAt: new Date().toISOString() } : c
-          ),
-        })),
-
-      renameConversation: (id, title) =>
-        set((state) => ({
-          conversations: state.conversations.map((c) =>
-            c.id === id ? { ...c, title, updatedAt: new Date().toISOString() } : c
-          ),
-        })),
-
-      archiveConversation: (id) =>
-        set((state) => ({
-          conversations: state.conversations.map((c) =>
-            c.id === id
-              ? { ...c, status: "archived", updatedAt: new Date().toISOString() }
-              : c
-          ),
-        })),
-
-      setConversationModel: (id, modelId) =>
-        set((state) => ({
-          conversations: state.conversations.map((c) =>
-            c.id === id
-              ? { ...c, modelId, updatedAt: new Date().toISOString() }
-              : c
-          ),
-        })),
-
-      addMessage: (conversationId, role, blocks) => {
-        const msgId = generateId("msg")
-        const nowIso = new Date().toISOString()
-        const existing = get().messagesByConversation[conversationId] ?? []
-        const conversation = get().conversations.find((c) => c.id === conversationId)
-        const fullBlocks: MessageBlock[] = blocks.map((b, i) => ({
-          ...b,
-          id: generateId("blk"),
-          messageId: msgId,
-          sequenceOrder: i,
-          createdAt: nowIso,
-          updatedAt: nowIso,
-        }))
-        const message: Message = {
-          id: msgId,
-          conversationId,
-          role,
-          modelName: role === "assistant" ? (conversation?.modelId ?? "") : "",
-          inputTokens: 0,
-          outputTokens: 0,
-          createdAt: nowIso,
-          updatedAt: nowIso,
-          status: "complete",
-          sequenceOrder: existing.length,
-          blocks: fullBlocks,
-        }
-        set((state) => ({
-          messagesByConversation: {
-            ...state.messagesByConversation,
-            [conversationId]: [...existing, message],
-          },
-          conversations: state.conversations.map((c) =>
-            c.id === conversationId
-              ? {
-                  ...c,
-                  messageCount: c.messageCount + 1,
-                  updatedAt: nowIso,
-                }
-              : c
-          ),
-        }))
-        return msgId
-      },
-    }),
-    {
-      name: "chat-storage",
+        localStorage.removeItem("chat-storage")
+      } catch (error) {
+        set({ error: messageFromError(error), initialized: false })
+      } finally {
+        set({ loading: false })
+      }
+    })()
+    try {
+      await initializationPromise
+    } finally {
+      initializationPromise = null
     }
-  )
-)
+  },
+
+  refresh: async () => get().initialize(true),
+  setActiveConversation: (id) => set({ activeConversationId: id }),
+
+  createConversation: async (title = "New conversation") => {
+    const conversation = await pb.send<Conversation>(
+      "/api/chat/conversations",
+      { method: "POST", body: { title } }
+    )
+    set((state) => ({
+      conversations: [conversation, ...state.conversations],
+      activeConversationId: conversation.id,
+    }))
+    return conversation.id
+  },
+
+  deleteConversation: async (id) => {
+    await pb.send(`/api/chat/conversations/${id}`, { method: "DELETE" })
+    set((state) => {
+      const conversations = state.conversations.filter((item) => item.id !== id)
+      return {
+        conversations,
+        activeConversationId:
+          state.activeConversationId === id
+            ? (conversations[0]?.id ?? null)
+            : state.activeConversationId,
+      }
+    })
+  },
+
+  togglePin: async (id) => {
+    const current = get().conversations.find((item) => item.id === id)
+    if (!current) return
+    const conversation = await pb.send<Conversation>(
+      `/api/chat/conversations/${id}`,
+      { method: "PATCH", body: { pinned: !current.pinned } }
+    )
+    set((state) => ({
+      conversations: state.conversations.map((item) =>
+        item.id === id ? conversation : item
+      ),
+    }))
+  },
+
+  renameConversation: async (id, title) => {
+    const conversation = await pb.send<Conversation>(
+      `/api/chat/conversations/${id}`,
+      { method: "PATCH", body: { title } }
+    )
+    set((state) => ({
+      conversations: state.conversations.map((item) =>
+        item.id === id ? conversation : item
+      ),
+    }))
+  },
+
+  archiveConversation: async (id) => {
+    const conversation = await pb.send<Conversation>(
+      `/api/chat/conversations/${id}`,
+      { method: "PATCH", body: { status: "archived" } }
+    )
+    set((state) => ({
+      conversations: state.conversations.map((item) =>
+        item.id === id ? conversation : item
+      ),
+    }))
+  },
+}))

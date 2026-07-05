@@ -1,5 +1,3 @@
-import { useMemo } from "react"
-
 import {
   Message,
   MessageContent,
@@ -18,168 +16,108 @@ import {
   ToolOutput,
 } from "@/components/ai-elements/tool"
 import { Badge } from "@/components/ui/badge"
-import { cn } from "@/lib/utils"
 import { formatRelativeTime } from "@/lib/chat-utils"
-import { BlockType, type Message as ChatMessage } from "@/types/chat"
+import { cn } from "@/lib/utils"
+import type { ChatUIMessage } from "@/types/chat"
 
-/** Parse a JSON string safely, returning the raw string on failure. */
-function tryParseJson(value: string): unknown {
-  if (!value) return null
-  try {
-    return JSON.parse(value)
-  } catch {
-    return value
-  }
-}
-
-/**
- * Pairs a `tool_use` block with its corresponding `tool_result` block (matched
- * by `toolUseId`) and renders them inside a single collapsible Tool.
- */
-function ToolBlockPair({
-  toolUseBlock,
-  resultBlock,
-}: {
-  toolUseBlock: ChatMessage["blocks"][number]
-  resultBlock?: ChatMessage["blocks"][number]
-}) {
-  const input = useMemo(
-    () => tryParseJson(toolUseBlock.toolInput) as Record<string, unknown> | null,
-    [toolUseBlock.toolInput]
-  )
-
-  const output = resultBlock
-    ? (tryParseJson(resultBlock.toolResult) as Record<string, unknown> | string | null)
-    : null
-
-  const isError = resultBlock?.isError ?? false
-  const state = resultBlock
-    ? isError
-      ? ("output-error" as const)
-      : ("output-available" as const)
-    : ("input-available" as const)
-
-  return (
-    <Tool defaultOpen={isError}>
-      <ToolHeader
-        type={`tool-${toolUseBlock.toolName}` as `tool-${string}`}
-        state={state}
-      />
-      <ToolContent>
-        {input && <ToolInput input={input} />}
-        {resultBlock && (
-          <ToolOutput
-            output={output as React.ReactNode}
-            errorText={isError ? String(output ?? "Tool execution failed") : undefined}
-          />
-        )}
-      </ToolContent>
-    </Tool>
-  )
-}
-
-/**
- * Renders all blocks for a single message, pairing tool_use ↔ tool_result
- * blocks and rendering text / thinking blocks inline.
- */
-function MessageBlocks({ message }: { message: ChatMessage }) {
-  // Walk blocks in order; when we hit a tool_use, look ahead for its result.
-  const rendered: React.ReactNode[] = []
-  const consumedResultIds = new Set<string>()
-
-  message.blocks.forEach((block, index) => {
-    switch (block.blockType) {
-      case BlockType.Text:
-        rendered.push(
-          <MessageResponse key={`text-${index}`}>
-            {block.content}
+function MessageParts({ message }: { message: ChatUIMessage }) {
+  return message.parts.map((part, index) => {
+    switch (part.type) {
+      case "text":
+        return (
+          <MessageResponse
+            key={`text-${index}`}
+            isAnimating={part.state === "streaming"}
+          >
+            {part.text}
           </MessageResponse>
         )
-        break
-
-      case BlockType.Thinking:
-        rendered.push(
+      case "reasoning":
+        return (
           <Reasoning
-            key={`thinking-${index}`}
-            isStreaming={message.status === "streaming"}
+            key={`reasoning-${index}`}
+            isStreaming={part.state === "streaming"}
           >
             <ReasoningTrigger />
-            <ReasoningContent>{block.content}</ReasoningContent>
+            <ReasoningContent>{part.text}</ReasoningContent>
           </Reasoning>
         )
-        break
-
-      case BlockType.ToolUse: {
-        // Find the matching tool_result by toolUseId
-        const resultBlock = message.blocks.find(
-          (b) =>
-            b.blockType === BlockType.ToolResult &&
-            b.toolUseId === block.toolUseId &&
-            !consumedResultIds.has(b.id)
-        )
-        if (resultBlock) consumedResultIds.add(resultBlock.id)
-
-        rendered.push(
-          <ToolBlockPair
-            key={`tool-${index}`}
-            toolUseBlock={block}
-            resultBlock={resultBlock}
-          />
-        )
-        break
-      }
-
-      case BlockType.ToolResult:
-        // Skip — already rendered paired with its tool_use above.
-        // Render standalone only if it was orphaned (no matching tool_use).
-        if (consumedResultIds.has(block.id)) break
-        rendered.push(
-          <Tool key={`result-orphan-${index}`} defaultOpen>
+      case "dynamic-tool":
+        return (
+          <Tool
+            key={part.toolCallId}
+            defaultOpen={part.state === "output-error"}
+          >
             <ToolHeader
-              type="tool-unknown"
-              state={block.isError ? "output-error" : "output-available"}
+              type="dynamic-tool"
+              toolName={part.toolName}
+              state={part.state}
             />
             <ToolContent>
-              <ToolOutput
-                output={tryParseJson(block.toolResult) as React.ReactNode}
-                errorText={
-                  block.isError ? block.toolResult : undefined
-                }
-              />
+              {part.input !== undefined && <ToolInput input={part.input} />}
+              {(part.state === "output-available" ||
+                part.state === "output-error") && (
+                <ToolOutput
+                  output={
+                    part.state === "output-available" ? part.output : undefined
+                  }
+                  errorText={
+                    part.state === "output-error" ? part.errorText : undefined
+                  }
+                />
+              )}
             </ToolContent>
           </Tool>
         )
-        break
+      case "source-url":
+        return (
+          <a
+            key={`${part.sourceId}-${index}`}
+            href={part.url}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs text-muted-foreground underline underline-offset-4"
+          >
+            {part.title || part.url}
+          </a>
+        )
+      default:
+        return null
     }
   })
-
-  return <>{rendered}</>
 }
 
-export function ChatMessageItem({ message }: { message: ChatMessage }) {
+export function ChatMessageItem({ message }: { message: ChatUIMessage }) {
   const isUser = message.role === "user"
+  const metadata = message.metadata
+  const createdAt = metadata?.createdAt
+  const usage = metadata?.usage
 
   return (
     <Message from={message.role}>
-      {/* Role + model label */}
       <div
         className={cn(
           "flex items-center gap-2 text-xs text-muted-foreground",
           isUser && "ml-auto justify-end"
         )}
       >
-        <span className="font-medium">
-          {isUser ? "You" : "Assistant"}
-        </span>
-        {!isUser && message.modelName && (
+        <span className="font-medium">{isUser ? "You" : "Assistant"}</span>
+        {!isUser && metadata?.model?.name && (
           <>
             <span className="text-muted-foreground/50">·</span>
-            <span className="text-muted-foreground">{message.modelName}</span>
+            <span>{metadata.model.name}</span>
           </>
         )}
-        <span className="text-muted-foreground/50">·</span>
-        <span>{formatRelativeTime(message.createdAt)}</span>
-        {message.status === "streaming" && (
+        {createdAt && (
+          <>
+            <span className="text-muted-foreground/50">·</span>
+            <span>{formatRelativeTime(createdAt)}</span>
+          </>
+        )}
+        {(metadata?.status === "streaming" ||
+          message.parts.some((part) =>
+            "state" in part ? part.state === "streaming" : false
+          )) && (
           <Badge variant="secondary" className="h-4 px-1 text-[10px]">
             streaming
           </Badge>
@@ -187,21 +125,17 @@ export function ChatMessageItem({ message }: { message: ChatMessage }) {
       </div>
 
       <MessageContent>
-        <MessageBlocks message={message} />
+        <MessageParts message={message} />
       </MessageContent>
 
-      {/* Token usage for assistant messages */}
-      {!isUser && (message.inputTokens > 0 || message.outputTokens > 0) && (
-        <div className="text-muted-foreground/70 flex items-center gap-2 text-[11px]">
-          {message.inputTokens > 0 && (
-            <span>↑ {message.inputTokens} in</span>
-          )}
-          {message.outputTokens > 0 && (
-            <span>↓ {message.outputTokens} out</span>
-          )}
-        </div>
-      )}
+      {!isUser &&
+        usage &&
+        (usage.inputTokens > 0 || usage.outputTokens > 0) && (
+          <div className="flex items-center gap-2 text-[11px] text-muted-foreground/70">
+            {usage.inputTokens > 0 && <span>↑ {usage.inputTokens} in</span>}
+            {usage.outputTokens > 0 && <span>↓ {usage.outputTokens} out</span>}
+          </div>
+        )}
     </Message>
   )
 }
-

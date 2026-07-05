@@ -11,6 +11,7 @@ import (
 	"github.com/pocketbase/pocketbase/tools/osutils"
 
 	"github.com/xusenlin/workavera/internal/board"
+	"github.com/xusenlin/workavera/internal/chat"
 	"github.com/xusenlin/workavera/internal/llm"
 	_ "github.com/xusenlin/workavera/migrations"
 )
@@ -23,6 +24,7 @@ func main() {
 	app.RootCmd.Version = version
 	board.Register(app)
 	llm.Register(app)
+	chat.Register(app)
 
 	migratecmd.MustRegister(app, app.RootCmd, migratecmd.Config{
 		Automigrate: osutils.IsProbablyGoRun(),

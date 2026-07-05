@@ -31,7 +31,7 @@ func TestLLMModelsMigration(t *testing.T) {
 		t.Fatalf("api_key must be a hidden text field: %#v", apiKey)
 	}
 	protocol, ok := collection.Fields.GetByName("protocol").(*core.SelectField)
-	if !ok || len(protocol.Values) != 3 || protocol.Values[0] != "openai" || protocol.Values[1] != "anthropic" || protocol.Values[2] != "google" {
+	if !ok || len(protocol.Values) != 4 || protocol.Values[0] != "openai" || protocol.Values[1] != "openai-compatible" || protocol.Values[2] != "anthropic" || protocol.Values[3] != "google" {
 		t.Fatalf("unexpected protocol field: %#v", protocol)
 	}
 	for _, name := range []string{"name", "model_id", "base_url", "is_default", "created", "updated"} {
