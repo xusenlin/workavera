@@ -20,6 +20,8 @@ import { formatRelativeTime } from "@/lib/chat-utils"
 import { cn } from "@/lib/utils"
 import type { ChatUIMessage } from "@/types/chat"
 
+import { ContactsToolCard } from "./contacts-tool-output"
+
 function MessageParts({ message }: { message: ChatUIMessage }) {
   return message.parts.map((part, index) => {
     switch (part.type) {
@@ -43,6 +45,9 @@ function MessageParts({ message }: { message: ChatUIMessage }) {
           </Reasoning>
         )
       case "dynamic-tool":
+        if (part.toolName === "get_contacts") {
+          return <ContactsToolCard key={part.toolCallId} part={part} />
+        }
         return (
           <Tool
             key={part.toolCallId}

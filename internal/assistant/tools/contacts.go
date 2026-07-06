@@ -17,7 +17,7 @@ type contactsInput struct {
 func newContactsTool(app core.App, actorID string) fantasy.AgentTool {
 	return fantasy.NewAgentTool(
 		"get_contacts",
-		"搜索当前用户可见的团队联系人，返回姓名、职位和在线状态。结果不包含手机号等敏感资料。",
+		"搜索当前用户可见的团队联系人，支持按姓名或职位模糊匹配，返回姓名、职位和在线状态。结果不包含手机号等敏感资料。",
 		func(ctx context.Context, input contactsInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
 			result, err := contacts.Search(ctx, app, actorID, contacts.SearchOptions{Query: input.Query, Limit: input.Limit})
 			if err != nil {

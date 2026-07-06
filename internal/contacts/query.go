@@ -17,10 +17,12 @@ type SearchOptions struct {
 }
 
 type Summary struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Title  string `json:"title,omitempty"`
-	Status string `json:"status,omitempty"`
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Title      string `json:"title,omitempty"`
+	Status     string `json:"status,omitempty"`
+	Avatar     string `json:"avatar,omitempty"`
+	Collection string `json:"collectionId,omitempty"`
 }
 
 // Search returns the bounded, non-sensitive contact projection available to
@@ -63,10 +65,12 @@ func Search(ctx context.Context, app core.App, actorID string, options SearchOpt
 	result := make([]Summary, 0, len(records))
 	for _, record := range records {
 		result = append(result, Summary{
-			ID:     record.Id,
-			Name:   record.GetString("name"),
-			Title:  record.GetString("title"),
-			Status: record.GetString("status"),
+			ID:         record.Id,
+			Name:       record.GetString("name"),
+			Title:      record.GetString("title"),
+			Status:     record.GetString("status"),
+			Avatar:     record.GetString("avatar"),
+			Collection: record.Collection().Id,
 		})
 	}
 	return result, nil
