@@ -17,11 +17,20 @@ type ProjectSearchOptions struct {
 	Limit           int
 }
 
+type ProjectStateSummary struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Color     string `json:"color"`
+	Category  string `json:"category"`
+	TaskCount int    `json:"taskCount"`
+}
+
 type ProjectSummary struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	Archived    bool   `json:"archived"`
+	ID          string                `json:"id"`
+	Name        string                `json:"name"`
+	Description string                `json:"description,omitempty"`
+	Archived    bool                  `json:"archived"`
+	States      []ProjectStateSummary `json:"states"`
 }
 
 // SearchVisibleProjects centralizes the same owner-or-member visibility rule
@@ -66,12 +75,57 @@ func SearchVisibleProjects(ctx context.Context, app core.App, actorID string, op
 
 	result := make([]ProjectSummary, 0, len(records))
 	for _, record := range records {
+		states, err := loadProjectStatesWithCounts(ctx, app, record.Id)
+		if err != nil {
+			return nil, err
+		}
 		result = append(result, ProjectSummary{
 			ID:          record.Id,
 			Name:        record.GetString("name"),
 			Description: record.GetString("description"),
 			Archived:    record.GetBool("archived"),
+			States:      states,
 		})
 	}
 	return result, nil
+}
+
+// loadProjectStatesWithCounts returns the states of a project sorted by
+// sort_order, each annotated with the number of tasks currently in that state.
+func loadProjectStatesWithCounts(ctx context.Context, app core.App, projectID string) ([]ProjectStateSummary, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	stateRecords, err := app.FindRecordsByFilter(boardProjectStatesCollection, "project = {:project}", "sort_order", 0, 0, dbx.Params{"project": projectID})
+	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	// Query all tasks for this project and count by state in Go. This avoids
+	// per-state queries and avoids PocketBase array-operator pitfalls.
+	taskCounts := make(map[string]int)
+	if len(stateRecords) > 0 {
+		taskRecords, err := app.FindRecordsByFilter(boardTasksCollection, "project = {:project}", "", 0, 0, dbx.Params{"project": projectID})
+		if err != nil {
+			return nil, err
+		}
+		for _, tr := range taskRecords {
+			taskCounts[tr.GetString("state")]++
+		}
+	}
+
+	states := make([]ProjectStateSummary, 0, len(stateRecords))
+	for _, sr := range stateRecords {
+		states = append(states, ProjectStateSummary{
+			ID:        sr.Id,
+			Name:      sr.GetString("name"),
+			Color:     sr.GetString("color"),
+			Category:  sr.GetString("category"),
+			TaskCount: taskCounts[sr.Id],
+		})
+	}
+	return states, nil
 }

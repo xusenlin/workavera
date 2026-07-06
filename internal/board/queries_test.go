@@ -46,6 +46,15 @@ func TestSearchVisibleProjectsUsesOwnerOrMemberPolicy(t *testing.T) {
 	if !ids[owned.Id] || !ids[shared.Id] || len(ids) != 2 {
 		t.Fatalf("unexpected visible projects: %#v", result)
 	}
+
+	// Verify states and task counts are populated.
+	for _, project := range result {
+		for _, state := range project.States {
+			if state.ID == "" || state.Name == "" || state.Color == "" {
+				t.Fatalf("project %s has incomplete state: %#v", project.Name, state)
+			}
+		}
+	}
 }
 
 func createQueryTestUser(t *testing.T, app core.App, email, name string) *core.Record {

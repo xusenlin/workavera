@@ -16,7 +16,7 @@ import (
 	workagent "github.com/xusenlin/workavera/internal/agent"
 )
 
-const defaultSystemPrompt = "You are a helpful assistant for a collaborative work management application. Be accurate, concise, and use Markdown when it improves clarity."
+const defaultSystemPrompt = "You are a helpful assistant for a collaborative work management application. Be accurate, concise, and use Markdown when it improves clarity. When a tool's results are displayed to the user as a custom UI (e.g. contact cards, project cards), do NOT repeat or list the same data in your text reply — just give a brief one-sentence summary."
 
 type streamRequest struct {
 	RunID          string            `json:"runId"`

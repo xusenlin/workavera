@@ -10,23 +10,23 @@ import (
 )
 
 type contactsInput struct {
-	Query string `json:"query,omitempty" description:"按姓名或职位筛选；留空时返回前几位联系人"`
-	Limit int    `json:"limit,omitempty" description:"最多返回多少条，默认 10，最大 20"`
+	Query string `json:"query,omitempty" description:"Filter by name or title; leave empty to return the first few contacts"`
+	Limit int    `json:"limit,omitempty" description:"Maximum number of results, default 10, max 20"`
 }
 
 func newContactsTool(app core.App, actorID string) fantasy.AgentTool {
 	return fantasy.NewAgentTool(
-		"get_contacts",
-		"搜索当前用户可见的团队联系人，支持按姓名或职位模糊匹配，返回姓名、职位和在线状态。结果不包含手机号等敏感资料。",
+		"show_contacts",
+		"Search team contacts visible to the current user with fuzzy matching by name or title. Returns name, title and online status. The results are already displayed to the user as contact cards — do NOT repeat the contact list in your reply, just give a brief one-sentence summary.",
 		func(ctx context.Context, input contactsInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
 			result, err := contacts.Search(ctx, app, actorID, contacts.SearchOptions{Query: input.Query, Limit: input.Limit})
 			if err != nil {
 				app.Logger().Error("assistant contacts tool failed", "actorId", actorID, "error", err)
-				return fantasy.NewTextErrorResponse("联系人查询暂时不可用"), nil
+				return fantasy.NewTextErrorResponse("Contacts search is temporarily unavailable"), nil
 			}
 			data, err := json.Marshal(result)
 			if err != nil {
-				return fantasy.NewTextErrorResponse("联系人结果序列化失败"), nil
+				return fantasy.NewTextErrorResponse("Failed to serialize contacts results"), nil
 			}
 			return fantasy.NewTextResponse(string(data)), nil
 		},

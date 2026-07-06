@@ -18,8 +18,6 @@ import {
 import {
   Avatar,
   AvatarFallback,
-  AvatarGroup,
-  AvatarGroupCount,
   AvatarImage,
 } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -33,6 +31,7 @@ import { pb } from "@/lib/pocketbase"
 import { cn } from "@/lib/utils"
 import type { DynamicToolUIPart } from "ai"
 import type { ReactNode } from "react"
+import { useNavigate } from "react-router"
 
 type UserStatus = "online" | "away" | "busy" | "offline"
 
@@ -131,10 +130,11 @@ export function ContactsToolCard({ part }: { part: ContactsToolPart }) {
   const isError = part.state === "output-error"
   const isLoading =
     part.state === "input-streaming" || part.state === "input-available"
+  const navigate = useNavigate()
 
   return (
     <Collapsible
-      defaultOpen={isError || isLoading}
+      defaultOpen={true}
       className="group not-prose mb-4 w-full rounded-md border"
     >
       <CollapsibleTrigger
@@ -192,19 +192,33 @@ export function ContactsToolCard({ part }: { part: ContactsToolPart }) {
         {/* Results */}
         {part.state === "output-available" && contacts.length > 0 && (
           <TooltipProvider delayDuration={200}>
-            <AvatarGroup className="flex-wrap">
+            <div className="flex flex-wrap gap-2">
               {visible.map((contact) => {
                 const meta = statusMeta(contact.status)
                 const src = avatarUrl(contact)
                 return (
                   <Tooltip key={contact.id}>
                     <TooltipTrigger asChild>
-                      <Avatar size="sm" className="cursor-default">
-                        {src && <AvatarImage src={src} alt={contact.name} />}
-                        <AvatarFallback>
-                          {getInitials(contact.name)}
-                        </AvatarFallback>
-                      </Avatar>
+                      <div
+                        className="flex cursor-pointer items-center gap-2 rounded-full border bg-card px-2 py-1 transition-colors hover:bg-muted/50"
+                        onClick={() => navigate("/contacts")}
+                      >
+                        <Avatar size="sm">
+                          {src && <AvatarImage src={src} alt={contact.name} />}
+                          <AvatarFallback>
+                            {getInitials(contact.name)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="pr-1 text-sm font-medium">
+                          {contact.name}
+                        </span>
+                        {meta && (
+                          <span
+                            className="size-2 rounded-full"
+                            style={{ backgroundColor: meta.color }}
+                          />
+                        )}
+                      </div>
                     </TooltipTrigger>
                     <TooltipContent className="flex flex-col items-start gap-0.5 py-1.5">
                       <div className="flex items-center gap-1.5">
@@ -229,9 +243,11 @@ export function ContactsToolCard({ part }: { part: ContactsToolPart }) {
                 )
               })}
               {overflow > 0 && (
-                <AvatarGroupCount>+{overflow}</AvatarGroupCount>
+                <div className="flex items-center rounded-full border bg-muted px-2.5 py-1 text-sm text-muted-foreground">
+                  +{overflow}
+                </div>
               )}
-            </AvatarGroup>
+            </div>
           </TooltipProvider>
         )}
 

@@ -25,8 +25,8 @@ type Summary struct {
 	Collection string `json:"collectionId,omitempty"`
 }
 
-// Search returns the bounded, non-sensitive contact projection available to
-// an authenticated user. Phone numbers and other profile details are excluded
+// Search returns the non-sensitive contact projection available to an
+// authenticated user. Phone numbers and other profile details are excluded
 // because tool results are forwarded to the selected external model.
 func Search(ctx context.Context, app core.App, actorID string, options SearchOptions) ([]Summary, error) {
 	if actorID == "" {
@@ -39,14 +39,6 @@ func Search(ctx context.Context, app core.App, actorID string, options SearchOpt
 		return nil, errors.New("actor is not an active user")
 	}
 
-	limit := options.Limit
-	if limit <= 0 {
-		limit = 10
-	}
-	if limit > MaxSearchResults {
-		limit = MaxSearchResults
-	}
-
 	query := strings.TrimSpace(options.Query)
 	filter := "id != ''"
 	params := dbx.Params{}
@@ -54,7 +46,7 @@ func Search(ctx context.Context, app core.App, actorID string, options SearchOpt
 		filter = "name ~ {:query} || title ~ {:query}"
 		params["query"] = query
 	}
-	records, err := app.FindRecordsByFilter("users", filter, "name", limit, 0, params)
+	records, err := app.FindRecordsByFilter("users", filter, "name", 0, 0, params)
 	if err != nil {
 		return nil, err
 	}

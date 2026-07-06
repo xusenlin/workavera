@@ -12,7 +12,7 @@ func TestFactoryRegistersOnlyProductionTools(t *testing.T) {
 	for _, tool := range registered {
 		names[tool.Info().Name] = true
 	}
-	if !names["get_contacts"] || !names["get_board_projects"] || names["get_weather"] {
+	if !names["show_contacts"] || !names["show_board_projects"] || names["get_weather"] {
 		t.Fatalf("unexpected production tool registry: %#v", names)
 	}
 }

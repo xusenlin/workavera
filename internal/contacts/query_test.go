@@ -12,7 +12,7 @@ import (
 	_ "github.com/xusenlin/workavera/migrations"
 )
 
-func TestSearchIsBoundedAndExcludesPhoneNumbers(t *testing.T) {
+func TestSearchReturnsAllAndExcludesPhoneNumbers(t *testing.T) {
 	app, err := tests.NewTestApp()
 	if err != nil {
 		t.Fatal(err)
@@ -39,12 +39,12 @@ func TestSearchIsBoundedAndExcludesPhoneNumbers(t *testing.T) {
 		}
 	}
 
-	result, err := Search(context.Background(), app, actorID, SearchOptions{Query: "Engineer", Limit: 200})
+	result, err := Search(context.Background(), app, actorID, SearchOptions{Query: "Engineer"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result) != MaxSearchResults {
-		t.Fatalf("expected capped result count %d, got %d", MaxSearchResults, len(result))
+	if len(result) != 25 {
+		t.Fatalf("expected all 25 results, got %d", len(result))
 	}
 	raw, err := json.Marshal(result)
 	if err != nil {
