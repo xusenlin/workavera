@@ -13,12 +13,19 @@ import (
 	"charm.land/fantasy/providers/openaicompat"
 )
 
-// FantasyRunner adapts Fantasy to the application's AI SDK UI compatible
-// stream protocol. Fantasy types never escape this file.
-type FantasyRunner struct{}
+const maxAgentSteps = 12
 
-func NewFantasyRunner() *FantasyRunner {
-	return &FantasyRunner{}
+// FantasyRunner adapts Fantasy to the application's AI SDK UI compatible
+// stream protocol. PocketBase and application-domain services stay outside
+// this package and are supplied through an actor-scoped tool factory.
+type FantasyToolFactory func(actorID string) []fantasy.AgentTool
+
+type FantasyRunner struct {
+	toolFactory FantasyToolFactory
+}
+
+func NewFantasyRunner(toolFactory FantasyToolFactory) *FantasyRunner {
+	return &FantasyRunner{toolFactory: toolFactory}
 }
 
 func (r *FantasyRunner) Stream(ctx context.Context, request Request, emit EmitFunc) (Result, error) {
@@ -27,7 +34,10 @@ func (r *FantasyRunner) Stream(ctx context.Context, request Request, emit EmitFu
 		return Result{}, err
 	}
 
-	opts := make([]fantasy.AgentOption, 0, 1)
+	opts := []fantasy.AgentOption{fantasy.WithStopConditions(fantasy.StepCountIs(maxAgentSteps))}
+	if r.toolFactory != nil {
+		opts = append(opts, fantasy.WithTools(r.toolFactory(request.ActorID)...))
+	}
 	if request.SystemPrompt != "" {
 		opts = append(opts, fantasy.WithSystemPrompt(request.SystemPrompt))
 	}
@@ -53,6 +63,9 @@ func (r *FantasyRunner) Stream(ctx context.Context, request Request, emit EmitFu
 			return emitChunk(StreamChunk{Type: "text-start", ID: id})
 		},
 		OnTextDelta: func(id, text string) error {
+			if text == "" {
+				return nil
+			}
 			return emitChunk(StreamChunk{Type: "text-delta", ID: id, Delta: text})
 		},
 		OnTextEnd: func(id string) error {
@@ -68,30 +81,43 @@ func (r *FantasyRunner) Stream(ctx context.Context, request Request, emit EmitFu
 			return nil
 		},
 		OnReasoningDelta: func(id, text string) error {
+			if text == "" {
+				return nil
+			}
 			return emitChunk(StreamChunk{Type: "reasoning-delta", ID: id, Delta: text})
 		},
-		OnReasoningEnd: func(id string, _ fantasy.ReasoningContent) error {
-			return emitChunk(StreamChunk{Type: "reasoning-end", ID: id})
+		OnReasoningEnd: func(id string, reasoning fantasy.ReasoningContent) error {
+			chunk := StreamChunk{Type: "reasoning-end", ID: id, ProviderMetadata: providerMetadataMap(reasoning.ProviderMetadata)}
+			// Preserve provider metadata (e.g. Anthropic thinking-block
+			// signatures). Without it, a rebuilt reasoning part cannot be
+			// round-tripped back into a thinking block, and providers that
+			// require thinking blocks to accompany tool_use blocks (Anthropic)
+			// reject the request on the next turn.
+			return emitChunk(chunk)
 		},
 		OnToolInputStart: func(id, toolName string) error {
 			return emitChunk(StreamChunk{Type: "tool-input-start", ToolCallID: id, ToolName: toolName, Dynamic: true})
 		},
 		OnToolInputDelta: func(id, delta string) error {
+			if delta == "" {
+				return nil
+			}
 			return emitChunk(StreamChunk{Type: "tool-input-delta", ToolCallID: id, InputTextDelta: delta})
 		},
 		OnToolCall: func(call fantasy.ToolCallContent) error {
 			input := decodeJSONValue(call.Input)
+			metadata := providerMetadataMap(call.ProviderMetadata)
 			if call.Invalid {
 				message := "Invalid tool input"
 				if call.ValidationError != nil {
 					message = call.ValidationError.Error()
 				}
-				return emitChunk(StreamChunk{Type: "tool-input-error", ToolCallID: call.ToolCallID, ToolName: call.ToolName, Input: input, ErrorText: message, Dynamic: true, ProviderExecuted: call.ProviderExecuted})
+				return emitChunk(StreamChunk{Type: "tool-input-error", ToolCallID: call.ToolCallID, ToolName: call.ToolName, Input: input, ErrorText: message, Dynamic: true, ProviderExecuted: call.ProviderExecuted, ProviderMetadata: metadata})
 			}
-			return emitChunk(StreamChunk{Type: "tool-input-available", ToolCallID: call.ToolCallID, ToolName: call.ToolName, Input: input, Dynamic: true, ProviderExecuted: call.ProviderExecuted})
+			return emitChunk(StreamChunk{Type: "tool-input-available", ToolCallID: call.ToolCallID, ToolName: call.ToolName, Input: input, Dynamic: true, ProviderExecuted: call.ProviderExecuted, ProviderMetadata: metadata})
 		},
 		OnToolResult: func(result fantasy.ToolResultContent) error {
-			chunk := StreamChunk{ToolCallID: result.ToolCallID, Dynamic: true, ProviderExecuted: result.ProviderExecuted}
+			chunk := StreamChunk{ToolCallID: result.ToolCallID, Dynamic: true, ProviderExecuted: result.ProviderExecuted, ProviderMetadata: providerMetadataMap(result.ProviderMetadata)}
 			switch output := result.Result.(type) {
 			case fantasy.ToolResultOutputContentText:
 				chunk.Type = "tool-output-available"
@@ -206,47 +232,85 @@ func toFantasyMessages(messages []Message) ([]fantasy.Message, error) {
 				result = append(result, fantasy.Message{Role: fantasy.MessageRoleUser, Content: parts})
 			}
 		case "assistant":
-			assistantParts := make([]fantasy.MessagePart, 0, len(message.Parts))
-			toolParts := make([]fantasy.MessagePart, 0)
-			for _, part := range message.Parts {
-				partType, _ := part["type"].(string)
-				switch partType {
-				case "text":
-					if text, _ := part["text"].(string); text != "" {
-						assistantParts = append(assistantParts, fantasy.TextPart{Text: text})
-					}
-				case "reasoning":
-					if text, _ := part["text"].(string); text != "" {
-						assistantParts = append(assistantParts, fantasy.ReasoningPart{Text: text})
-					}
-				case "dynamic-tool":
-					callID, _ := part["toolCallId"].(string)
-					toolName, _ := part["toolName"].(string)
-					if callID == "" || toolName == "" {
-						continue
-					}
-					input, err := json.Marshal(part["input"])
-					if err != nil {
-						return nil, err
-					}
-					assistantParts = append(assistantParts, fantasy.ToolCallPart{ToolCallID: callID, ToolName: toolName, Input: string(input)})
-					if state, _ := part["state"].(string); state == "output-available" {
-						output, err := json.Marshal(part["output"])
+			// Rebuild assistant messages preserving the Anthropic contract:
+			// every tool_use block must be immediately followed (in the next
+			// message) by its tool_result. Fantasy splits a multi-step turn
+			// into separate assistant/tool messages per step (see
+			// toResponseMessages in agent.go). We must reconstruct that
+			// structure from the flattened, persisted parts — using the
+			// "step-start" markers as step boundaries.
+			steps := splitAssistantPartsByStep(message.Parts)
+			for _, stepParts := range steps {
+				assistantParts := make([]fantasy.MessagePart, 0, len(stepParts))
+				var toolParts []fantasy.MessagePart
+				for _, part := range stepParts {
+					partType, _ := part["type"].(string)
+					switch partType {
+					case "text":
+						if text, _ := part["text"].(string); text != "" {
+							assistantParts = append(assistantParts, fantasy.TextPart{Text: text})
+						}
+					case "reasoning":
+						text, _ := part["text"].(string)
+						meta, _ := part["providerMetadata"].(map[string]any)
+						if text == "" && len(meta) == 0 {
+							continue
+						}
+						reasoningPart := fantasy.ReasoningPart{Text: text}
+						if len(meta) > 0 {
+							reasoningPart.ProviderOptions = toProviderOptions(meta)
+						}
+						assistantParts = append(assistantParts, reasoningPart)
+					case "dynamic-tool":
+						callID, _ := part["toolCallId"].(string)
+						toolName, _ := part["toolName"].(string)
+						if callID == "" || toolName == "" {
+							continue
+						}
+						input, err := json.Marshal(part["input"])
 						if err != nil {
 							return nil, err
 						}
-						toolParts = append(toolParts, fantasy.ToolResultPart{ToolCallID: callID, Output: fantasy.ToolResultOutputContentText{Text: string(output)}})
-					} else if state == "output-error" {
-						errorText, _ := part["errorText"].(string)
-						toolParts = append(toolParts, fantasy.ToolResultPart{ToolCallID: callID, Output: fantasy.ToolResultOutputContentError{Error: errors.New(errorText)}})
+						providerExecuted, _ := part["providerExecuted"].(bool)
+						callPart := fantasy.ToolCallPart{ToolCallID: callID, ToolName: toolName, Input: string(input), ProviderExecuted: providerExecuted}
+						if meta, ok := part["callProviderMetadata"].(map[string]any); ok && len(meta) > 0 {
+							callPart.ProviderOptions = toProviderOptions(meta)
+						}
+						assistantParts = append(assistantParts, callPart)
+						if state, _ := part["state"].(string); state == "output-available" {
+							output, err := toolResultText(part["output"])
+							if err != nil {
+								return nil, err
+							}
+							resultPart := fantasy.ToolResultPart{ToolCallID: callID, Output: fantasy.ToolResultOutputContentText{Text: output}, ProviderExecuted: providerExecuted}
+							if meta, ok := part["resultProviderMetadata"].(map[string]any); ok && len(meta) > 0 {
+								resultPart.ProviderOptions = toProviderOptions(meta)
+							}
+							if providerExecuted {
+								assistantParts = append(assistantParts, resultPart)
+							} else {
+								toolParts = append(toolParts, resultPart)
+							}
+						} else if state == "output-error" {
+							errorText, _ := part["errorText"].(string)
+							resultPart := fantasy.ToolResultPart{ToolCallID: callID, Output: fantasy.ToolResultOutputContentError{Error: errors.New(errorText)}, ProviderExecuted: providerExecuted}
+							if meta, ok := part["resultProviderMetadata"].(map[string]any); ok && len(meta) > 0 {
+								resultPart.ProviderOptions = toProviderOptions(meta)
+							}
+							if providerExecuted {
+								assistantParts = append(assistantParts, resultPart)
+							} else {
+								toolParts = append(toolParts, resultPart)
+							}
+						}
 					}
 				}
-			}
-			if len(assistantParts) > 0 {
-				result = append(result, fantasy.Message{Role: fantasy.MessageRoleAssistant, Content: assistantParts})
-			}
-			if len(toolParts) > 0 {
-				result = append(result, fantasy.Message{Role: fantasy.MessageRoleTool, Content: toolParts})
+				if len(assistantParts) > 0 {
+					result = append(result, fantasy.Message{Role: fantasy.MessageRoleAssistant, Content: assistantParts})
+				}
+				if len(toolParts) > 0 {
+					result = append(result, fantasy.Message{Role: fantasy.MessageRoleTool, Content: toolParts})
+				}
 			}
 		}
 	}
@@ -262,4 +326,81 @@ func decodeJSONValue(value string) any {
 		return decoded
 	}
 	return value
+}
+
+func toolResultText(value any) (string, error) {
+	if text, ok := value.(string); ok {
+		return text, nil
+	}
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	return string(raw), nil
+}
+
+func providerMetadataMap(metadata fantasy.ProviderMetadata) map[string]any {
+	if len(metadata) == 0 {
+		return nil
+	}
+	raw, err := json.Marshal(metadata)
+	if err != nil {
+		return nil
+	}
+	var value map[string]any
+	if json.Unmarshal(raw, &value) != nil || len(value) == 0 {
+		return nil
+	}
+	return value
+}
+
+// toProviderOptions rebuilds a fantasy.ProviderOptions from a
+// map[string]any (as persisted in a Part). Each value is re-marshaled to
+// json.RawMessage so the fantasy registry can route it to the correct
+// provider-specific type (e.g. Anthropic's ReasoningOptionMetadata carrying
+// the thinking-block signature).
+func toProviderOptions(meta map[string]any) fantasy.ProviderOptions {
+	rawMap := make(map[string]json.RawMessage, len(meta))
+	for provider, value := range meta {
+		raw, err := json.Marshal(value)
+		if err != nil {
+			continue
+		}
+		rawMap[provider] = raw
+	}
+	opts, err := fantasy.UnmarshalProviderOptions(rawMap)
+	if err != nil {
+		return nil
+	}
+	return opts
+}
+
+// splitAssistantPartsByStep groups persisted assistant parts into per-step
+// slices, using "step-start" markers as boundaries. This mirrors how the
+// fantasy agent splits a multi-step turn into separate messages internally
+// (one assistant + tool message pair per step). Without this split, a
+// flattened message with tool_use followed by second-step text would place
+// content between a tool_use and its tool_result, violating the Anthropic
+// API contract. If no step-start markers are present (e.g. older records),
+// all parts are returned as a single group.
+func splitAssistantPartsByStep(parts []Part) [][]Part {
+	var groups [][]Part
+	current := make([]Part, 0)
+	for _, part := range parts {
+		if partType, _ := part["type"].(string); partType == "step-start" {
+			if len(current) > 0 {
+				groups = append(groups, current)
+			}
+			current = make([]Part, 0)
+			continue
+		}
+		current = append(current, part)
+	}
+	if len(current) > 0 {
+		groups = append(groups, current)
+	}
+	if len(groups) == 0 && len(parts) > 0 {
+		groups = [][]Part{parts}
+	}
+	return groups
 }

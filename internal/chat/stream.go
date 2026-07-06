@@ -3,7 +3,9 @@ package chat
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -49,7 +51,7 @@ func (s *service) stream(event *core.RequestEvent) error {
 		return event.BadRequestError("A non-empty user text message is required.", nil)
 	}
 
-	userMessage, assistantMessage, err := createTurnRecords(event.App, conversation, modelRecord, request.Message.Parts)
+	_, assistantMessage, err := createTurnRecords(event.App, conversation, modelRecord, request.Message.Parts)
 	if err != nil {
 		return event.BadRequestError("Could not create chat messages.", err)
 	}
@@ -64,7 +66,7 @@ func (s *service) stream(event *core.RequestEvent) error {
 	subscriber := run.subscribe()
 
 	requestModel := modelConfig(modelRecord)
-	go s.executeRun(runCtx, run, conversation.Id, userMessage.Id, assistantMessage.Id, requestModel, history)
+	go s.executeRun(runCtx, run, conversation.Id, assistantMessage.Id, requestModel, history, event.Auth.Id)
 
 	prepareSSE(event, run.id)
 	for {
@@ -92,17 +94,36 @@ func (s *service) stopRun(event *core.RequestEvent) error {
 	return event.NoContent(http.StatusAccepted)
 }
 
-func (s *service) executeRun(ctx context.Context, run *activeRun, conversationID, _ string, assistantMessageID string, model workagent.ModelConfig, history []workagent.Message) {
+func (s *service) executeRun(ctx context.Context, run *activeRun, conversationID, assistantMessageID string, model workagent.ModelConfig, history []workagent.Message, ownerID string) {
+	reducer := newMessageReducer(assistantMessageID)
 	defer func() {
+		if r := recover(); r != nil {
+			s.app.Logger().Error(
+				"chat run panicked",
+				"runId", run.id,
+				"conversationId", conversationID,
+				"error", fmt.Sprint(r),
+				"stack", string(debug.Stack()),
+			)
+			metadata := runErrorMetadata(model, "internal_error", "The chat run failed unexpectedly.")
+			run.publish(workagent.StreamChunk{Type: "error", ErrorText: "The chat run failed unexpectedly."})
+			if err := saveMessageSnapshot(s.app, assistantMessageID, "error", reducer.Snapshot().Parts, metadata); err != nil {
+				s.app.Logger().Error("failed to persist panicked chat run", "runId", run.id, "error", err)
+			}
+		}
 		run.cancel()
 		run.finish()
 		s.removeRun(run.id)
 	}()
 
-	reducer := newMessageReducer(assistantMessageID)
 	run.publish(workagent.StreamChunk{Type: "start", MessageID: assistantMessageID, MessageMetadata: map[string]any{"runId": run.id}})
 	lastCheckpoint := time.Now()
-	result, err := s.runner.Stream(ctx, workagent.Request{SystemPrompt: defaultSystemPrompt, Messages: history, Model: model}, func(_ context.Context, chunk workagent.StreamChunk) error {
+	result, err := s.runner.Stream(ctx, workagent.Request{
+		SystemPrompt: defaultSystemPrompt,
+		Messages:     history,
+		Model:        model,
+		ActorID:      ownerID,
+	}, func(_ context.Context, chunk workagent.StreamChunk) error {
 		reducer.Apply(chunk)
 		run.publish(chunk)
 		if shouldCheckpoint(chunk) || time.Since(lastCheckpoint) >= time.Second {
@@ -113,6 +134,7 @@ func (s *service) executeRun(ctx context.Context, run *activeRun, conversationID
 	})
 
 	if err != nil {
+		s.app.Logger().Error("chat run failed", "runId", run.id, "conversationId", conversationID, "error", err)
 		status := "error"
 		metadata := baseMetadata(model)
 		if errors.Is(ctx.Err(), context.Canceled) {
@@ -126,8 +148,7 @@ func (s *service) executeRun(ctx context.Context, run *activeRun, conversationID
 				code = "run_timeout"
 				message = "The model request timed out."
 			}
-			metadata["finishReason"] = "error"
-			metadata["error"] = map[string]any{"code": code, "message": message}
+			metadata = runErrorMetadata(model, code, message)
 			run.publish(workagent.StreamChunk{Type: "error", ErrorText: message})
 		}
 		_ = saveMessageSnapshot(s.app, assistantMessageID, status, reducer.Snapshot().Parts, metadata)
@@ -145,6 +166,13 @@ func (s *service) executeRun(ctx context.Context, run *activeRun, conversationID
 	if err := saveMessageSnapshot(s.app, assistantMessageID, "complete", parts, metadata); err == nil {
 		_ = updateConversationStats(s.app, conversationID, parts, result.Usage)
 	}
+}
+
+func runErrorMetadata(model workagent.ModelConfig, code, message string) map[string]any {
+	metadata := baseMetadata(model)
+	metadata["finishReason"] = "error"
+	metadata["error"] = map[string]any{"code": code, "message": message}
+	return metadata
 }
 
 func createTurnRecords(app core.App, conversation, model *core.Record, userParts []workagent.Part) (*core.Record, *core.Record, error) {

@@ -2,7 +2,7 @@
 
 ## 决策
 
-- 后端采用 `charm.land/fantasy`，并将其完全封装在 `internal/agent`。
+- 后端采用 `charm.land/fantasy`；模型、消息和流回调适配封装在 `internal/agent`，应用工具通过组合根注入。
 - 项目只暴露两种 AI SDK UI 兼容的数据：最终消息 `ChatMessage` 和流式增量 `StreamChunk`。
 - 数据库的 `parts` 与前端 `UIMessage.parts` 使用同一种 JSON 结构；不再使用 `MessageBlock`、`thinking`、`tool_use`、`tool_result`。
 - 每次发送都必须显式提供 `modelConfigId`。会话不保存默认、上次或偏好模型。
@@ -35,6 +35,10 @@ Fantasy callbacks
 
 工具定义在 Go 后端，因此 UI 工具流统一设置 `dynamic: true`，最终聚合为 `DynamicToolUIPart`。
 
+SSE 出网前执行 UI Message Stream v1 必填字段校验。Fantasy 产生的空 text、reasoning、tool-input delta 会被忽略，避免 `omitempty` 生成缺字段事件并触发前端 Zod 中断。`input` 和 `output` 的 JSON `null` 是合法值，必须保留。
+
+持久化的 `step-start` 是模型历史回放边界。多步工具消息必须恢复为 `assistant(tool_use) -> tool(tool_result) -> assistant(final text)`，reasoning provider metadata（包括只有签名、没有文本的 part）也必须一并恢复。
+
 ## 工具链与依赖
 
 ### Go
@@ -43,6 +47,16 @@ Fantasy callbacks
 - Docker builder 升级到 `golang:1.26.4-alpine`。
 - README 环境要求同步为 Go 1.26.4+。
 - 固定 `charm.land/fantasy v0.35.0`。
+- Fantasy 工具循环最多执行 12 step，外层运行仍保留 10 分钟超时。
+
+### 应用工具
+
+- `internal/assistant/tools` 只负责把应用能力包装为 Fantasy 工具和注册工具。
+- `internal/contacts`、`internal/board` 负责领域查询与可见性；工具不得直接复制 collection 权限规则。
+- 工具工厂在 Chat 组合根用 PocketBase App 创建，再按当前 `actorId` 为每次运行创建工具。
+- 列表型工具必须有默认和最大返回数量，避免把整个集合塞入模型上下文。
+- 联系人工具仅返回非敏感摘要；手机号等资料不默认发送给外部模型。
+- Mock 工具不进入生产注册表。
 
 ### 前端
 
@@ -94,7 +108,17 @@ internal/agent/
   agent.go       Runner、Request、Result
   types.go       Message、Part、StreamChunk
   fantasy.go     Fantasy 回调适配及 provider 创建
-  reducer.go     Chunk 聚合逻辑（如需复用）
+
+internal/assistant/tools/
+  registry.go    actor-scoped 工具工厂
+  contacts.go    联系人工具适配
+  board_projects.go
+
+internal/contacts/
+  query.go       联系人安全投影与有界搜索
+
+internal/board/
+  queries.go     owner/member 可见项目查询
 
 internal/chat/
   chat.go        路由注册
@@ -146,6 +170,8 @@ Chat 包从数据库加载可信历史和模型配置，组装系统提示词与
 - 显式 stop API 调用 run registry 中的 cancel function，将消息标记为 `cancelled`。
 - 服务关闭时统一取消 registry 中的运行。
 - 不在整个模型调用期间持有数据库事务；按 part 完成、工具状态变化、定时 checkpoint 和最终完成进行短事务写入。
+- 后台 goroutine panic 时发布公开错误事件并把 assistant message 标记为 `error`，不能留下永久 `streaming` 记录。
+- Provider 原始错误和 panic stack 只写服务端结构化日志；消息 metadata 仅保存稳定错误码和安全文案。
 
 单实例阶段 run registry 使用内存即可。多实例部署前需引入持久队列/租约，否则断连续跑只保证在当前进程存活期间成立。
 
@@ -161,7 +187,8 @@ Chat 包从数据库加载可信历史和模型配置，组装系统提示词与
 
 ## 验证
 
-- Go 单元测试覆盖 Fantasy text/reasoning/tool/source 映射、Reducer、多 step、断连续跑、显式停止和错误脱敏。
+- Go 单元测试覆盖 Fantasy text/reasoning/tool/source 映射、metadata-only reasoning、Reducer、多 step、断连续跑、panic 收敛和错误脱敏。
+- 领域查询测试覆盖工具返回上限、联系人敏感字段排除、Board owner/member 可见性。
 - API 测试覆盖所有权、必填模型、集合 CRUD 和消息持久化。
 - 使用 Go 生成 SSE fixture，并由 `ai` 包解析，形成跨语言协议契约测试。
 - 前端验证默认模型、必填模型、模型切换、流式渲染、刷新恢复和停止行为。

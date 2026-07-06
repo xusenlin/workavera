@@ -3,6 +3,7 @@ package chat
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -32,6 +33,18 @@ func (fakeRunner) Stream(ctx context.Context, _ workagent.Request, emit workagen
 	return workagent.Result{Usage: workagent.Usage{InputTokens: 3, OutputTokens: 4, TotalTokens: 7}, FinishReason: "stop", StepCount: 1}, nil
 }
 
+type panicRunner struct{}
+
+func (panicRunner) Stream(context.Context, workagent.Request, workagent.EmitFunc) (workagent.Result, error) {
+	panic("simulated panic")
+}
+
+type errorRunner struct{}
+
+func (errorRunner) Stream(context.Context, workagent.Request, workagent.EmitFunc) (workagent.Result, error) {
+	return workagent.Result{}, errors.New("provider-secret-diagnostic")
+}
+
 type chatTestServer struct {
 	app     *tests.TestApp
 	handler http.Handler
@@ -40,6 +53,10 @@ type chatTestServer struct {
 }
 
 func newChatTestServer(t *testing.T) *chatTestServer {
+	return newChatTestServerWithRunner(t, fakeRunner{})
+}
+
+func newChatTestServerWithRunner(t *testing.T, runner workagent.Runner) *chatTestServer {
 	t.Helper()
 	app, err := tests.NewTestApp()
 	if err != nil {
@@ -80,7 +97,7 @@ func newChatTestServer(t *testing.T) *chatTestServer {
 		t.Fatal(err)
 	}
 
-	register(app, newService(app, fakeRunner{}))
+	register(app, newService(app, runner))
 	router, err := apis.NewRouter(app)
 	if err != nil {
 		t.Fatal(err)
@@ -96,6 +113,29 @@ func newChatTestServer(t *testing.T) *chatTestServer {
 	return &chatTestServer{app: app, handler: handler, token: token, modelID: model.Id}
 }
 
+func (server *chatTestServer) createConversation(t *testing.T) conversationResponse {
+	t.Helper()
+	created := server.request(t, http.MethodPost, "/api/chat/conversations", `{"title":"Test"}`)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create conversation: %d %s", created.Code, created.Body.String())
+	}
+	var conversation conversationResponse
+	if err := json.Unmarshal(created.Body.Bytes(), &conversation); err != nil {
+		t.Fatal(err)
+	}
+	return conversation
+}
+
+func (server *chatTestServer) streamMessage(t *testing.T, conversationID string) *httptest.ResponseRecorder {
+	t.Helper()
+	return server.request(t, http.MethodPost, "/api/chat/stream", `{
+		"runId":"00000000-0000-4000-8000-000000000001",
+		"conversationId":"`+conversationID+`",
+		"modelConfigId":"`+server.modelID+`",
+		"message":{"id":"client-1","role":"user","parts":[{"type":"text","text":"Hello"}]}
+	}`)
+}
+
 func (server *chatTestServer) request(t *testing.T, method, path, body string) *httptest.ResponseRecorder {
 	t.Helper()
 	recorder := httptest.NewRecorder()
@@ -108,21 +148,8 @@ func (server *chatTestServer) request(t *testing.T, method, path, body string) *
 
 func TestChatStreamPersistsUIMessageAndUsesProtocol(t *testing.T) {
 	server := newChatTestServer(t)
-	created := server.request(t, http.MethodPost, "/api/chat/conversations", `{"title":"Test"}`)
-	if created.Code != http.StatusCreated {
-		t.Fatalf("create conversation: %d %s", created.Code, created.Body.String())
-	}
-	var conversation conversationResponse
-	if err := json.Unmarshal(created.Body.Bytes(), &conversation); err != nil {
-		t.Fatal(err)
-	}
-
-	stream := server.request(t, http.MethodPost, "/api/chat/stream", `{
-		"runId":"00000000-0000-4000-8000-000000000001",
-		"conversationId":"`+conversation.ID+`",
-		"modelConfigId":"`+server.modelID+`",
-		"message":{"id":"client-1","role":"user","parts":[{"type":"text","text":"Hello"}]}
-	}`)
+	conversation := server.createConversation(t)
+	stream := server.streamMessage(t, conversation.ID)
 	if stream.Code != http.StatusOK {
 		t.Fatalf("stream: %d %s", stream.Code, stream.Body.String())
 	}
@@ -149,6 +176,40 @@ func TestChatStreamPersistsUIMessageAndUsesProtocol(t *testing.T) {
 	}
 	if len(result) != 2 || result[1].Parts[len(result[1].Parts)-1]["text"] != "Hello from the agent" {
 		t.Fatalf("unexpected messages: %#v", result)
+	}
+}
+
+func TestPanickedRunPublishesAndPersistsAnError(t *testing.T) {
+	server := newChatTestServerWithRunner(t, panicRunner{})
+	conversation := server.createConversation(t)
+	stream := server.streamMessage(t, conversation.ID)
+	if stream.Code != http.StatusOK {
+		t.Fatalf("stream: %d %s", stream.Code, stream.Body.String())
+	}
+	if !strings.Contains(stream.Body.String(), `"type":"error"`) || !strings.Contains(stream.Body.String(), "data: [DONE]") {
+		t.Fatalf("panic was not represented as a completed error stream: %s", stream.Body.String())
+	}
+
+	messages := server.request(t, http.MethodGet, "/api/chat/conversations/"+conversation.ID+"/messages", "")
+	var result []workagent.Message
+	if err := json.Unmarshal(messages.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if len(result) != 2 || result[1].Metadata["status"] != "error" {
+		t.Fatalf("panicked assistant message was not marked as error: %#v", result)
+	}
+}
+
+func TestProviderErrorDetailsStayServerSide(t *testing.T) {
+	server := newChatTestServerWithRunner(t, errorRunner{})
+	conversation := server.createConversation(t)
+	stream := server.streamMessage(t, conversation.ID)
+	if strings.Contains(stream.Body.String(), "provider-secret-diagnostic") {
+		t.Fatalf("stream exposed provider diagnostics: %s", stream.Body.String())
+	}
+	messages := server.request(t, http.MethodGet, "/api/chat/conversations/"+conversation.ID+"/messages", "")
+	if strings.Contains(messages.Body.String(), "provider-secret-diagnostic") {
+		t.Fatalf("persisted message exposed provider diagnostics: %s", messages.Body.String())
 	}
 }
 

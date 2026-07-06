@@ -67,6 +67,73 @@ func (c StreamChunk) MarshalJSON() ([]byte, error) {
 	return json.Marshal(value)
 }
 
+// ValidForWire reports whether the chunk satisfies the AI SDK UI Message
+// Stream v1 required-field contract for its type. The AI SDK frontend parses
+// the SSE stream with a strict Zod discriminated union: a single part missing
+// a required field (e.g. a "reasoning-delta" without "delta") aborts the whole
+// stream. Source libraries may emit empty/no-op deltas that, combined with the
+// omitempty tags above, serialize to such invalid parts. This check is the
+// single chokepoint that guarantees no structurally-invalid part ever reaches
+// the browser, regardless of what the upstream library or callbacks produce.
+//
+// Note: the persisted message (built by the reducer) is unaffected — the
+// reducer sees every chunk and tolerates empty deltas — so dropping a chunk
+// here only suppresses its (invalid) wire representation, never the saved state.
+func (c StreamChunk) ValidForWire() bool {
+	switch c.Type {
+	// Types with no required payload fields.
+	case "start", "finish", "abort", "start-step", "finish-step":
+		return true
+
+	// Lifecycle markers keyed by an id.
+	case "text-start", "text-end", "reasoning-start", "reasoning-end":
+		return c.ID != ""
+
+	// Incremental deltas: id + content must both be present and non-empty.
+	case "text-delta", "reasoning-delta":
+		return c.ID != "" && c.Delta != ""
+
+	// Tool input streaming.
+	case "tool-input-start":
+		return c.ToolCallID != "" && c.ToolName != ""
+	case "tool-input-delta":
+		return c.ToolCallID != "" && c.InputTextDelta != ""
+
+	// Tool input finalized.
+	case "tool-input-available":
+		return c.ToolCallID != "" && c.ToolName != ""
+	case "tool-input-error":
+		return c.ToolCallID != "" && c.ToolName != "" && c.ErrorText != ""
+
+	// Tool output.
+	case "tool-output-available":
+		return c.ToolCallID != ""
+	case "tool-output-error":
+		return c.ToolCallID != "" && c.ErrorText != ""
+	case "tool-output-denied":
+		return c.ToolCallID != ""
+
+	// Errors and metadata.
+	case "error":
+		return c.ErrorText != ""
+	case "message-metadata":
+		return len(c.MessageMetadata) > 0
+
+	// Sources.
+	case "source-url":
+		return c.SourceID != "" && c.URL != ""
+	case "source-document":
+		return c.SourceID != "" && c.MediaType != "" && c.Title != ""
+	case "file":
+		return c.URL != "" && c.MediaType != ""
+
+	default:
+		// Unknown / unsupported part types are dropped rather than risk
+		// triggering unrecognized_keys or invalid_value on the client.
+		return false
+	}
+}
+
 type ModelConfig struct {
 	ID       string
 	Name     string

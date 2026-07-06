@@ -1,13 +1,7 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 
 import { HugeiconsIcon } from "@hugeicons/react"
-import {
-  Call02Icon,
-  Delete02Icon,
-  Location01Icon,
-  Mail02Icon,
-  StarIcon,
-} from "@hugeicons/core-free-icons"
+import { Call02Icon, Delete02Icon, Location01Icon, Mail02Icon, StarIcon } from "@hugeicons/core-free-icons"
 
 import {
   AlertDialog,
@@ -24,13 +18,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import {
   Sheet,
@@ -42,12 +30,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  STATUS_META,
-  useContactsStore,
-  type Contact,
-  type ContactStatus,
-} from "@/store/contacts"
+import { STATUS_META, useContactsStore, type Contact, type ContactStatus } from "@/store/contacts"
 
 type ContactDetailSheetProps = {
   open: boolean
@@ -81,42 +64,38 @@ const emptyForm: FormState = {
   favorite: false,
 }
 
+function formFromContact(contact: Contact | null): FormState {
+  if (!contact) return { ...emptyForm }
+  return {
+    name: contact.name,
+    email: contact.email ?? "",
+    phone: contact.phone ?? "",
+    title: contact.title ?? "",
+    company: contact.company ?? "",
+    location: contact.location ?? "",
+    website: contact.website ?? "",
+    status: contact.status,
+    notes: contact.notes ?? "",
+    favorite: contact.favorite,
+  }
+}
+
 function getInitials(name: string) {
   return name.charAt(0).toUpperCase()
 }
 
-export function ContactDetailSheet({
-  open,
-  onOpenChange,
-  contact,
-}: ContactDetailSheetProps) {
+export function ContactDetailSheet({ ...props }: ContactDetailSheetProps) {
+  const formKey = props.open ? (props.contact?.id ?? "new") : "closed"
+  return <ContactDetailSheetForm key={formKey} {...props} />
+}
+
+function ContactDetailSheetForm({ open, onOpenChange, contact }: ContactDetailSheetProps) {
   const addContact = useContactsStore((s) => s.addContact)
   const updateContact = useContactsStore((s) => s.updateContact)
   const removeContact = useContactsStore((s) => s.removeContact)
 
-  const [form, setForm] = useState<FormState>(emptyForm)
+  const [form, setForm] = useState<FormState>(() => formFromContact(contact))
   const [confirmDelete, setConfirmDelete] = useState(false)
-
-  useEffect(() => {
-    if (open) {
-      if (contact) {
-        setForm({
-          name: contact.name,
-          email: contact.email ?? "",
-          phone: contact.phone ?? "",
-          title: contact.title ?? "",
-          company: contact.company ?? "",
-          location: contact.location ?? "",
-          website: contact.website ?? "",
-          status: contact.status,
-          notes: contact.notes ?? "",
-          favorite: contact.favorite,
-        })
-      } else {
-        setForm(emptyForm)
-      }
-    }
-  }, [open, contact])
 
   const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -168,9 +147,7 @@ export function ContactDetailSheet({
         <SheetHeader>
           <SheetTitle>{contact ? "Contact details" : "Add contact"}</SheetTitle>
           <SheetDescription>
-            {contact
-              ? "View or update the contact information below."
-              : "Fill in the details for your new contact."}
+            {contact ? "View or update the contact information below." : "Fill in the details for your new contact."}
           </SheetDescription>
         </SheetHeader>
 
@@ -179,24 +156,17 @@ export function ContactDetailSheet({
           <div className="flex items-center gap-4">
             <Avatar size="lg" className="size-16">
               <AvatarImage src={contact?.avatar} alt={form.name} />
-              <AvatarFallback className="text-xl">
-                {getInitials(form.name || "?")}
-              </AvatarFallback>
+              <AvatarFallback className="text-xl">{getInitials(form.name || "?")}</AvatarFallback>
             </Avatar>
             <div className="flex min-w-0 flex-col gap-1">
-              <span className="truncate text-base font-semibold">
-                {form.name || "New contact"}
-              </span>
+              <span className="truncate text-base font-semibold">{form.name || "New contact"}</span>
               {form.company && (
-                <span className="text-muted-foreground truncate text-sm">
+                <span className="truncate text-sm text-muted-foreground">
                   {form.title ? `${form.title} · ${form.company}` : form.company}
                 </span>
               )}
               <Badge variant={statusMeta?.variant} className="w-fit">
-                <span
-                  className="size-2 rounded-full"
-                  style={{ backgroundColor: statusMeta?.color }}
-                />
+                <span className="size-2 rounded-full" style={{ backgroundColor: statusMeta?.color }} />
                 {statusMeta?.label}
               </Badge>
             </div>
@@ -206,15 +176,9 @@ export function ContactDetailSheet({
           {(contact?.email || contact?.phone || contact?.location) && (
             <>
               <div className="flex flex-col gap-2">
-                {contact.email && (
-                  <InfoRow icon={Mail02Icon} label={contact.email} />
-                )}
-                {contact.phone && (
-                  <InfoRow icon={Call02Icon} label={contact.phone} />
-                )}
-                {contact.location && (
-                  <InfoRow icon={Location01Icon} label={contact.location} />
-                )}
+                {contact.email && <InfoRow icon={Mail02Icon} label={contact.email} />}
+                {contact.phone && <InfoRow icon={Call02Icon} label={contact.phone} />}
+                {contact.location && <InfoRow icon={Location01Icon} label={contact.location} />}
               </div>
               <Separator />
             </>
@@ -254,26 +218,17 @@ export function ContactDetailSheet({
             </div>
             <div className="flex flex-col gap-2">
               <Label>Status</Label>
-              <Select
-                value={form.status}
-                onValueChange={(v) => setField("status", v as ContactStatus)}
-              >
+              <Select value={form.status} onValueChange={(v) => setField("status", v as ContactStatus)}>
                 <SelectTrigger className="w-full">
                   <span className="flex items-center gap-2">
-                    <span
-                      className="size-2 rounded-full"
-                      style={{ backgroundColor: statusMeta?.color }}
-                    />
+                    <span className="size-2 rounded-full" style={{ backgroundColor: statusMeta?.color }} />
                     <SelectValue />
                   </span>
                 </SelectTrigger>
                 <SelectContent>
                   {STATUS_META.map((s) => (
                     <SelectItem key={s.value} value={s.value}>
-                      <span
-                        className="size-2 rounded-full"
-                        style={{ backgroundColor: s.color }}
-                      />
+                      <span className="size-2 rounded-full" style={{ backgroundColor: s.color }} />
                       {s.label}
                     </SelectItem>
                   ))}
@@ -343,11 +298,7 @@ export function ContactDetailSheet({
               onChange={(e) => setField("favorite", e.target.checked)}
               className="size-4 accent-amber-500"
             />
-            <HugeiconsIcon
-              icon={StarIcon}
-              strokeWidth={2}
-              className="size-4 text-amber-500"
-            />
+            <HugeiconsIcon icon={StarIcon} strokeWidth={2} className="size-4 text-amber-500" />
             Mark as favorite
           </label>
         </div>
@@ -381,8 +332,7 @@ export function ContactDetailSheet({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete contact?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently remove "{contact?.name}" from your contacts.
-              This action cannot be undone.
+              This will permanently remove "{contact?.name}" from your contacts. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -397,15 +347,9 @@ export function ContactDetailSheet({
   )
 }
 
-function InfoRow({
-  icon,
-  label,
-}: {
-  icon: React.ComponentProps<typeof HugeiconsIcon>["icon"]
-  label: string
-}) {
+function InfoRow({ icon, label }: { icon: React.ComponentProps<typeof HugeiconsIcon>["icon"]; label: string }) {
   return (
-    <div className="text-muted-foreground flex items-center gap-2 text-sm">
+    <div className="flex items-center gap-2 text-sm text-muted-foreground">
       <HugeiconsIcon icon={icon} strokeWidth={2} className="size-4 shrink-0" />
       <span className="truncate">{label}</span>
     </div>

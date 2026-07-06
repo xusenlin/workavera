@@ -23,6 +23,14 @@ func prepareSSE(event *core.RequestEvent, runID string) {
 }
 
 func writeSSE(event *core.RequestEvent, chunk workagent.StreamChunk) error {
+	// Single chokepoint for the AI SDK UI Message Stream v1 contract: drop any
+	// chunk that would serialize to a structurally invalid wire part (e.g. a
+	// delta with empty content whose field is omitted by omitempty). The
+	// persisted message is built upstream by the reducer from every chunk and is
+	// unaffected, so this only prevents bad parts from reaching the browser.
+	if !chunk.ValidForWire() {
+		return nil
+	}
 	data, err := json.Marshal(chunk)
 	if err != nil {
 		return err

@@ -42,6 +42,9 @@ func (r *messageReducer) Apply(chunk workagent.StreamChunk) {
 	case "reasoning-delta":
 		r.appendText("reasoning:"+chunk.ID, chunk.Delta)
 	case "reasoning-end":
+		if len(chunk.ProviderMetadata) > 0 {
+			r.setPartField("reasoning:"+chunk.ID, "providerMetadata", chunk.ProviderMetadata)
+		}
 		r.finishPart("reasoning:" + chunk.ID)
 	case "tool-input-start":
 		r.active["tool:"+chunk.ToolCallID] = len(r.message.Parts)
@@ -56,6 +59,9 @@ func (r *messageReducer) Apply(chunk workagent.StreamChunk) {
 		part := r.toolPart(chunk.ToolCallID, chunk.ToolName)
 		part["input"] = chunk.Input
 		part["providerExecuted"] = chunk.ProviderExecuted
+		if len(chunk.ProviderMetadata) > 0 {
+			part["callProviderMetadata"] = chunk.ProviderMetadata
+		}
 		if chunk.Type == "tool-input-error" {
 			part["state"] = "output-error"
 			part["errorText"] = chunk.ErrorText
@@ -66,6 +72,9 @@ func (r *messageReducer) Apply(chunk workagent.StreamChunk) {
 	case "tool-output-available", "tool-output-error":
 		part := r.toolPart(chunk.ToolCallID, chunk.ToolName)
 		part["providerExecuted"] = chunk.ProviderExecuted
+		if len(chunk.ProviderMetadata) > 0 {
+			part["resultProviderMetadata"] = chunk.ProviderMetadata
+		}
 		if chunk.Type == "tool-output-error" {
 			part["state"] = "output-error"
 			part["errorText"] = chunk.ErrorText
@@ -98,6 +107,14 @@ func (r *messageReducer) finishPart(key string) {
 	}
 	r.message.Parts[index]["state"] = "done"
 	delete(r.active, key)
+}
+
+func (r *messageReducer) setPartField(key, field string, value any) {
+	index, ok := r.active[key]
+	if !ok || index >= len(r.message.Parts) {
+		return
+	}
+	r.message.Parts[index][field] = value
 }
 
 func (r *messageReducer) toolPart(callID, toolName string) workagent.Part {

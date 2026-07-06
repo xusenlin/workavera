@@ -66,6 +66,8 @@ docker run --rm \
 ├── frontend/        # Vite 前端项目，构建产物为 dist/
 ├── internal/board/  # Board 路由、领域校验与操作日志 Hook
 ├── internal/agent/  # Fantasy 封装与 AI SDK UI 兼容流
+├── internal/assistant/tools/ # 应用能力到 Fantasy 工具的适配与注册
+├── internal/contacts/ # 联系人领域查询与安全投影
 ├── internal/chat/   # 会话持久化、后台运行与 SSE API
 ├── migrations/      # 数据库迁移
 ├── go.mod

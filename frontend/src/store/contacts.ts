@@ -154,19 +154,14 @@ export const useContactsStore = create<ContactState>()(
       addContact: (contact) => {
         const id = generateId("contact")
         set((state) => ({
-          contacts: [
-            { ...contact, id, createdAt: new Date().toISOString() },
-            ...state.contacts,
-          ],
+          contacts: [{ ...contact, id, createdAt: new Date().toISOString() }, ...state.contacts],
         }))
         return id
       },
 
       updateContact: (id, patch) =>
         set((state) => ({
-          contacts: state.contacts.map((c) =>
-            c.id === id ? { ...c, ...patch } : c
-          ),
+          contacts: state.contacts.map((c) => (c.id === id ? { ...c, ...patch } : c)),
         })),
 
       removeContact: (id) =>
@@ -176,9 +171,7 @@ export const useContactsStore = create<ContactState>()(
 
       toggleFavorite: (id) =>
         set((state) => ({
-          contacts: state.contacts.map((c) =>
-            c.id === id ? { ...c, favorite: !c.favorite } : c
-          ),
+          contacts: state.contacts.map((c) => (c.id === id ? { ...c, favorite: !c.favorite } : c)),
         })),
     }),
     {
@@ -193,7 +186,7 @@ export const STATUS_META: {
   value: ContactStatus
   label: string
   color: string
-  variant: "default" | "secondary" | "destructive" | "outline"
+  variant: "default" | "secondary" | "destructive" | "outline" | "ghost"
 }[] = [
   { value: "active", label: "Active", color: "#22c55e", variant: "secondary" },
   { value: "vip", label: "VIP", color: "#f59e0b", variant: "default" },

@@ -4,10 +4,12 @@ import (
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 	workagent "github.com/xusenlin/workavera/internal/agent"
+	assistanttools "github.com/xusenlin/workavera/internal/assistant/tools"
 )
 
 func Register(app core.App) {
-	service := newService(app, workagent.NewFantasyRunner())
+	toolFactory := assistanttools.NewFactory(app)
+	service := newService(app, workagent.NewFantasyRunner(toolFactory.ForActor))
 	register(app, service)
 }
 

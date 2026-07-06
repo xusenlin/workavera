@@ -91,11 +91,7 @@ type BoardState = {
   initialize: () => Promise<void>
   dispose: () => void
   clearError: () => void
-  addProject: (input: {
-    name: string
-    description?: string
-    templateId?: string
-  }) => Promise<void>
+  addProject: (input: { name: string; description?: string; templateId?: string }) => Promise<void>
   removeProject: (id: string) => Promise<void>
   toggleProjectCollapse: (id: string) => void
   addState: (projectId: string, input: StateInput) => Promise<void>
@@ -228,10 +224,7 @@ function toMember(record: MemberRecord): Member {
     userId: record.user,
     role: record.role,
     name: user?.name || user?.email || "Unknown member",
-    avatar:
-      user?.avatar && user
-        ? pb.files.getURL(user, user.avatar)
-        : undefined,
+    avatar: user?.avatar && user ? pb.files.getURL(user, user.avatar) : undefined,
   }
 }
 
@@ -281,18 +274,20 @@ function todoPatchToRecord(patch: Partial<Omit<Todo, "id">>) {
 
 async function loadBoardSnapshot() {
   const [templates, projects, states, todos, labels, members] = await Promise.all([
-    pb.collection(COLLECTIONS.templates).getFullList<TemplateRecord>({ sort: "name" }, { requestKey: null }),
+    pb.collection(COLLECTIONS.templates).getFullList<TemplateRecord>({ sort: "name", requestKey: null }),
     pb.collection(COLLECTIONS.projects).getFullList<ProjectRecord>({
       filter: "archived = false",
       sort: "created",
-    }, { requestKey: null }),
-    pb.collection(COLLECTIONS.states).getFullList<StateRecord>({ sort: "sort_order" }, { requestKey: null }),
-    pb.collection(COLLECTIONS.tasks).getFullList<TodoRecord>({ sort: "rank" }, { requestKey: null }),
-    pb.collection(COLLECTIONS.labels).getFullList<LabelRecord>({ sort: "name" }, { requestKey: null }),
+      requestKey: null,
+    }),
+    pb.collection(COLLECTIONS.states).getFullList<StateRecord>({ sort: "sort_order", requestKey: null }),
+    pb.collection(COLLECTIONS.tasks).getFullList<TodoRecord>({ sort: "rank", requestKey: null }),
+    pb.collection(COLLECTIONS.labels).getFullList<LabelRecord>({ sort: "name", requestKey: null }),
     pb.collection(COLLECTIONS.members).getFullList<MemberRecord>({
       expand: "user",
       sort: "created",
-    }, { requestKey: null }),
+      requestKey: null,
+    }),
   ])
 
   return {
@@ -305,7 +300,9 @@ async function loadBoardSnapshot() {
   }
 }
 
-async function connectRealtime(set: (patch: Partial<BoardState> | ((state: BoardState) => Partial<BoardState>)) => void) {
+async function connectRealtime(
+  set: (patch: Partial<BoardState> | ((state: BoardState) => Partial<BoardState>)) => void
+) {
   realtimeUnsubscribers.forEach((unsubscribe) => unsubscribe())
   realtimeUnsubscribers = []
 
@@ -321,15 +318,23 @@ async function connectRealtime(set: (patch: Partial<BoardState> | ((state: Board
           : key === "projects"
             ? { filter: "archived = false", requestKey: null }
             : { requestKey: null }
-      const unsubscribe = await pb.collection(collection).subscribe<T>("*", (event) => {
-        set((state) => {
-          const current = state[key] as Array<{ id: string }>
-          if (event.action === "delete") {
-            return { [key]: current.filter((item) => item.id !== event.record.id) } as Partial<BoardState>
-          }
-          return { [key]: upsertById(current, mapRecord(event.record)) } as Partial<BoardState>
-        })
-      }, options)
+      const unsubscribe = await pb.collection(collection).subscribe<T>(
+        "*",
+        (event) => {
+          set((state) => {
+            const current = state[key] as Array<{ id: string }>
+            if (event.action === "delete") {
+              return {
+                [key]: current.filter((item) => item.id !== event.record.id),
+              } as Partial<BoardState>
+            }
+            return {
+              [key]: upsertById(current, mapRecord(event.record)),
+            } as Partial<BoardState>
+          })
+        },
+        options
+      )
       realtimeUnsubscribers.push(unsubscribe)
     } catch (err) {
       // 组件卸载或被新请求替代时，静默忽略 PocketBase 自动取消产生的 abort 错误
@@ -425,9 +430,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       if (project?.collapsed) collapsedProjects.delete(id)
       else collapsedProjects.add(id)
       return {
-        projects: state.projects.map((item) =>
-          item.id === id ? { ...item, collapsed: !item.collapsed } : item
-        ),
+        projects: state.projects.map((item) => (item.id === id ? { ...item, collapsed: !item.collapsed } : item)),
       }
     }),
 
@@ -464,7 +467,9 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   removeState: async (id) => {
     try {
       await pb.collection(COLLECTIONS.states).delete(id)
-      set((state) => ({ states: state.states.filter((item) => item.id !== id) }))
+      set((state) => ({
+        states: state.states.filter((item) => item.id !== id),
+      }))
     } catch (error) {
       const message = messageFromError(error, "Move or delete the tasks in this state first")
       set({ error: message })
@@ -475,26 +480,30 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   reorderState: async (id, direction) => {
     const state = get().states.find((item) => item.id === id)
     if (!state) return
-    const ordered = get().states
-      .filter((item) => item.projectId === state.projectId)
+    const ordered = get()
+      .states.filter((item) => item.projectId === state.projectId)
       .sort((a, b) => a.sortOrder - b.sortOrder)
     const from = ordered.findIndex((item) => item.id === id)
     const to = from + direction
     if (from < 0 || to < 0 || to >= ordered.length) return
     ;[ordered[from], ordered[to]] = [ordered[to], ordered[from]]
-    const updates = ordered.map((item, index) => ({ ...item, sortOrder: (index + 1) * 1024 }))
+    const updates = ordered.map((item, index) => ({
+      ...item,
+      sortOrder: (index + 1) * 1024,
+    }))
     set((current) => ({
       states: current.states.map((item) => updates.find((next) => next.id === item.id) || item),
     }))
     try {
       await Promise.all(
-        updates.map((item) =>
-          pb.collection(COLLECTIONS.states).update(item.id, { sort_order: item.sortOrder })
-        )
+        updates.map((item) => pb.collection(COLLECTIONS.states).update(item.id, { sort_order: item.sortOrder }))
       )
     } catch (error) {
       const snapshot = await loadBoardSnapshot()
-      set({ ...snapshot, error: messageFromError(error, "Could not reorder states") })
+      set({
+        ...snapshot,
+        error: messageFromError(error, "Could not reorder states"),
+      })
     }
   },
 
@@ -550,9 +559,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   },
 
   addTodo: async (todo) => {
-    const sameState = get().todos.filter(
-      (item) => item.projectId === todo.projectId && item.stateId === todo.stateId
-    )
+    const sameState = get().todos.filter((item) => item.projectId === todo.projectId && item.stateId === todo.stateId)
     const rank = Math.max(0, ...sameState.map((item) => item.rank)) + 1024
     try {
       const record = await pb.collection(COLLECTIONS.tasks).create<TodoRecord>({
@@ -576,9 +583,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   updateTodo: async (id, patch) => {
     try {
-      const record = await pb
-        .collection(COLLECTIONS.tasks)
-        .update<TodoRecord>(id, todoPatchToRecord(patch))
+      const record = await pb.collection(COLLECTIONS.tasks).update<TodoRecord>(id, todoPatchToRecord(patch))
       set((state) => ({ todos: upsertById(state.todos, toTodo(record)) }))
     } catch (error) {
       const message = messageFromError(error, "Could not update the task")
@@ -601,18 +606,13 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   moveTodo: async (id, toStateId, toIndex) => {
     const dragged = get().todos.find((todo) => todo.id === id)
     if (!dragged) return
-    const target = get().todos
-      .filter((todo) => todo.stateId === toStateId && todo.id !== id)
+    const target = get()
+      .todos.filter((todo) => todo.stateId === toStateId && todo.id !== id)
       .sort((a, b) => a.rank - b.rank)
     const before = target[toIndex - 1]
     const after = target[toIndex]
-    const rank = before && after
-      ? (before.rank + after.rank) / 2
-      : before
-        ? before.rank + 1024
-        : after
-          ? after.rank - 1024
-          : 1024
+    const rank =
+      before && after ? (before.rank + after.rank) / 2 : before ? before.rank + 1024 : after ? after.rank - 1024 : 1024
     const optimistic = { ...dragged, stateId: toStateId, rank }
     set((state) => ({ todos: upsertById(state.todos, optimistic) }))
     try {
