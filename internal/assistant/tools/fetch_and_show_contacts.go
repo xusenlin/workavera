@@ -14,10 +14,10 @@ type contactsInput struct {
 	Limit int    `json:"limit,omitempty" description:"Maximum number of results, default 10, max 20"`
 }
 
-func newContactsTool(app core.App, actorID string) fantasy.AgentTool {
+func newFetchAndShowContactsTool(app core.App, actorID string) fantasy.AgentTool {
 	return fantasy.NewAgentTool(
-		"show_contacts",
-		"Search team contacts visible to the current user with fuzzy matching by name or title. Returns name, title and online status. The results are already displayed to the user as contact cards — do NOT repeat the contact list in your reply, just give a brief one-sentence summary.",
+		"fetch_and_show_contacts",
+		"Fetch and display team contacts visible to the current user with fuzzy matching by name or title. Returns name, title and online status. The results are already displayed to the user as contact cards — do NOT repeat the contact list in your reply, just give a brief one-sentence summary.",
 		func(ctx context.Context, input contactsInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
 			result, err := contacts.Search(ctx, app, actorID, contacts.SearchOptions{Query: input.Query, Limit: input.Limit})
 			if err != nil {

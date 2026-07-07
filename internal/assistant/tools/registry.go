@@ -18,7 +18,8 @@ func NewFactory(app core.App) *Factory {
 
 func (f *Factory) ForActor(actorID string) []fantasy.AgentTool {
 	return []fantasy.AgentTool{
-		newContactsTool(f.app, actorID),
-		newBoardProjectsTool(f.app, actorID),
+		newFetchAndShowContactsTool(f.app, actorID),
+		newFetchAndShowBoardProjectsTool(f.app, actorID),
+		newFetchAndShowTasksTool(f.app, actorID),
 	}
 }

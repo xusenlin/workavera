@@ -15,10 +15,10 @@ type boardProjectsInput struct {
 	Limit           int    `json:"limit,omitempty" description:"Maximum number of results, default 10, max 20"`
 }
 
-func newBoardProjectsTool(app core.App, actorID string) fantasy.AgentTool {
+func newFetchAndShowBoardProjectsTool(app core.App, actorID string) fantasy.AgentTool {
 	return fantasy.NewAgentTool(
-		"show_board_projects",
-		"Search board projects owned by or visible to the current user, including project states and task counts per state. The results are already displayed to the user as project cards — do NOT repeat the project list in your reply, just give a brief one-sentence summary.",
+		"fetch_and_show_board_projects",
+		"Fetch and display board projects owned by or visible to the current user, including project states and task counts per state. The results are already displayed to the user as project cards — do NOT repeat the project list in your reply, just give a brief one-sentence summary.",
 		func(ctx context.Context, input boardProjectsInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
 			result, err := board.SearchVisibleProjects(ctx, app, actorID, board.ProjectSearchOptions{
 				Query:           input.Query,

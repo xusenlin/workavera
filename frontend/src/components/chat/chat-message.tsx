@@ -22,6 +22,7 @@ import type { ChatUIMessage } from "@/types/chat"
 
 import { ContactsToolCard } from "./contacts-tool-output"
 import { BoardProjectsToolCard } from "./board-projects-tool-output"
+import { TasksToolCard } from "./tasks-tool-output"
 
 function MessageParts({ message }: { message: ChatUIMessage }) {
   return message.parts.map((part, index) => {
@@ -46,11 +47,14 @@ function MessageParts({ message }: { message: ChatUIMessage }) {
           </Reasoning>
         )
       case "dynamic-tool":
-        if (part.toolName === "show_contacts") {
+        if (part.toolName === "fetch_and_show_contacts") {
           return <ContactsToolCard key={part.toolCallId} part={part} />
         }
-        if (part.toolName === "show_board_projects") {
+        if (part.toolName === "fetch_and_show_board_projects") {
           return <BoardProjectsToolCard key={part.toolCallId} part={part} />
+        }
+        if (part.toolName === "fetch_and_show_tasks") {
+          return <TasksToolCard key={part.toolCallId} part={part} />
         }
         return (
           <Tool
