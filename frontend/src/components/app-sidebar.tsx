@@ -1,4 +1,4 @@
-import { NavLink } from "react-router"
+import { NavLink, useLocation } from "react-router"
 
 import { HugeiconsIcon } from "@hugeicons/react"
 
@@ -19,6 +19,7 @@ import { Logo } from "@/components/logo"
 import { navGroups } from "@/lib/navigation"
 
 export function AppSidebar() {
+  const { pathname } = useLocation()
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
@@ -51,7 +52,7 @@ export function AppSidebar() {
               <SidebarMenu>
                 {group.items.map((item) => (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild tooltip={item.title}>
+                    <SidebarMenuButton asChild tooltip={item.title} isActive={pathname === item.url || pathname.startsWith(item.url + "/")}>
                       <NavLink to={item.url}>
                         <HugeiconsIcon icon={item.icon} strokeWidth={2} />
                         <span>{item.title}</span>
