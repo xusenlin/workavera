@@ -1,26 +1,26 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 
 import { HugeiconsIcon } from "@hugeicons/react"
-import { Add01Icon, ContactBookIcon } from "@hugeicons/core-free-icons"
+import { ContactBookIcon } from "@hugeicons/core-free-icons"
 
 import { ContactDetailSheet } from "@/components/contacts/contact-detail-sheet"
 import { ContactList } from "@/components/contacts/contact-list"
-import { Button } from "@/components/ui/button"
 import { useContactsStore, type Contact } from "@/store/contacts"
 
 export function ContactsPage() {
   const [sheetOpen, setSheetOpen] = useState(false)
-  const [selected, setSelected] = useState<Contact | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const contacts = useContactsStore((s) => s.contacts)
+  const fetchContacts = useContactsStore((s) => s.fetchContacts)
+  const selected = contacts.find((contact) => contact.id === selectedId) ?? null
+
+  useEffect(() => {
+    void fetchContacts()
+  }, [fetchContacts])
 
   const handleSelect = (contact: Contact | null) => {
-    setSelected(contact)
-    setSheetOpen(true)
-  }
-
-  const handleAdd = () => {
-    setSelected(null)
+    setSelectedId(contact?.id ?? null)
     setSheetOpen(true)
   }
 
@@ -38,13 +38,9 @@ export function ContactsPage() {
             </span>
           </div>
           <p className="text-muted-foreground text-sm">
-            Manage clients, partners, and the people connected to your work.
+            Browse teammates and the people connected to your workspace.
           </p>
         </div>
-        <Button variant="secondary" size="sm" onClick={handleAdd}>
-          <HugeiconsIcon icon={Add01Icon} strokeWidth={2} className="size-4" />
-          Add contact
-        </Button>
       </div>
 
       <ContactList onSelect={handleSelect} />
