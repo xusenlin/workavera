@@ -1,5 +1,6 @@
 import { create } from "zustand"
 import { ClientResponseError, type RecordModel } from "pocketbase"
+import { toast } from "sonner"
 
 import { pb } from "@/lib/pocketbase"
 
@@ -372,7 +373,9 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       set({ ...snapshot, initialized: true })
       if (connectionWanted) await connectRealtime(set)
     } catch (error) {
-      set({ error: messageFromError(error, "Could not load the board") })
+      const message = messageFromError(error, "Could not load the board")
+      set({ error: message })
+      toast.error(message)
     } finally {
       set({ loading: false })
     }
@@ -403,6 +406,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     } catch (error) {
       const message = messageFromError(error, "Could not create the project")
       set({ error: message })
+      toast.error(message)
       throw new Error(message, { cause: error })
     }
   },
@@ -420,6 +424,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     } catch (error) {
       const message = messageFromError(error, "Could not delete the project")
       set({ error: message })
+      toast.error(message)
       throw new Error(message, { cause: error })
     }
   },
@@ -449,6 +454,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     } catch (error) {
       const message = messageFromError(error, "Could not add the state")
       set({ error: message })
+      toast.error(message)
       throw new Error(message, { cause: error })
     }
   },
@@ -460,6 +466,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     } catch (error) {
       const message = messageFromError(error, "Could not update the state")
       set({ error: message })
+      toast.error(message)
       throw new Error(message, { cause: error })
     }
   },
@@ -473,6 +480,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     } catch (error) {
       const message = messageFromError(error, "Move or delete the tasks in this state first")
       set({ error: message })
+      toast.error(message)
       throw new Error(message, { cause: error })
     }
   },
@@ -518,6 +526,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     } catch (error) {
       const message = messageFromError(error, "Could not add the label")
       set({ error: message })
+      toast.error(message)
       throw new Error(message, { cause: error })
     }
   },
@@ -529,6 +538,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     } catch (error) {
       const message = messageFromError(error, "Could not update the label")
       set({ error: message })
+      toast.error(message)
       throw new Error(message, { cause: error })
     }
   },
@@ -554,6 +564,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     } catch (error) {
       const message = messageFromError(error, "Could not delete the label")
       set({ error: message })
+      toast.error(message)
       throw new Error(message, { cause: error })
     }
   },
@@ -577,6 +588,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     } catch (error) {
       const message = messageFromError(error, "Could not create the task")
       set({ error: message })
+      toast.error(message)
       throw new Error(message, { cause: error })
     }
   },
@@ -588,6 +600,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     } catch (error) {
       const message = messageFromError(error, "Could not update the task")
       set({ error: message })
+      toast.error(message)
       throw new Error(message, { cause: error })
     }
   },
@@ -599,6 +612,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     } catch (error) {
       const message = messageFromError(error, "Could not delete the task")
       set({ error: message })
+      toast.error(message)
       throw new Error(message, { cause: error })
     }
   },

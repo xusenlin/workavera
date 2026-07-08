@@ -28,6 +28,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { pb } from "@/lib/pocketbase"
+import { ToolInput } from "@/components/chat/tool-input"
 import { cn } from "@/lib/utils"
 import type { DynamicToolUIPart } from "ai"
 import type { ReactNode } from "react"
@@ -44,11 +45,6 @@ type ContactSummary = {
   avatar?: string
   /** PocketBase collection id, needed to resolve the avatar file URL. */
   collectionId?: string
-}
-
-type ContactsToolInput = {
-  query?: string
-  limit?: number
 }
 
 const MAX_VISIBLE = 16
@@ -124,7 +120,6 @@ type ContactsToolPart = DynamicToolUIPart
 
 export function ContactsToolCard({ part }: { part: ContactsToolPart }) {
   const contacts = parseContacts(part.output)
-  const input = (part.input ?? {}) as ContactsToolInput
   const visible = contacts.slice(0, MAX_VISIBLE)
   const overflow = contacts.length - visible.length
   const isError = part.state === "output-error"
@@ -166,21 +161,7 @@ export function ContactsToolCard({ part }: { part: ContactsToolPart }) {
 
       <CollapsibleContent className="space-y-3 p-4 pt-0 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:animate-in data-[state=open]:slide-in-from-top-2">
         {/* Parameters */}
-        {(input.query || input.limit) && (
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span className="font-medium tracking-wide uppercase">Query</span>
-            {input.query && (
-              <Badge variant="outline" className="font-normal">
-                {input.query}
-              </Badge>
-            )}
-            {input.limit && (
-              <Badge variant="outline" className="font-normal">
-                limit {input.limit}
-              </Badge>
-            )}
-          </div>
-        )}
+        <ToolInput input={part.input} />
 
         {/* Error */}
         {isError && (

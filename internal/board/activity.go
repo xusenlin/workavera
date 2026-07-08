@@ -102,6 +102,29 @@ func boardRecordName(app core.App, collection, id string) string {
 	return name
 }
 
+// boardAssigneeSummary resolves a user id into a TaskAssigneeSummary with the
+// display name, avatar file name and collection id. The avatar fields let the
+// frontend build the image URL without an extra request.
+func boardAssigneeSummary(app core.App, userID string) TaskAssigneeSummary {
+	if userID == "" {
+		return TaskAssigneeSummary{}
+	}
+	record, err := app.FindRecordById("users", userID)
+	if err != nil {
+		return TaskAssigneeSummary{ID: userID, Name: userID}
+	}
+	name := record.GetString("name")
+	if name == "" {
+		name = record.GetString("email")
+	}
+	return TaskAssigneeSummary{
+		ID:           record.Id,
+		Name:         name,
+		Avatar:       record.GetString("avatar"),
+		CollectionID: record.Collection().Id,
+	}
+}
+
 func boardRecordNames(app core.App, collection string, ids []string) []string {
 	names := make([]string, 0, len(ids))
 	for _, id := range ids {

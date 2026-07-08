@@ -16,6 +16,7 @@ type ProjectSearchOptions struct {
 	Query           string
 	IncludeArchived bool
 	Limit           int
+	UserIDs         []string
 }
 
 type ProjectStateSummary struct {
@@ -65,8 +66,36 @@ func SearchVisibleProjects(ctx context.Context, app core.App, actorID string, op
 		clauses = append(clauses, "name ~ {:query}")
 		params["query"] = query
 	}
+	if len(options.UserIDs) > 0 {
+		userClauses := make([]string, 0, len(options.UserIDs))
+		for i, uid := range options.UserIDs {
+			key := fmt.Sprintf("user%d", i)
+			userClauses = append(userClauses, "user = {:"+key+"}")
+			params[key] = uid
+		}
+		memberFilter := strings.Join(userClauses, " || ")
+		memberRecords, err := app.FindRecordsByFilter(boardProjectMembersCollection, memberFilter, "", 0, 0, params)
+		if err != nil {
+			return nil, err
+		}
+		projectIDSet := make(map[string]bool)
+		for _, mr := range memberRecords {
+			projectIDSet[mr.GetString("project")] = true
+		}
+		if len(projectIDSet) == 0 {
+			return []ProjectSummary{}, nil
+		}
+		projectIDClauses := make([]string, 0, len(projectIDSet))
+		for id := range projectIDSet {
+			key := fmt.Sprintf("pid_%s", id)
+			projectIDClauses = append(projectIDClauses, "id = {:"+key+"}")
+			params[key] = id
+		}
+		clauses = append(clauses, "("+strings.Join(projectIDClauses, " || ")+")")
+	}
 
-	records, err := app.FindRecordsByFilter(boardProjectsCollection, strings.Join(clauses, " && "), "-updated", limit, 0, params)
+	finalFilter := strings.Join(clauses, " && ")
+	records, err := app.FindRecordsByFilter(boardProjectsCollection, finalFilter, "-updated", limit, 0, params)
 	if err != nil {
 		return nil, err
 	}
@@ -134,56 +163,93 @@ func loadProjectStatesWithCounts(ctx context.Context, app core.App, projectID st
 type TaskSearchOptions struct {
 	ProjectID string
 	StateIDs  []string
+	UserIDs   []string
 }
 
+// TaskStateSummary carries the state a task belongs to so tool consumers can
+// group tasks by state without an extra fetch.
+type TaskStateSummary struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Color     string `json:"color"`
+	Category  string `json:"category"`
+	SortOrder int    `json:"sortOrder"`
+}
+
+// TaskLabelSummary is a label resolved to its display name and color.
+type TaskLabelSummary struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Color string `json:"color"`
+}
+
+// TaskAssigneeSummary is an assignee resolved to a display name and avatar.
 type TaskAssigneeSummary struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Avatar       string `json:"avatar,omitempty"`
+	CollectionID string `json:"collectionId,omitempty"`
 }
 
+// TaskSummary is a self-contained task representation for tool consumers. All
+// related fields (state, labels, assignees) are resolved server-side so the
+// frontend can render the result without additional requests.
 type TaskSummary struct {
-	ID        string                `json:"id"`
-	Title     string                `json:"title"`
-	Priority  string                `json:"priority,omitempty"`
-	DueDate   string                `json:"dueDate,omitempty"`
-	Assignees []TaskAssigneeSummary `json:"assignees"`
+	ID          string                `json:"id"`
+	Title       string                `json:"title"`
+	Description string                `json:"description,omitempty"`
+	Priority    string                `json:"priority,omitempty"`
+	DueDate     string                `json:"dueDate,omitempty"`
+	StateID     string                `json:"stateId"`
+	Labels      []TaskLabelSummary    `json:"labels"`
+	Assignees   []TaskAssigneeSummary `json:"assignees"`
+	Rank        float64               `json:"rank"`
+}
+
+// TaskSearchResult bundles the matching states and tasks so a tool consumer
+// can render them grouped by state.
+type TaskSearchResult struct {
+	States []TaskStateSummary `json:"states"`
+	Tasks  []TaskSummary      `json:"tasks"`
 }
 
 // SearchVisibleTasks returns the tasks of a project visible to the actor,
 // optionally filtered by one or more states. Labels and assignee names are
 // resolved server-side so the tool result is self-contained.
-func SearchVisibleTasks(ctx context.Context, app core.App, actorID string, options TaskSearchOptions) ([]TaskSummary, error) {
+func SearchVisibleTasks(ctx context.Context, app core.App, actorID string, options TaskSearchOptions) (TaskSearchResult, error) {
 	if actorID == "" {
-		return nil, errors.New("missing actor")
+		return TaskSearchResult{}, errors.New("missing actor")
 	}
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return TaskSearchResult{}, err
 	}
 	if _, err := app.FindRecordById("users", actorID); err != nil {
-		return nil, errors.New("actor is not an active user")
+		return TaskSearchResult{}, errors.New("actor is not an active user")
 	}
 	projectID := strings.TrimSpace(options.ProjectID)
 	if projectID == "" {
-		return nil, errors.New("project ID is required")
+		return TaskSearchResult{}, errors.New("project ID is required")
 	}
 
 	// Verify the actor can access the project.
 	project, err := app.FindRecordById(boardProjectsCollection, projectID)
 	if err != nil {
-		return nil, errors.New("project not found")
+		return TaskSearchResult{}, errors.New("project not found")
 	}
 	visible, err := projectVisibleTo(app, project, actorID)
 	if err != nil {
-		return nil, err
+		return TaskSearchResult{}, err
 	}
 	if !visible {
-		return nil, errors.New("project not found")
+		return TaskSearchResult{}, errors.New("project not found")
 	}
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return TaskSearchResult{}, err
 	}
 
 	// Build filter: project = {:project} && optionally state filter.
+	// Assignee filtering is done in Go after the query because PocketBase's
+	// ?= operator does not work reliably with parameterized placeholders.
 	filter := "project = {:project}"
 	params := dbx.Params{"project": projectID}
 	if len(options.StateIDs) > 0 {
@@ -198,31 +264,103 @@ func SearchVisibleTasks(ctx context.Context, app core.App, actorID string, optio
 
 	taskRecords, err := app.FindRecordsByFilter(boardTasksCollection, filter, "rank", 0, 0, params)
 	if err != nil {
-		return nil, err
+		return TaskSearchResult{}, err
 	}
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return TaskSearchResult{}, err
+	}
+
+	// Filter by assignees in Go (PocketBase ?= with params is unreliable).
+	if len(options.UserIDs) > 0 {
+		userSet := make(map[string]bool, len(options.UserIDs))
+		for _, uid := range options.UserIDs {
+			userSet[uid] = true
+		}
+		filtered := taskRecords[:0]
+		for _, tr := range taskRecords {
+			for _, uid := range tr.GetStringSlice("assignees") {
+				if userSet[uid] {
+					filtered = append(filtered, tr)
+					break
+				}
+			}
+		}
+		taskRecords = filtered
+	}
+
+	// Load the project states (optionally filtered) once, sorted by sort_order.
+	stateFilter := "project = {:project}"
+	stateParams := dbx.Params{"project": projectID}
+	if len(options.StateIDs) > 0 {
+		stateClauses := make([]string, 0, len(options.StateIDs))
+		for i, sid := range options.StateIDs {
+			key := fmt.Sprintf("sid%d", i)
+			stateClauses = append(stateClauses, "id = {:"+key+"}")
+			stateParams[key] = sid
+		}
+		stateFilter += " && (" + strings.Join(stateClauses, " || ") + ")"
+	}
+	stateRecords, err := app.FindRecordsByFilter(boardProjectStatesCollection, stateFilter, "sort_order", 0, 0, stateParams)
+	if err != nil {
+		return TaskSearchResult{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return TaskSearchResult{}, err
+	}
+
+	states := make([]TaskStateSummary, 0, len(stateRecords))
+	for _, sr := range stateRecords {
+		states = append(states, TaskStateSummary{
+			ID:        sr.Id,
+			Name:      sr.GetString("name"),
+			Color:     sr.GetString("color"),
+			Category:  sr.GetString("category"),
+			SortOrder: sr.GetInt("sort_order"),
+		})
+	}
+
+	// Preload all project labels so we can resolve each task's label ids in one
+	// pass instead of querying per task.
+	labelRecords, err := app.FindRecordsByFilter(boardProjectLabelsCollection, "project = {:project}", "", 0, 0, dbx.Params{"project": projectID})
+	if err != nil {
+		return TaskSearchResult{}, err
+	}
+	labelsByID := make(map[string]TaskLabelSummary, len(labelRecords))
+	for _, lr := range labelRecords {
+		labelsByID[lr.Id] = TaskLabelSummary{
+			ID:    lr.Id,
+			Name:  lr.GetString("name"),
+			Color: lr.GetString("color"),
+		}
 	}
 
 	result := make([]TaskSummary, 0, len(taskRecords))
 	for _, tr := range taskRecords {
 		assignees := make([]TaskAssigneeSummary, 0)
 		for _, uid := range tr.GetStringSlice("assignees") {
-			assignees = append(assignees, TaskAssigneeSummary{
-				ID:   uid,
-				Name: boardRecordName(app, "users", uid),
-			})
+			assignees = append(assignees, boardAssigneeSummary(app, uid))
+		}
+
+		taskLabels := make([]TaskLabelSummary, 0)
+		for _, lid := range tr.GetStringSlice("labels") {
+			if label, ok := labelsByID[lid]; ok {
+				taskLabels = append(taskLabels, label)
+			}
 		}
 
 		result = append(result, TaskSummary{
-			ID:        tr.Id,
-			Title:     tr.GetString("title"),
-			Priority:  tr.GetString("priority"),
-			DueDate:   tr.GetString("due_date"),
-			Assignees: assignees,
+			ID:          tr.Id,
+			Title:       tr.GetString("title"),
+			Description: tr.GetString("description"),
+			Priority:    tr.GetString("priority"),
+			DueDate:     tr.GetString("due_date"),
+			StateID:     tr.GetString("state"),
+			Labels:      taskLabels,
+			Assignees:   assignees,
+			Rank:        tr.GetFloat("rank"),
 		})
 	}
-	return result, nil
+	return TaskSearchResult{States: states, Tasks: result}, nil
 }
 
 // projectVisibleTo checks whether the actor is the owner or a member of the

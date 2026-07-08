@@ -16,6 +16,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import { Badge } from "@/components/ui/badge"
+import { ToolInput } from "@/components/chat/tool-input"
 import { cn } from "@/lib/utils"
 import type { DynamicToolUIPart } from "ai"
 import type { ReactNode } from "react"
@@ -35,12 +36,6 @@ type ProjectSummary = {
   description?: string
   archived: boolean
   states: StateSummary[]
-}
-
-type BoardProjectsInput = {
-  query?: string
-  includeArchived?: boolean
-  limit?: number
 }
 
 const statusLabels: Partial<Record<DynamicToolUIPart["state"], string>> = {
@@ -90,7 +85,6 @@ export function BoardProjectsToolCard({
   part: BoardProjectsToolPart
 }) {
   const projects = parseProjects(part.output)
-  const input = (part.input ?? {}) as BoardProjectsInput
   const isError = part.state === "output-error"
   const isLoading =
     part.state === "input-streaming" || part.state === "input-available"
@@ -135,26 +129,7 @@ export function BoardProjectsToolCard({
 
       <CollapsibleContent className="space-y-3 p-4 pt-0 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:animate-in data-[state=open]:slide-in-from-top-2">
         {/* Parameters */}
-        {(input.query || input.includeArchived || input.limit) && (
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span className="font-medium tracking-wide uppercase">Query</span>
-            {input.query && (
-              <Badge variant="outline" className="font-normal">
-                {input.query}
-              </Badge>
-            )}
-            {input.includeArchived && (
-              <Badge variant="outline" className="font-normal">
-                archived
-              </Badge>
-            )}
-            {input.limit && (
-              <Badge variant="outline" className="font-normal">
-                limit {input.limit}
-              </Badge>
-            )}
-          </div>
-        )}
+        <ToolInput input={part.input} />
 
         {/* Error */}
         {isError && (

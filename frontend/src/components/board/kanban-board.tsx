@@ -67,7 +67,7 @@ export function KanbanBoard() {
       ? targetTodos.findIndex((todo) => todo.id === over.id)
       : targetTodos.length
 
-    void moveTodo(dragged.id, targetStateId, Math.max(0, overIndex))
+    void moveTodo(dragged.id, targetStateId, Math.max(0, overIndex)).catch(() => {})
   }
 
   const handleAddTask = (projectId: string, stateId: string) => {

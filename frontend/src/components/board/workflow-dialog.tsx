@@ -163,7 +163,7 @@ export function WorkflowDialog({
                     variant="ghost"
                     size="icon-sm"
                     disabled={index === 0}
-                    onClick={() => void reorderState(state.id, -1)}
+                    onClick={() => void reorderState(state.id, -1).catch(() => {})}
                     aria-label="Move state up"
                   >
                     <HugeiconsIcon icon={ArrowUp01Icon} strokeWidth={2} />
@@ -172,7 +172,7 @@ export function WorkflowDialog({
                     variant="ghost"
                     size="icon-sm"
                     disabled={index === states.length - 1}
-                    onClick={() => void reorderState(state.id, 1)}
+                    onClick={() => void reorderState(state.id, 1).catch(() => {})}
                     aria-label="Move state down"
                   >
                     <HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} />

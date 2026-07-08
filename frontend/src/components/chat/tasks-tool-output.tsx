@@ -1,19 +1,10 @@
-import { useEffect, useState } from "react"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
-  ArrowUpRightIcon,
+  Calendar03Icon,
   ChevronDownIcon,
   Task01Icon,
+  TextAlignLeftIcon,
 } from "@hugeicons/core-free-icons"
-import {
-  DndContext,
-  DragOverlay,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  type DragStartEvent,
-} from "@dnd-kit/core"
 import {
   CheckCircleIcon,
   CircleIcon,
@@ -26,20 +17,52 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { StatusColumn } from "@/components/board/status-column"
-import { TodoCard } from "@/components/board/todo-card"
-import { TodoCardSheet } from "@/components/board/todo-card-sheet"
-import { useBoardStore, type Todo } from "@/store/board"
+import { pb } from "@/lib/pocketbase"
+import { PRIORITY_META } from "@/store/board"
+import { ToolInput } from "@/components/chat/tool-input"
 import { cn } from "@/lib/utils"
 import type { DynamicToolUIPart } from "ai"
 import type { ReactNode } from "react"
 import { useNavigate } from "react-router"
 
-type TasksInput = {
-  projectId?: string
-  stateIds?: string[]
+type TaskStateSummary = {
+  id: string
+  name: string
+  color: string
+  category: string
+  sortOrder: number
+}
+
+type TaskLabelSummary = {
+  id: string
+  name: string
+  color: string
+}
+
+type TaskAssigneeSummary = {
+  id: string
+  name: string
+  avatar?: string
+  collectionId?: string
+}
+
+type TaskSummary = {
+  id: string
+  title: string
+  description?: string
+  priority?: string
+  dueDate?: string
+  stateId: string
+  labels: TaskLabelSummary[]
+  assignees: TaskAssigneeSummary[]
+  rank: number
+}
+
+type TaskSearchResult = {
+  states: TaskStateSummary[]
+  tasks: TaskSummary[]
 }
 
 const statusLabels: Partial<Record<DynamicToolUIPart["state"], string>> = {
@@ -68,126 +91,102 @@ function getStatusBadge(state: DynamicToolUIPart["state"]) {
   )
 }
 
+/** Parses the tool output, tolerating either a parsed object or a JSON string. */
+function parseTaskResult(output: unknown): TaskSearchResult | null {
+  const data = typeof output === "string" ? safeJsonParse(output) : output
+  if (data && typeof data === "object" && "tasks" in data) {
+    return data as TaskSearchResult
+  }
+  return null
+}
+
+function safeJsonParse(value: string): unknown {
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
+}
+
+function isOverdue(dueDate?: string) {
+  if (!dueDate) return false
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return new Date(dueDate) < today
+}
+
+function formatDate(dueDate: string) {
+  const date = new Date(dueDate)
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+}
+
+function assigneeAvatarUrl(assignee: TaskAssigneeSummary): string | undefined {
+  if (!assignee.avatar || !assignee.collectionId) return undefined
+  return pb.files.getURL(
+    { id: assignee.id, collectionId: assignee.collectionId },
+    assignee.avatar
+  )
+}
+
 type TasksToolPart = DynamicToolUIPart
 
 export function TasksToolCard({ part }: { part: TasksToolPart }) {
-  const input = (part.input ?? {}) as TasksInput
-  const projectId = input.projectId ?? ""
   const isError = part.state === "output-error"
   const isLoading =
     part.state === "input-streaming" || part.state === "input-available"
   const navigate = useNavigate()
 
-  // Board store — initialize once to populate states/todos/labels/members.
-  const states = useBoardStore((s) => s.states)
-  const todos = useBoardStore((s) => s.todos)
-  const initialize = useBoardStore((s) => s.initialize)
-  const dispose = useBoardStore((s) => s.dispose)
-  const moveTodo = useBoardStore((s) => s.moveTodo)
+  const result = parseTaskResult(part.output)
+  const states = (result?.states ?? []).sort((a, b) => a.sortOrder - b.sortOrder)
+  const tasks = result?.tasks ?? []
 
-  useEffect(() => {
-    void initialize()
-    return dispose
-  }, [dispose, initialize])
-
-  // Filter to this project, optionally by stateIds.
-  const projectStates = states
-    .filter((s) => s.projectId === projectId)
-    .filter((s) => !input.stateIds?.length || input.stateIds.includes(s.id))
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-  const projectTodos = todos.filter((t) => t.projectId === projectId)
-
-  // DnD — same logic as KanbanBoard, restricted to this project.
-  const [activeTodo, setActiveTodo] = useState<Todo | null>(null)
-  const [editingTodo, setEditingTodo] = useState<Todo | null>(null)
-  const [sheetOpen, setSheetOpen] = useState(false)
-  const [addStateId, setAddStateId] = useState("")
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
-  )
-
-  const handleDragStart = (event: DragStartEvent) => {
-    setActiveTodo(
-      projectTodos.find((todo) => todo.id === event.active.id) ?? null
-    )
+  // Group tasks by state id, sorted by rank within each group.
+  const tasksByState = new Map<string, TaskSummary[]>()
+  for (const task of tasks) {
+    const group = tasksByState.get(task.stateId) ?? []
+    group.push(task)
+    tasksByState.set(task.stateId, group)
   }
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event
-    setActiveTodo(null)
-    if (!over) return
-
-    const dragged = projectTodos.find((todo) => todo.id === active.id)
-    if (!dragged) return
-
-    const targetProjectId = over.data.current?.projectId as string | undefined
-    const targetStateId = over.data.current?.stateId as string | undefined
-    if (!targetStateId || targetProjectId !== dragged.projectId) return
-
-    const targetTodos = projectTodos
-      .filter((todo) => todo.stateId === targetStateId && todo.id !== dragged.id)
-      .sort((a, b) => a.rank - b.rank)
-    const overIndex = over.data.current?.type === "todo"
-      ? targetTodos.findIndex((todo) => todo.id === over.id)
-      : targetTodos.length
-
-    void moveTodo(dragged.id, targetStateId, Math.max(0, overIndex))
-  }
-
-  const handleAddTask = (stateId: string) => {
-    setAddStateId(stateId)
-    setEditingTodo(null)
-    setSheetOpen(true)
-  }
-
-  const handleEditTask = (todo: Todo) => {
-    setAddStateId(todo.stateId)
-    setEditingTodo(todo)
-    setSheetOpen(true)
+  for (const group of tasksByState.values()) {
+    group.sort((a, b) => a.rank - b.rank)
   }
 
   return (
     <Collapsible
       defaultOpen={true}
-      className="group not-prose mb-4 w-full min-w-0 rounded-md border"
+      className="group not-prose mb-4 w-full rounded-md border"
     >
-      <div className="flex w-full items-center justify-between gap-4 p-3">
-        <CollapsibleTrigger
-          className={cn(
-            "flex min-w-0 flex-1 items-center gap-2",
-            isLoading && "cursor-default"
-          )}
-        >
+      <CollapsibleTrigger
+        className={cn(
+          "flex w-full items-center justify-between gap-4 p-3",
+          isLoading && "cursor-default"
+        )}
+      >
+        <div className="flex min-w-0 items-center gap-2">
           <HugeiconsIcon
             icon={Task01Icon}
             strokeWidth={2}
             className="size-4 shrink-0 text-muted-foreground"
           />
           <span className="text-sm font-medium">Tasks</span>
-          {part.state === "output-available" && projectTodos.length > 0 && (
+          {part.state === "output-available" && tasks.length > 0 && (
             <Badge variant="secondary" className="rounded-full px-1.5">
-              {projectTodos.length}
+              {tasks.length}
             </Badge>
           )}
           {getStatusBadge(part.state)}
-          <HugeiconsIcon
-            icon={ChevronDownIcon}
-            strokeWidth={2}
-            className="ml-auto size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180"
-          />
-        </CollapsibleTrigger>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-label="Open board"
-          onClick={() => navigate("/board")}
-        >
-          <HugeiconsIcon icon={ArrowUpRightIcon} strokeWidth={2} className="size-4" />
-        </Button>
-      </div>
+        </div>
+        <HugeiconsIcon
+          icon={ChevronDownIcon}
+          strokeWidth={2}
+          className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180"
+        />
+      </CollapsibleTrigger>
 
-      <CollapsibleContent className="outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:animate-in data-[state=open]:slide-in-from-top-2">
+      <CollapsibleContent className="space-y-3 p-4 pt-0 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:animate-in data-[state=open]:slide-in-from-top-2">
+        {/* Parameters */}
+        <ToolInput input={part.input} />
+
         {/* Error */}
         {isError && (
           <div className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
@@ -195,55 +194,176 @@ export function TasksToolCard({ part }: { part: TasksToolPart }) {
           </div>
         )}
 
-        {/* Results — reuse board's StatusColumn + TodoCard + DnD */}
-        {part.state === "output-available" && (
-          <div className="min-w-0 p-3">
-            {projectStates.length > 0 ? (
-              <DndContext
-                sensors={sensors}
-                onDragStart={handleDragStart}
-                onDragEnd={handleDragEnd}
-                onDragCancel={() => setActiveTodo(null)}
-              >
-                <div className="flex gap-4 overflow-x-auto pb-2">
-                  {projectStates.map((state) => (
-                    <StatusColumn
-                      key={state.id}
-                      state={state}
-                      todos={projectTodos
-                        .filter((t) => t.stateId === state.id)
-                        .sort((a, b) => a.rank - b.rank)}
-                      onAddTask={handleAddTask}
-                      onEditTask={handleEditTask}
-                    />
-                  ))}
-                </div>
-
-                <DragOverlay>
-                  {activeTodo ? (
-                    <div className="w-72 rotate-3 opacity-80">
-                      <TodoCard todo={activeTodo} onEdit={() => {}} />
+        {/* Results */}
+        {part.state === "output-available" && tasks.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex gap-3 overflow-x-auto pb-2">
+              {states.map((state) => {
+                const stateTasks = tasksByState.get(state.id) ?? []
+                if (stateTasks.length === 0) return null
+                return (
+                  <div key={state.id} className="w-60 shrink-0 space-y-1.5">
+                    {/* State header */}
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="size-2 rounded-full"
+                        style={{ backgroundColor: state.color }}
+                      />
+                      <span className="text-sm font-semibold">{state.name}</span>
+                      <span className="bg-muted text-muted-foreground rounded-full px-1.5 py-0.5 text-xs tabular-nums">
+                        {stateTasks.length}
+                      </span>
                     </div>
-                  ) : null}
-                </DragOverlay>
-              </DndContext>
-            ) : (
-              <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-                No states found for this project
+
+                    {/* Task cards */}
+                    <div className="space-y-1.5">
+                      {stateTasks.map((task) => (
+                        <TaskItem key={task.id} task={task} onClick={() => navigate("/board")} />
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+
+              {/* Tasks whose state was not returned (e.g. filtered out) */}
+              {(() => {
+                const stateIds = new Set(states.map((s) => s.id))
+                const orphanTasks = tasks
+                  .filter((t) => !stateIds.has(t.stateId))
+                  .sort((a, b) => a.rank - b.rank)
+                if (orphanTasks.length === 0) return null
+                return (
+                  <div className="w-60 shrink-0 space-y-1.5">
+                    <div className="text-muted-foreground text-xs font-medium">
+                      Other
+                    </div>
+                    <div className="space-y-1.5">
+                      {orphanTasks.map((task) => (
+                        <TaskItem
+                          key={task.id}
+                          task={task}
+                          onClick={() => navigate("/board")}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
+            </div>
+
+            {/* Summary */}
+            <div className="flex items-center gap-3 px-1 text-xs text-muted-foreground">
+              <span>{tasks.length} tasks</span>
+              {states.length > 0 && (
+                <>
+                  <span>·</span>
+                  <span>{states.length} states</span>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Empty result */}
+        {part.state === "output-available" && tasks.length === 0 && (
+          <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+            No tasks found
+          </div>
+        )}
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
+function TaskItem({ task, onClick }: { task: TaskSummary; onClick: () => void }) {
+  const priorityMeta = PRIORITY_META.find((p) => p.value === task.priority)
+  const overdue = isOverdue(task.dueDate)
+
+  return (
+    <div
+      className="cursor-pointer rounded-lg border border-border/60 bg-card p-2.5 transition-colors hover:border-border hover:bg-muted/40"
+      onClick={onClick}
+    >
+      {/* Labels */}
+      {task.labels.length > 0 && (
+        <div className="mb-1.5 flex flex-wrap gap-1">
+          {task.labels.map((label) => (
+            <span
+              key={label.id}
+              className="inline-flex h-4.5 items-center rounded-md px-1.5 text-[10px] font-medium text-white"
+              style={{ backgroundColor: label.color }}
+            >
+              {label.name}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Title */}
+      <p className="text-sm font-medium leading-snug">{task.title}</p>
+
+      {/* Description */}
+      {task.description && (
+        <div className="text-muted-foreground mt-1 flex items-center gap-1 text-xs">
+          <HugeiconsIcon icon={TextAlignLeftIcon} strokeWidth={2} className="size-3 shrink-0" />
+          <span className="truncate">{task.description}</span>
+        </div>
+      )}
+
+      {/* Footer */}
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5">
+          {/* Priority */}
+          {priorityMeta && (
+            <Badge
+              variant="secondary"
+              className="h-4.5 gap-1 px-1.5 text-[10px]"
+              style={{ color: priorityMeta.color }}
+            >
+              <span
+                className="size-1.5 rounded-full"
+                style={{ backgroundColor: priorityMeta.color }}
+              />
+              {priorityMeta.label}
+            </Badge>
+          )}
+
+          {/* Due date */}
+          {task.dueDate && (
+            <span
+              className={cn(
+                "flex items-center gap-0.5 text-[10px]",
+                overdue ? "text-destructive font-medium" : "text-muted-foreground"
+              )}
+            >
+              <HugeiconsIcon icon={Calendar03Icon} strokeWidth={2} className="size-3" />
+              {formatDate(task.dueDate)}
+            </span>
+          )}
+        </div>
+
+        {/* Assignees */}
+        {task.assignees.length > 0 && (
+          <div className="flex -space-x-1.5">
+            {task.assignees.slice(0, 3).map((assignee) => {
+              const src = assigneeAvatarUrl(assignee)
+              return (
+                <Avatar key={assignee.id} size="sm" className="ring-2 ring-card">
+                  {src && <AvatarImage src={src} alt={assignee.name} className="object-cover" />}
+                  <AvatarFallback className="text-[9px]">
+                    {assignee.name.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+              )
+            })}
+            {task.assignees.length > 3 && (
+              <div className="bg-muted text-muted-foreground ring-2 ring-card flex size-6 items-center justify-center rounded-full text-[9px]">
+                +{task.assignees.length - 3}
               </div>
             )}
           </div>
         )}
-      </CollapsibleContent>
-
-      <TodoCardSheet
-        key={`${sheetOpen ? "open" : "closed"}:${editingTodo?.id || "new"}:${addStateId}`}
-        open={sheetOpen}
-        onOpenChange={setSheetOpen}
-        todo={editingTodo}
-        projectId={projectId}
-        defaultStateId={addStateId}
-      />
-    </Collapsible>
+      </div>
+    </div>
   )
 }

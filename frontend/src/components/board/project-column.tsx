@@ -178,7 +178,7 @@ export function ProjectColumn({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={() => void removeProject(project.id)}>
+            <AlertDialogAction variant="destructive" onClick={() => void removeProject(project.id).catch(() => {})}>
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
