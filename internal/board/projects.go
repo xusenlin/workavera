@@ -1,28 +1,34 @@
 package board
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 
 	"github.com/pocketbase/pocketbase/core"
 )
 
-type createBoardProjectRequest struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	TemplateID  string `json:"templateId"`
-}
-
-type boardTemplateState struct {
+type boardProjectStateInput struct {
 	Name     string `json:"name"`
 	Color    string `json:"color"`
 	Category string `json:"category"`
 }
 
-type boardTemplateLabel struct {
+type boardProjectLabelInput struct {
 	Name  string `json:"name"`
 	Color string `json:"color"`
+}
+
+type boardProjectMemberInput struct {
+	UserID string `json:"userId"`
+	Role   string `json:"role"`
+}
+
+type createBoardProjectRequest struct {
+	Name        string                    `json:"name"`
+	Description string                    `json:"description"`
+	States      []boardProjectStateInput  `json:"states"`
+	Labels      []boardProjectLabelInput  `json:"labels"`
+	Members     []boardProjectMemberInput `json:"members"`
 }
 
 func createBoardProject(event *core.RequestEvent) error {
@@ -54,66 +60,79 @@ func createBoardProject(event *core.RequestEvent) error {
 		}
 		projectID = project.Id
 
-		members, err := txApp.FindCollectionByNameOrId(boardProjectMembersCollection)
+		membersCollection, err := txApp.FindCollectionByNameOrId(boardProjectMembersCollection)
 		if err != nil {
 			return err
 		}
-		member := core.NewRecord(members)
-		member.Set("project", project.Id)
-		member.Set("user", event.Auth.Id)
-		member.Set("role", "owner")
-		if err := txApp.Save(member); err != nil {
+
+		// Always create an owner membership for the creator.
+		ownerMember := core.NewRecord(membersCollection)
+		ownerMember.Set("project", project.Id)
+		ownerMember.Set("user", event.Auth.Id)
+		ownerMember.Set("role", "owner")
+		if err := txApp.Save(ownerMember); err != nil {
 			return err
 		}
 
-		if request.TemplateID == "" {
-			return nil
-		}
-
-		template, err := txApp.FindRecordById(boardTemplatesCollection, request.TemplateID)
-		if err != nil {
-			return err
-		}
-		owner := template.GetString("owner")
-		if owner != "" && owner != event.Auth.Id {
-			return event.ForbiddenError("You cannot use this template.", nil)
-		}
-
-		var templateStates []boardTemplateState
-		if err := decodeBoardTemplateField(template.Get("states"), &templateStates); err != nil {
-			return err
-		}
-		states, err := txApp.FindCollectionByNameOrId(boardProjectStatesCollection)
-		if err != nil {
-			return err
-		}
-		for index, state := range templateStates {
-			record := core.NewRecord(states)
+		// Create additional members (skip the owner to avoid duplicates).
+		for _, m := range request.Members {
+			if m.UserID == "" || m.UserID == event.Auth.Id {
+				continue
+			}
+			role := m.Role
+			if role == "" || role == "owner" {
+				role = "member"
+			}
+			record := core.NewRecord(membersCollection)
 			record.Set("project", project.Id)
-			record.Set("name", strings.TrimSpace(state.Name))
-			record.Set("color", state.Color)
-			record.Set("category", state.Category)
-			record.Set("sort_order", (index+1)*1024)
+			record.Set("user", m.UserID)
+			record.Set("role", role)
 			if err := txApp.Save(record); err != nil {
 				return err
 			}
 		}
 
-		var templateLabels []boardTemplateLabel
-		if err := decodeBoardTemplateField(template.Get("labels"), &templateLabels); err != nil {
-			return err
-		}
-		labels, err := txApp.FindCollectionByNameOrId(boardProjectLabelsCollection)
-		if err != nil {
-			return err
-		}
-		for _, label := range templateLabels {
-			record := core.NewRecord(labels)
-			record.Set("project", project.Id)
-			record.Set("name", strings.TrimSpace(label.Name))
-			record.Set("color", label.Color)
-			if err := txApp.Save(record); err != nil {
+		// Create states.
+		if len(request.States) > 0 {
+			statesCollection, err := txApp.FindCollectionByNameOrId(boardProjectStatesCollection)
+			if err != nil {
 				return err
+			}
+			for index, state := range request.States {
+				name := strings.TrimSpace(state.Name)
+				if name == "" {
+					continue
+				}
+				record := core.NewRecord(statesCollection)
+				record.Set("project", project.Id)
+				record.Set("name", name)
+				record.Set("color", state.Color)
+				record.Set("category", state.Category)
+				record.Set("sort_order", (index+1)*1024)
+				if err := txApp.Save(record); err != nil {
+					return err
+				}
+			}
+		}
+
+		// Create labels.
+		if len(request.Labels) > 0 {
+			labelsCollection, err := txApp.FindCollectionByNameOrId(boardProjectLabelsCollection)
+			if err != nil {
+				return err
+			}
+			for _, label := range request.Labels {
+				name := strings.TrimSpace(label.Name)
+				if name == "" {
+					continue
+				}
+				record := core.NewRecord(labelsCollection)
+				record.Set("project", project.Id)
+				record.Set("name", name)
+				record.Set("color", label.Color)
+				if err := txApp.Save(record); err != nil {
+					return err
+				}
 			}
 		}
 
@@ -128,12 +147,4 @@ func createBoardProject(event *core.RequestEvent) error {
 		return event.InternalServerError("Project was created but could not be loaded.", err)
 	}
 	return event.JSON(http.StatusCreated, project)
-}
-
-func decodeBoardTemplateField(value any, target any) error {
-	raw, err := json.Marshal(value)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(raw, target)
 }

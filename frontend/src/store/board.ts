@@ -79,9 +79,14 @@ type TodoInput = Omit<Todo, "id" | "rank">
 type StateInput = Pick<ProjectState, "name" | "color" | "category">
 type LabelInput = Pick<Label, "name" | "color">
 
+const PROJECTS_PER_PAGE = 4
+
 type BoardState = {
   templates: BoardTemplate[]
   projects: Project[]
+  projectPage: number
+  projectTotalPages: number
+  projectTotalItems: number
   states: ProjectState[]
   todos: Todo[]
   labels: Label[]
@@ -92,7 +97,15 @@ type BoardState = {
   initialize: () => Promise<void>
   dispose: () => void
   clearError: () => void
-  addProject: (input: { name: string; description?: string; templateId?: string }) => Promise<void>
+  loadProjectPage: (page: number) => Promise<void>
+  addProject: (input: {
+    name: string
+    description?: string
+    states: StateInput[]
+    labels: LabelInput[]
+    members: { userId: string; role: ProjectRole }[]
+  }) => Promise<void>
+  updateProject: (id: string, patch: { name?: string; description?: string }) => Promise<void>
   removeProject: (id: string) => Promise<void>
   toggleProjectCollapse: (id: string) => void
   addState: (projectId: string, input: StateInput) => Promise<void>
@@ -102,6 +115,9 @@ type BoardState = {
   addLabel: (projectId: string, input: LabelInput) => Promise<void>
   updateLabel: (id: string, patch: Partial<LabelInput>) => Promise<void>
   removeLabel: (id: string) => Promise<void>
+  addMember: (projectId: string, input: { userId: string; role: ProjectRole }) => Promise<void>
+  updateMember: (id: string, patch: { role: ProjectRole }) => Promise<void>
+  removeMember: (id: string) => Promise<void>
   addTodo: (todo: TodoInput) => Promise<void>
   updateTodo: (id: string, patch: Partial<Omit<Todo, "id">>) => Promise<void>
   removeTodo: (id: string) => Promise<void>
@@ -171,7 +187,8 @@ const COLLECTIONS = {
   tasks: "board_tasks",
 } as const
 
-const collapsedProjects = new Set<string>()
+// Accordion mode: only one project expanded at a time. null means all collapsed.
+let expandedProjectId: string | null = null
 let realtimeUnsubscribers: Array<() => void> = []
 let connectionWanted = false
 
@@ -193,7 +210,7 @@ function toProject(record: ProjectRecord): Project {
     description: record.description || undefined,
     ownerId: record.owner,
     archived: record.archived,
-    collapsed: collapsedProjects.has(record.id),
+    collapsed: expandedProjectId === record.id,
   }
 }
 
@@ -273,12 +290,12 @@ function todoPatchToRecord(patch: Partial<Omit<Todo, "id">>) {
   return body
 }
 
-async function loadBoardSnapshot() {
-  const [templates, projects, states, todos, labels, members] = await Promise.all([
+async function loadBoardPage(page: number) {
+  const [templates, projectResult, states, todos, labels, members] = await Promise.all([
     pb.collection(COLLECTIONS.templates).getFullList<TemplateRecord>({ sort: "name", requestKey: null }),
-    pb.collection(COLLECTIONS.projects).getFullList<ProjectRecord>({
+    pb.collection(COLLECTIONS.projects).getList<ProjectRecord>(page + 1, PROJECTS_PER_PAGE, {
       filter: "archived = false",
-      sort: "created",
+      sort: "-created",
       requestKey: null,
     }),
     pb.collection(COLLECTIONS.states).getFullList<StateRecord>({ sort: "sort_order", requestKey: null }),
@@ -293,7 +310,10 @@ async function loadBoardSnapshot() {
 
   return {
     templates: templates.map(toTemplate),
-    projects: projects.map(toProject),
+    projects: projectResult.items.map(toProject),
+    projectPage: page,
+    projectTotalPages: projectResult.totalPages,
+    projectTotalItems: projectResult.totalItems,
     states: states.map(toState),
     todos: todos.map(toTodo),
     labels: labels.map(toLabel),
@@ -356,6 +376,9 @@ async function connectRealtime(
 export const useBoardStore = create<BoardState>((set, get) => ({
   templates: [],
   projects: [],
+  projectPage: 0,
+  projectTotalPages: 1,
+  projectTotalItems: 0,
   states: [],
   todos: [],
   labels: [],
@@ -369,9 +392,32 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     if (get().loading || get().initialized) return
     set({ loading: true, error: null })
     try {
-      const snapshot = await loadBoardSnapshot()
-      set({ ...snapshot, initialized: true })
+      const snapshot = await loadBoardPage(0)
+      expandedProjectId = snapshot.projects[0]?.id ?? null
+      set({
+        ...snapshot,
+        projects: snapshot.projects.map((p) => ({ ...p, collapsed: p.id !== expandedProjectId })),
+        initialized: true,
+      })
       if (connectionWanted) await connectRealtime(set)
+    } catch (error) {
+      const message = messageFromError(error, "Could not load the board")
+      set({ error: message })
+      toast.error(message)
+    } finally {
+      set({ loading: false })
+    }
+  },
+
+  loadProjectPage: async (page) => {
+    set({ loading: true, error: null })
+    try {
+      const snapshot = await loadBoardPage(page)
+      expandedProjectId = snapshot.projects[0]?.id ?? null
+      set({
+        ...snapshot,
+        projects: snapshot.projects.map((p) => ({ ...p, collapsed: p.id !== expandedProjectId })),
+      })
     } catch (error) {
       const message = messageFromError(error, "Could not load the board")
       set({ error: message })
@@ -398,13 +444,30 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         body: {
           name: input.name,
           description: input.description || "",
-          templateId: input.templateId || "",
+          states: input.states,
+          labels: input.labels,
+          members: input.members,
         },
       })
-      const snapshot = await loadBoardSnapshot()
+      const snapshot = await loadBoardPage(0)
       set(snapshot)
     } catch (error) {
       const message = messageFromError(error, "Could not create the project")
+      set({ error: message })
+      toast.error(message)
+      throw new Error(message, { cause: error })
+    }
+  },
+
+  updateProject: async (id, patch) => {
+    try {
+      const record = await pb.collection(COLLECTIONS.projects).update<ProjectRecord>(id, {
+        name: patch.name,
+        description: patch.description,
+      })
+      set((state) => ({ projects: upsertById(state.projects, toProject(record)) }))
+    } catch (error) {
+      const message = messageFromError(error, "Could not update the project")
       set({ error: message })
       toast.error(message)
       throw new Error(message, { cause: error })
@@ -432,10 +495,15 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   toggleProjectCollapse: (id) =>
     set((state) => {
       const project = state.projects.find((item) => item.id === id)
-      if (project?.collapsed) collapsedProjects.delete(id)
-      else collapsedProjects.add(id)
+      // Accordion mode: expanding one project collapses all others.
+      // Clicking an already-expanded project collapses it.
+      const willExpand = project?.collapsed ?? true
+      expandedProjectId = willExpand ? id : null
       return {
-        projects: state.projects.map((item) => (item.id === id ? { ...item, collapsed: !item.collapsed } : item)),
+        projects: state.projects.map((item) => ({
+          ...item,
+          collapsed: item.id !== expandedProjectId,
+        })),
       }
     }),
 
@@ -563,6 +631,46 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       }))
     } catch (error) {
       const message = messageFromError(error, "Could not delete the label")
+      set({ error: message })
+      toast.error(message)
+      throw new Error(message, { cause: error })
+    }
+  },
+
+  addMember: async (projectId, input) => {
+    try {
+      const record = await pb.collection(COLLECTIONS.members).create<MemberRecord>({
+        project: projectId,
+        user: input.userId,
+        role: input.role,
+      })
+      set((state) => ({ members: upsertById(state.members, toMember(record)) }))
+    } catch (error) {
+      const message = messageFromError(error, "Could not add the member")
+      set({ error: message })
+      toast.error(message)
+      throw new Error(message, { cause: error })
+    }
+  },
+
+  updateMember: async (id, patch) => {
+    try {
+      const record = await pb.collection(COLLECTIONS.members).update<MemberRecord>(id, { role: patch.role })
+      set((state) => ({ members: upsertById(state.members, toMember(record)) }))
+    } catch (error) {
+      const message = messageFromError(error, "Could not update the member")
+      set({ error: message })
+      toast.error(message)
+      throw new Error(message, { cause: error })
+    }
+  },
+
+  removeMember: async (id) => {
+    try {
+      await pb.collection(COLLECTIONS.members).delete(id)
+      set((state) => ({ members: state.members.filter((member) => member.id !== id) }))
+    } catch (error) {
+      const message = messageFromError(error, "Could not remove the member")
       set({ error: message })
       toast.error(message)
       throw new Error(message, { cause: error })

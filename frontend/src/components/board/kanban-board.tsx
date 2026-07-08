@@ -12,13 +12,20 @@ import {
 
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
-import { useBoardStore, type Todo } from "@/store/board"
+import { useBoardStore, type Todo, type Project } from "@/store/board"
 import { ProjectColumn } from "./project-column"
 import { TodoCard } from "./todo-card"
 import { TodoCardSheet } from "./todo-card-sheet"
 
-export function KanbanBoard() {
+type KanbanBoardProps = {
+  onEditProject?: (project: Project) => void
+}
+
+export function KanbanBoard({ onEditProject }: KanbanBoardProps) {
   const projects = useBoardStore((store) => store.projects)
+  const projectPage = useBoardStore((store) => store.projectPage)
+  const projectTotalPages = useBoardStore((store) => store.projectTotalPages)
+  const projectTotalItems = useBoardStore((store) => store.projectTotalItems)
   const states = useBoardStore((store) => store.states)
   const todos = useBoardStore((store) => store.todos)
   const loading = useBoardStore((store) => store.loading)
@@ -27,6 +34,7 @@ export function KanbanBoard() {
   const initialize = useBoardStore((store) => store.initialize)
   const dispose = useBoardStore((store) => store.dispose)
   const clearError = useBoardStore((store) => store.clearError)
+  const loadProjectPage = useBoardStore((store) => store.loadProjectPage)
   const moveTodo = useBoardStore((store) => store.moveTodo)
 
   const [activeTodo, setActiveTodo] = useState<Todo | null>(null)
@@ -116,6 +124,7 @@ export function KanbanBoard() {
               todos={todos}
               onAddTask={handleAddTask}
               onEditTask={handleEditTask}
+              onEditProject={onEditProject}
             />
           ))}
 
@@ -137,6 +146,35 @@ export function KanbanBoard() {
           ) : null}
         </DragOverlay>
       </DndContext>
+
+      {projectTotalPages > 0 && (
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-muted-foreground text-xs">
+            {projectTotalItems} project{projectTotalItems === 1 ? "" : "s"}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={projectPage === 0 || loading}
+              onClick={() => void loadProjectPage(projectPage - 1)}
+            >
+              Previous
+            </Button>
+            <span className="text-muted-foreground text-xs tabular-nums">
+              {projectPage + 1} / {projectTotalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={projectPage >= projectTotalPages - 1 || loading}
+              onClick={() => void loadProjectPage(projectPage + 1)}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
 
       <TodoCardSheet
         key={`${sheetOpen ? "open" : "closed"}:${editingTodo?.id || "new"}:${addStateId}`}

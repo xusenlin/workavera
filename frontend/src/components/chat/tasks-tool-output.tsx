@@ -183,7 +183,7 @@ export function TasksToolCard({ part }: { part: TasksToolPart }) {
         />
       </CollapsibleTrigger>
 
-      <CollapsibleContent className="space-y-3 p-4 pt-0 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:animate-in data-[state=open]:slide-in-from-top-2">
+      <CollapsibleContent className="min-w-0 space-y-3 p-4 pt-0 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:animate-in data-[state=open]:slide-in-from-top-2">
         {/* Parameters */}
         <ToolInput input={part.input} />
 
@@ -197,7 +197,7 @@ export function TasksToolCard({ part }: { part: TasksToolPart }) {
         {/* Results */}
         {part.state === "output-available" && tasks.length > 0 && (
           <div className="space-y-3">
-            <div className="flex gap-3 overflow-x-auto pb-2">
+            <div className="flex max-w-full min-w-0 gap-3 overflow-x-auto pb-2">
               {states.map((state) => {
                 const stateTasks = tasksByState.get(state.id) ?? []
                 if (stateTasks.length === 0) return null

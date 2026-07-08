@@ -9,6 +9,7 @@ import {
   MoreHorizontalIcon,
   Settings02Icon,
   Tag01Icon,
+  UserGroup02Icon,
 } from "@hugeicons/core-free-icons"
 
 import {
@@ -36,8 +37,6 @@ import {
   type Todo,
 } from "@/store/board"
 import { StatusColumn } from "./status-column"
-import { WorkflowDialog } from "./workflow-dialog"
-import { LabelsDialog } from "./labels-dialog"
 
 type ProjectColumnProps = {
   project: Project
@@ -45,6 +44,7 @@ type ProjectColumnProps = {
   todos: Todo[]
   onAddTask: (projectId: string, stateId: string) => void
   onEditTask: (todo: Todo) => void
+  onEditProject?: (project: Project) => void
 }
 
 export function ProjectColumn({
@@ -53,21 +53,20 @@ export function ProjectColumn({
   todos,
   onAddTask,
   onEditTask,
+  onEditProject,
 }: ProjectColumnProps) {
   const toggleCollapse = useBoardStore((store) => store.toggleProjectCollapse)
   const removeProject = useBoardStore((store) => store.removeProject)
   const labels = useBoardStore((store) => store.labels)
+  const members = useBoardStore((store) => store.members)
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const [workflowOpen, setWorkflowOpen] = useState(false)
-  const [labelsOpen, setLabelsOpen] = useState(false)
 
   const projectTodos = todos.filter((todo) => todo.projectId === project.id)
   const projectStates = [...states]
     .filter((state) => state.projectId === project.id)
     .sort((a, b) => a.sortOrder - b.sortOrder)
-  const projectLabels = labels
-    .filter((label) => label.projectId === project.id)
-    .sort((a, b) => a.name.localeCompare(b.name))
+  const projectLabels = labels.filter((label) => label.projectId === project.id)
+  const projectMembers = members.filter((member) => member.projectId === project.id)
 
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-card/50 p-4">
@@ -85,9 +84,22 @@ export function ProjectColumn({
             <HugeiconsIcon icon={Layers02Icon} strokeWidth={2} className="size-3.5" />
           </div>
           <span className="text-sm font-semibold">{project.name}</span>
-          <span className="bg-muted text-muted-foreground rounded-full px-1.5 py-0.5 text-xs tabular-nums">
+          <span className="bg-muted text-muted-foreground flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs tabular-nums">
+            <HugeiconsIcon icon={Layers02Icon} strokeWidth={2} className="size-3" />
             {projectTodos.length}
           </span>
+          {projectLabels.length > 0 && (
+            <span className="bg-muted text-muted-foreground flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs tabular-nums">
+              <HugeiconsIcon icon={Tag01Icon} strokeWidth={2} className="size-3" />
+              {projectLabels.length}
+            </span>
+          )}
+          {projectMembers.length > 0 && (
+            <span className="bg-muted text-muted-foreground flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs tabular-nums">
+              <HugeiconsIcon icon={UserGroup02Icon} strokeWidth={2} className="size-3" />
+              {projectMembers.length}
+            </span>
+          )}
         </button>
 
         <div className="ml-auto">
@@ -98,13 +110,9 @@ export function ProjectColumn({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setWorkflowOpen(true)}>
+              <DropdownMenuItem onClick={() => onEditProject?.(project)}>
                 <HugeiconsIcon icon={Settings02Icon} strokeWidth={2} />
-                Configure workflow
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setLabelsOpen(true)}>
-                <HugeiconsIcon icon={Tag01Icon} strokeWidth={2} />
-                Manage labels
+                Edit project
               </DropdownMenuItem>
               <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
                 <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
@@ -145,27 +153,12 @@ export function ProjectColumn({
                 Add at least one state before creating tasks.
               </p>
             </div>
-            <Button size="sm" variant="secondary" onClick={() => setWorkflowOpen(true)}>
-              Configure workflow
+            <Button size="sm" variant="secondary" onClick={() => onEditProject?.(project)}>
+              Edit project
             </Button>
           </div>
         )}
       </div>
-
-      <WorkflowDialog
-        open={workflowOpen}
-        onOpenChange={setWorkflowOpen}
-        project={project}
-        states={projectStates}
-        todos={projectTodos}
-      />
-      <LabelsDialog
-        open={labelsOpen}
-        onOpenChange={setLabelsOpen}
-        project={project}
-        labels={projectLabels}
-        todos={projectTodos}
-      />
 
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>

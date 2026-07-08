@@ -40,6 +40,7 @@
     "pocketbase": "0.26.5",
     "radix-ui": "^1.6.1",
     "react": "^19.2.6",
+    "react-colorful": "^5.7.0",
     "react-day-picker": "^10.0.1",
     "react-dom": "^19.2.6",
     "react-router": "^8.1.0",
