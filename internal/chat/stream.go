@@ -16,7 +16,11 @@ import (
 	workagent "github.com/xusenlin/workavera/internal/agent"
 )
 
-const defaultSystemPrompt = "You are a helpful assistant for a collaborative work management application. Be accurate, concise, and use Markdown when it improves clarity. When a tool's results are displayed to the user as a custom UI (e.g. contact cards, project cards), do NOT repeat or list the same data in your text reply — just give a brief one-sentence summary."
+const baseSystemPrompt = "You are a helpful assistant for a collaborative work management application. Be accurate, concise, and use Markdown when it improves clarity. When a tool's results are displayed to the user as a custom UI (e.g. contact cards, project cards), do NOT repeat or list the same data in your text reply — just give a brief one-sentence summary."
+
+func buildSystemPrompt() string {
+	return baseSystemPrompt + "\n\nCurrent date: " + time.Now().Format("2006-01-02")
+}
 
 type streamRequest struct {
 	RunID          string            `json:"runId"`
@@ -119,7 +123,7 @@ func (s *service) executeRun(ctx context.Context, run *activeRun, conversationID
 	run.publish(workagent.StreamChunk{Type: "start", MessageID: assistantMessageID, MessageMetadata: map[string]any{"runId": run.id}})
 	lastCheckpoint := time.Now()
 	result, err := s.runner.Stream(ctx, workagent.Request{
-		SystemPrompt: defaultSystemPrompt,
+		SystemPrompt: buildSystemPrompt(),
 		Messages:     history,
 		Model:        model,
 		ActorID:      ownerID,
@@ -221,6 +225,7 @@ func createTurnRecords(app core.App, conversation, model *core.Record, userParts
 		}
 		storedConversation.Set("message_count+", 2)
 		storedConversation.Set("last_message_at", types.NowDateTime())
+		storedConversation.Set("model_config", model.Id)
 		if err := tx.Save(storedConversation); err != nil {
 			return err
 		}
