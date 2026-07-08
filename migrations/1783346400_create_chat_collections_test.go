@@ -19,16 +19,13 @@ func TestChatCollectionsMigration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if conversations.ListRule != nil || conversations.ViewRule != nil || conversations.CreateRule != nil || conversations.UpdateRule != nil || conversations.DeleteRule != nil {
-		t.Fatal("chat_conversations must only be accessible through custom APIs")
+	if conversations.ListRule == nil || conversations.ViewRule == nil || conversations.CreateRule == nil || conversations.UpdateRule == nil || conversations.DeleteRule == nil {
+		t.Fatal("chat_conversations must have API rules set for owner-scoped access")
 	}
-	for _, name := range []string{"owner", "title", "status", "pinned", "last_message_at", "message_count", "tool_call_count", "input_tokens", "output_tokens", "total_tokens", "created", "updated"} {
+	for _, name := range []string{"owner", "model_config", "title", "status", "pinned", "last_message_at", "message_count", "tool_call_count", "input_tokens", "output_tokens", "total_tokens", "created", "updated"} {
 		if conversations.Fields.GetByName(name) == nil {
 			t.Fatalf("missing conversation field %s", name)
 		}
-	}
-	if conversations.Fields.GetByName("model_config") != nil {
-		t.Fatal("conversations must not persist a model selection")
 	}
 
 	messages, err := app.FindCollectionByNameOrId(chatMessagesCollection)

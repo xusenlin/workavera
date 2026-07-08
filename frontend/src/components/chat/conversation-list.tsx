@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
@@ -31,10 +31,19 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination"
 import { cn } from "@/lib/utils"
 import { formatRelativeTime } from "@/lib/chat-utils"
 import { useChatStore } from "@/store/chat"
 import type { Conversation } from "@/types/chat"
+
+import { ArchivedConversationsDialog } from "./archived-conversations-dialog"
 
 function ConversationItem({
   conversation,
@@ -53,15 +62,22 @@ function ConversationItem({
   const [renaming, setRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState(conversation.title)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const ignoreRenameBlurRef = useRef(false)
 
-  const handleRenameSubmit = () => {
+  const handleRenameSubmit = async () => {
     const trimmed = renameValue.trim()
-    if (trimmed && trimmed !== conversation.title) {
-      renameConversation(conversation.id, trimmed)
-    } else {
+    if (!trimmed || trimmed === conversation.title) {
+      setRenameValue(conversation.title)
+      setRenaming(false)
+      return
+    }
+
+    try {
+      await renameConversation(conversation.id, trimmed)
+      setRenaming(false)
+    } catch {
       setRenameValue(conversation.title)
     }
-    setRenaming(false)
   }
 
   return (
@@ -78,10 +94,21 @@ function ConversationItem({
             autoFocus
             value={renameValue}
             onChange={(e) => setRenameValue(e.target.value)}
-            onBlur={handleRenameSubmit}
+            onBlur={() => {
+              if (ignoreRenameBlurRef.current) {
+                ignoreRenameBlurRef.current = false
+                return
+              }
+              void handleRenameSubmit()
+            }}
             onKeyDown={(e) => {
-              if (e.key === "Enter") handleRenameSubmit()
+              if (e.key === "Enter") {
+                e.preventDefault()
+                e.currentTarget.blur()
+              }
               if (e.key === "Escape") {
+                e.preventDefault()
+                ignoreRenameBlurRef.current = true
                 setRenameValue(conversation.title)
                 setRenaming(false)
               }
@@ -91,14 +118,6 @@ function ConversationItem({
           />
         ) : (
           <div className="flex items-start gap-2">
-            <span
-              className={cn(
-                "line-clamp-1 flex-1 text-sm font-medium",
-                isActive ? "text-foreground" : "text-foreground/90"
-              )}
-            >
-              {conversation.title}
-            </span>
             {conversation.pinned && (
               <HugeiconsIcon
                 icon={Pin02Icon}
@@ -106,18 +125,27 @@ function ConversationItem({
                 className="mt-0.5 size-3 shrink-0 text-muted-foreground"
               />
             )}
+            <span
+              className={cn(
+                "line-clamp-1 flex-1 text-sm font-medium",
+                isActive ? "text-foreground" : "text-foreground/90",
+                "pr-6"
+              )}
+            >
+              {conversation.title}
+            </span>
           </div>
         )}
 
         {!renaming && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>{formatRelativeTime(conversation.updatedAt)}</span>
+            <span>{formatRelativeTime(conversation.updated)}</span>
             <span className="text-muted-foreground/50">·</span>
-            <span>{conversation.messageCount} msgs</span>
-            {conversation.toolCallCount > 0 && (
+            <span>{conversation.message_count} msgs</span>
+            {conversation.tool_call_count > 0 && (
               <>
                 <span className="text-muted-foreground/50">·</span>
-                <span>{conversation.toolCallCount} tools</span>
+                <span>{conversation.tool_call_count} tools</span>
               </>
             )}
             {conversation.status === "archived" && (
@@ -145,7 +173,7 @@ function ConversationItem({
               align="end"
               onClick={(e) => e.stopPropagation()}
             >
-              <DropdownMenuItem onClick={() => togglePin(conversation.id)}>
+              <DropdownMenuItem onClick={() => void togglePin(conversation.id)}>
                 <HugeiconsIcon icon={Pin02Icon} strokeWidth={2} />
                 {conversation.pinned ? "Unpin" : "Pin"}
               </DropdownMenuItem>
@@ -159,7 +187,7 @@ function ConversationItem({
                 Rename
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => archiveConversation(conversation.id)}
+                onClick={() => void archiveConversation(conversation.id).catch(() => {})}
                 disabled={conversation.status === "archived"}
               >
                 <HugeiconsIcon icon={Archive02Icon} strokeWidth={2} />
@@ -190,7 +218,7 @@ function ConversationItem({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => deleteConversation(conversation.id)}
+                onClick={() => void deleteConversation(conversation.id).catch(() => {})}
             >
               Delete
             </AlertDialogAction>
@@ -238,8 +266,13 @@ export function ConversationList() {
   const activeConversationId = useChatStore((s) => s.activeConversationId)
   const setActiveConversation = useChatStore((s) => s.setActiveConversation)
   const createConversation = useChatStore((s) => s.createConversation)
+  const page = useChatStore((s) => s.page)
+  const totalPages = useChatStore((s) => s.totalPages)
+  const loading = useChatStore((s) => s.loading)
+  const setPage = useChatStore((s) => s.setPage)
 
   const [query, setQuery] = useState("")
+  const [archivedOpen, setArchivedOpen] = useState(false)
 
   const { pinned, recent } = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -249,7 +282,7 @@ export function ConversationList() {
 
     const sorted = [...filtered].sort(
       (a, b) =>
-        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+        new Date(b.updated).getTime() - new Date(a.updated).getTime()
     )
 
     return {
@@ -259,7 +292,7 @@ export function ConversationList() {
   }, [conversations, query])
 
   const handleNew = () => {
-    void createConversation()
+    void createConversation().catch(() => {})
   }
 
   const hasResults = pinned.length > 0 || recent.length > 0
@@ -270,14 +303,26 @@ export function ConversationList() {
       <div className="flex flex-col gap-2 border-b p-3">
         <div className="flex items-center justify-between">
           <span className="text-sm font-semibold">Conversations</span>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={handleNew}
-            aria-label="New conversation"
-          >
-            <HugeiconsIcon icon={PlusSignIcon} strokeWidth={2} />
-          </Button>
+          <div className="flex items-center gap-0.5">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setArchivedOpen(true)}
+              aria-label="View archived"
+              className="cursor-pointer"
+            >
+              <HugeiconsIcon icon={Archive02Icon} strokeWidth={2} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={handleNew}
+              aria-label="New conversation"
+              className="cursor-pointer"
+            >
+              <HugeiconsIcon icon={PlusSignIcon} strokeWidth={2} />
+            </Button>
+          </div>
         </div>
         <div className="relative">
           <HugeiconsIcon
@@ -327,6 +372,45 @@ export function ConversationList() {
           </div>
         )}
       </div>
+
+      {!loading && totalPages > 0 && (
+        <Pagination className="justify-end px-2 py-1">
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious
+                text="Prev"
+                onClick={() => void setPage(page - 1)}
+                className={
+                  page <= 1 || loading
+                    ? "pointer-events-none opacity-50"
+                    : "cursor-pointer"
+                }
+              />
+            </PaginationItem>
+            <span className="flex items-center px-2 text-xs text-muted-foreground">
+              {page} / {Math.max(1, totalPages)}
+            </span>
+            <PaginationItem>
+              <PaginationNext
+                text="Next"
+                onClick={() => void setPage(page + 1)}
+                className={
+                  page >= totalPages || loading
+                    ? "pointer-events-none opacity-50"
+                    : "cursor-pointer"
+                }
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      )}
+
+      {archivedOpen && (
+        <ArchivedConversationsDialog
+          open={archivedOpen}
+          onOpenChange={setArchivedOpen}
+        />
+      )}
     </div>
   )
 }

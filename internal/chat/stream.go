@@ -18,8 +18,15 @@ import (
 
 const baseSystemPrompt = "You are a helpful assistant for a collaborative work management application. Be accurate, concise, and use Markdown when it improves clarity. When a tool's results are displayed to the user as a custom UI (e.g. contact cards, project cards), do NOT repeat or list the same data in your text reply — just give a brief one-sentence summary."
 
-func buildSystemPrompt() string {
-	return baseSystemPrompt + "\n\nCurrent date: " + time.Now().Format("2006-01-02")
+func buildSystemPrompt(user *core.Record) string {
+	prompt := baseSystemPrompt + "\n\nCurrent date: " + time.Now().Format("2006-01-02")
+	if user != nil {
+		prompt += "\nCurrent user: id=" + user.Id +
+			", name=" + user.GetString("name") +
+			", title=" + user.GetString("title") +
+			", status=" + user.GetString("status")
+	}
+	return prompt
 }
 
 type streamRequest struct {
@@ -70,7 +77,7 @@ func (s *service) stream(event *core.RequestEvent) error {
 	subscriber := run.subscribe()
 
 	requestModel := modelConfig(modelRecord)
-	go s.executeRun(runCtx, run, conversation.Id, assistantMessage.Id, requestModel, history, event.Auth.Id)
+	go s.executeRun(runCtx, run, conversation.Id, assistantMessage.Id, requestModel, history, event.Auth)
 
 	prepareSSE(event, run.id)
 	for {
@@ -98,7 +105,7 @@ func (s *service) stopRun(event *core.RequestEvent) error {
 	return event.NoContent(http.StatusAccepted)
 }
 
-func (s *service) executeRun(ctx context.Context, run *activeRun, conversationID, assistantMessageID string, model workagent.ModelConfig, history []workagent.Message, ownerID string) {
+func (s *service) executeRun(ctx context.Context, run *activeRun, conversationID, assistantMessageID string, model workagent.ModelConfig, history []workagent.Message, user *core.Record) {
 	reducer := newMessageReducer(assistantMessageID)
 	defer func() {
 		if r := recover(); r != nil {
@@ -123,10 +130,10 @@ func (s *service) executeRun(ctx context.Context, run *activeRun, conversationID
 	run.publish(workagent.StreamChunk{Type: "start", MessageID: assistantMessageID, MessageMetadata: map[string]any{"runId": run.id}})
 	lastCheckpoint := time.Now()
 	result, err := s.runner.Stream(ctx, workagent.Request{
-		SystemPrompt: buildSystemPrompt(),
+		SystemPrompt: buildSystemPrompt(user),
 		Messages:     history,
 		Model:        model,
-		ActorID:      ownerID,
+		ActorID:      user.Id,
 	}, func(_ context.Context, chunk workagent.StreamChunk) error {
 		reducer.Apply(chunk)
 		run.publish(chunk)

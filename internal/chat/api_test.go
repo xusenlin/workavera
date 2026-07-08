@@ -113,17 +113,19 @@ func newChatTestServerWithRunner(t *testing.T, runner workagent.Runner) *chatTes
 	return &chatTestServer{app: app, handler: handler, token: token, modelID: model.Id}
 }
 
-func (server *chatTestServer) createConversation(t *testing.T) conversationResponse {
+// createConversation creates a conversation via the PocketBase built-in Records API.
+// The OnRecordCreateRequest hook injects owner, status, and a default title.
+func (server *chatTestServer) createConversation(t *testing.T) string {
 	t.Helper()
-	created := server.request(t, http.MethodPost, "/api/chat/conversations", `{"title":"Test"}`)
-	if created.Code != http.StatusCreated {
+	created := server.request(t, http.MethodPost, "/api/collections/chat_conversations/records", `{"title":"Test"}`)
+	if created.Code != http.StatusOK {
 		t.Fatalf("create conversation: %d %s", created.Code, created.Body.String())
 	}
-	var conversation conversationResponse
-	if err := json.Unmarshal(created.Body.Bytes(), &conversation); err != nil {
+	var record map[string]any
+	if err := json.Unmarshal(created.Body.Bytes(), &record); err != nil {
 		t.Fatal(err)
 	}
-	return conversation
+	return record["id"].(string)
 }
 
 func (server *chatTestServer) streamMessage(t *testing.T, conversationID string) *httptest.ResponseRecorder {
@@ -148,8 +150,8 @@ func (server *chatTestServer) request(t *testing.T, method, path, body string) *
 
 func TestChatStreamPersistsUIMessageAndUsesProtocol(t *testing.T) {
 	server := newChatTestServer(t)
-	conversation := server.createConversation(t)
-	stream := server.streamMessage(t, conversation.ID)
+	conversationID := server.createConversation(t)
+	stream := server.streamMessage(t, conversationID)
 	if stream.Code != http.StatusOK {
 		t.Fatalf("stream: %d %s", stream.Code, stream.Body.String())
 	}
@@ -166,7 +168,7 @@ func TestChatStreamPersistsUIMessageAndUsesProtocol(t *testing.T) {
 		t.Fatalf("stream leaked API key: %s", body)
 	}
 
-	messages := server.request(t, http.MethodGet, "/api/chat/conversations/"+conversation.ID+"/messages", "")
+	messages := server.request(t, http.MethodGet, "/api/chat/conversations/"+conversationID+"/messages", "")
 	if messages.Code != http.StatusOK {
 		t.Fatalf("list messages: %d %s", messages.Code, messages.Body.String())
 	}
@@ -179,10 +181,61 @@ func TestChatStreamPersistsUIMessageAndUsesProtocol(t *testing.T) {
 	}
 }
 
+func TestPocketBaseApiRulesSeparateActiveAndArchivedConversations(t *testing.T) {
+	server := newChatTestServer(t)
+	activeID := server.createConversation(t)
+	archivedID := server.createConversation(t)
+
+	// Archive the second conversation via the built-in Records API.
+	update := server.request(t, http.MethodPatch, "/api/collections/chat_conversations/records/"+archivedID, `{"status":"archived"}`)
+	if update.Code != http.StatusOK {
+		t.Fatalf("archive conversation: %d %s", update.Code, update.Body.String())
+	}
+
+	// List active conversations via the built-in Records API.
+	activeList := server.request(t, http.MethodGet, "/api/collections/chat_conversations/records?filter=(status='active')&sort=-created", "")
+	if activeList.Code != http.StatusOK {
+		t.Fatalf("list active conversations: %d %s", activeList.Code, activeList.Body.String())
+	}
+	var activePage struct {
+		Items []struct {
+			ID string `json:"id"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(activeList.Body.Bytes(), &activePage); err != nil {
+		t.Fatal(err)
+	}
+	if len(activePage.Items) != 1 || activePage.Items[0].ID != activeID {
+		t.Fatalf("unexpected active conversations: %#v", activePage.Items)
+	}
+
+	// List archived conversations via the built-in Records API (paginated).
+	archivedList := server.request(t, http.MethodGet, "/api/collections/chat_conversations/records?filter=(status='archived')&sort=-updated&page=1&perPage=10", "")
+	if archivedList.Code != http.StatusOK {
+		t.Fatalf("list archived conversations: %d %s", archivedList.Code, archivedList.Body.String())
+	}
+	var archivedPage struct {
+		Items      []struct {
+			ID string `json:"id"`
+		} `json:"items"`
+		TotalItems  int `json:"totalItems"`
+		TotalPages  int `json:"totalPages"`
+	}
+	if err := json.Unmarshal(archivedList.Body.Bytes(), &archivedPage); err != nil {
+		t.Fatal(err)
+	}
+	if archivedPage.TotalItems != 1 ||
+		archivedPage.TotalPages != 1 ||
+		len(archivedPage.Items) != 1 ||
+		archivedPage.Items[0].ID != archivedID {
+		t.Fatalf("unexpected archived conversations page: %#v", archivedPage)
+	}
+}
+
 func TestPanickedRunPublishesAndPersistsAnError(t *testing.T) {
 	server := newChatTestServerWithRunner(t, panicRunner{})
-	conversation := server.createConversation(t)
-	stream := server.streamMessage(t, conversation.ID)
+	conversationID := server.createConversation(t)
+	stream := server.streamMessage(t, conversationID)
 	if stream.Code != http.StatusOK {
 		t.Fatalf("stream: %d %s", stream.Code, stream.Body.String())
 	}
@@ -190,7 +243,7 @@ func TestPanickedRunPublishesAndPersistsAnError(t *testing.T) {
 		t.Fatalf("panic was not represented as a completed error stream: %s", stream.Body.String())
 	}
 
-	messages := server.request(t, http.MethodGet, "/api/chat/conversations/"+conversation.ID+"/messages", "")
+	messages := server.request(t, http.MethodGet, "/api/chat/conversations/"+conversationID+"/messages", "")
 	var result []workagent.Message
 	if err := json.Unmarshal(messages.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
@@ -202,12 +255,12 @@ func TestPanickedRunPublishesAndPersistsAnError(t *testing.T) {
 
 func TestProviderErrorDetailsStayServerSide(t *testing.T) {
 	server := newChatTestServerWithRunner(t, errorRunner{})
-	conversation := server.createConversation(t)
-	stream := server.streamMessage(t, conversation.ID)
+	conversationID := server.createConversation(t)
+	stream := server.streamMessage(t, conversationID)
 	if strings.Contains(stream.Body.String(), "provider-secret-diagnostic") {
 		t.Fatalf("stream exposed provider diagnostics: %s", stream.Body.String())
 	}
-	messages := server.request(t, http.MethodGet, "/api/chat/conversations/"+conversation.ID+"/messages", "")
+	messages := server.request(t, http.MethodGet, "/api/chat/conversations/"+conversationID+"/messages", "")
 	if strings.Contains(messages.Body.String(), "provider-secret-diagnostic") {
 		t.Fatalf("persisted message exposed provider diagnostics: %s", messages.Body.String())
 	}
@@ -215,13 +268,9 @@ func TestProviderErrorDetailsStayServerSide(t *testing.T) {
 
 func TestChatStreamRequiresModelConfig(t *testing.T) {
 	server := newChatTestServer(t)
-	created := server.request(t, http.MethodPost, "/api/chat/conversations", `{"title":"Test"}`)
-	var conversation conversationResponse
-	if err := json.Unmarshal(created.Body.Bytes(), &conversation); err != nil {
-		t.Fatal(err)
-	}
+	conversationID := server.createConversation(t)
 	response := server.request(t, http.MethodPost, "/api/chat/stream", `{
-		"conversationId":"`+conversation.ID+`",
+		"conversationId":"`+conversationID+`",
 		"message":{"role":"user","parts":[{"type":"text","text":"Hello"}]}
 	}`)
 	if response.Code != http.StatusBadRequest {

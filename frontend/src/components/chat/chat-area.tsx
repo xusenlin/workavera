@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 
 import { Chat01Icon, SparklesIcon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
@@ -48,7 +48,9 @@ function ChatEmptyState({ onCreate }: { onCreate: () => void }) {
 
 function ActiveChat({ conversation }: { conversation: ChatConversation }) {
   const refreshConversations = useChatStore((state) => state.refresh)
+  const renameConversation = useChatStore((state) => state.renameConversation)
   const [loadingMessages, setLoadingMessages] = useState(true)
+  const pendingTitleRef = useRef<string | null>(null)
 
   const transport = useMemo(
     () =>
@@ -70,7 +72,12 @@ function ActiveChat({ conversation }: { conversation: ChatConversation }) {
     useChat<ChatUIMessage>({
       id: conversation.id,
       transport,
-      onFinish: () => {
+      onFinish: async () => {
+        const pendingTitle = pendingTitleRef.current
+        pendingTitleRef.current = null
+        if (conversation.title === "New conversation" && pendingTitle) {
+          await renameConversation(conversation.id, pendingTitle).catch(() => {})
+        }
         void refreshConversations()
       },
     })
@@ -114,10 +121,15 @@ function ActiveChat({ conversation }: { conversation: ChatConversation }) {
       </Conversation>
       <ChatPromptInput
         conversationId={conversation.id}
+        modelConfigId={conversation.model_config}
         disabled={loadingMessages}
         sendMessage={sendMessage}
         status={status}
         stop={stop}
+        onMessageSubmitted={(content) => {
+          if (conversation.title !== "New conversation") return
+          pendingTitleRef.current = content.slice(0, 16)
+        }}
       />
     </div>
   )
@@ -136,7 +148,7 @@ export function ChatArea() {
   if (!activeConversation) {
     return (
       <div className="flex flex-1 flex-col">
-        <ChatEmptyState onCreate={() => void createConversation()} />
+        <ChatEmptyState onCreate={() => void createConversation().catch(() => {})} />
       </div>
     )
   }

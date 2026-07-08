@@ -23,18 +23,22 @@ import type { ChatUIMessage } from "@/types/chat"
 
 type Props = {
   conversationId: string
+  modelConfigId?: string
   disabled?: boolean
   sendMessage: UseChatHelpers<ChatUIMessage>["sendMessage"]
   status: ChatStatus
   stop: UseChatHelpers<ChatUIMessage>["stop"]
+  onMessageSubmitted?: (content: string) => void
 }
 
 export function ChatPromptInput({
   conversationId,
+  modelConfigId: initialModelConfigId,
   disabled = false,
   sendMessage,
   status,
   stop,
+  onMessageSubmitted,
 }: Props) {
   const models = useLlmSettingsStore((state) => state.models)
   const defaultModelId = useMemo(
@@ -43,7 +47,7 @@ export function ChatPromptInput({
   )
   const [selectedModelConfigId, setSelectedModelConfigId] = useState<
     string | null
-  >(null)
+  >(initialModelConfigId || null)
   const modelConfigId = selectedModelConfigId ?? defaultModelId
   const [text, setText] = useState("")
   const activeRunId = useRef<string | null>(null)
@@ -65,6 +69,7 @@ export function ChatPromptInput({
     const runId = crypto.randomUUID()
     activeRunId.current = runId
     setText("")
+    onMessageSubmitted?.(content)
     await sendMessage(
       { text: content },
       { body: { runId, conversationId, modelConfigId } }

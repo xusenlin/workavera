@@ -7,14 +7,15 @@ export type Conversation = {
   title: string
   status: ConversationStatus
   pinned: boolean
-  messageCount: number
-  toolCallCount: number
-  totalTokens: number
-  inputTokens: number
-  outputTokens: number
-  lastMessageAt: string
-  createdAt: string
-  updatedAt: string
+  model_config: string
+  message_count: number
+  tool_call_count: number
+  total_tokens: number
+  input_tokens: number
+  output_tokens: number
+  last_message_at: string
+  created: string
+  updated: string
 }
 
 export type ChatMessageMetadata = {
