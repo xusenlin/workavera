@@ -7,6 +7,7 @@ import {
   ContactBookIcon,
   Calendar03Icon,
   BookOpen01Icon,
+  AppWindowIcon,
   Settings02Icon,
 } from "@hugeicons/core-free-icons"
 
@@ -77,6 +78,12 @@ export const navGroups: NavGroup[] = [
         url: "/reading",
         icon: BookOpen01Icon,
         description: "Bookmarks and reading list",
+      },
+      {
+        title: "HTML Apps",
+        url: "/html-apps",
+        icon: AppWindowIcon,
+        description: "AI-generated self-contained HTML apps",
       },
       {
         title: "Settings",

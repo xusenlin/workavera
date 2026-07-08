@@ -10,6 +10,7 @@ import { DocsPage } from "@/pages/docs"
 import { ContactsPage } from "@/pages/contacts"
 import { CalendarPage } from "@/pages/calendar"
 import { ReadingPage } from "@/pages/reading"
+import { HTMLAppsPage } from "@/pages/html-apps"
 import { SettingsPage } from "@/pages/settings"
 import { ProfilePage } from "@/pages/profile"
 
@@ -28,6 +29,7 @@ export function AppRouter() {
             <Route path="/contacts" element={<ContactsPage />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/reading" element={<ReadingPage />} />
+            <Route path="/html-apps" element={<HTMLAppsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/profile" element={<ProfilePage />} />
           </Route>
