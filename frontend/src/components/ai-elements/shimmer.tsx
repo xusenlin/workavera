@@ -1,24 +1,24 @@
-"use client";
+"use client"
 
-import { cn } from "@/lib/utils";
-import { motion } from "motion/react";
-import type { CSSProperties } from "react";
-import { memo, useMemo } from "react";
+import { cn } from "@/lib/utils"
+import { motion } from "motion/react"
+import type { CSSProperties } from "react"
+import { memo, useMemo } from "react"
 
 const motionComponents = {
   div: motion.div,
   p: motion.p,
   span: motion.span,
-};
+}
 
-type ShimmerElement = keyof typeof motionComponents;
+type ShimmerElement = keyof typeof motionComponents
 
 export interface TextShimmerProps {
-  children: string;
-  as?: ShimmerElement;
-  className?: string;
-  duration?: number;
-  spread?: number;
+  children: string
+  as?: ShimmerElement
+  className?: string
+  duration?: number
+  spread?: number
 }
 
 const ShimmerComponent = ({
@@ -28,12 +28,12 @@ const ShimmerComponent = ({
   duration = 2,
   spread = 2,
 }: TextShimmerProps) => {
-  const MotionComponent = motionComponents[as];
+  const MotionComponent = motionComponents[as]
 
   const dynamicSpread = useMemo(
     () => (children?.length ?? 0) * spread,
     [children, spread]
-  );
+  )
 
   return (
     <MotionComponent
@@ -59,7 +59,7 @@ const ShimmerComponent = ({
     >
       {children}
     </MotionComponent>
-  );
-};
+  )
+}
 
-export const Shimmer = memo(ShimmerComponent);
+export const Shimmer = memo(ShimmerComponent)

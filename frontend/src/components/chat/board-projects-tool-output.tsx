@@ -1,8 +1,5 @@
 import { HugeiconsIcon } from "@hugeicons/react"
-import {
-  ChevronDownIcon,
-  KanbanIcon,
-} from "@hugeicons/core-free-icons"
+import { ChevronDownIcon, KanbanIcon } from "@hugeicons/core-free-icons"
 import {
   CheckCircleIcon,
   CircleIcon,
@@ -174,20 +171,20 @@ export function BoardProjectsToolCard({
                         {project.archived && (
                           <Badge
                             variant="outline"
-                            className="font-normal text-xs"
+                            className="text-xs font-normal"
                           >
                             Archived
                           </Badge>
                         )}
                       </div>
-                      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
                         {projectTasks} tasks
                       </span>
                     </div>
 
                     {/* Description */}
                     {project.description && (
-                      <p className="text-muted-foreground mt-0.5 truncate text-xs">
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
                         {project.description}
                       </p>
                     )}
@@ -207,7 +204,7 @@ export function BoardProjectsToolCard({
                             <span className="text-xs font-medium">
                               {state.name}
                             </span>
-                            <span className="text-xs tabular-nums text-muted-foreground">
+                            <span className="text-xs text-muted-foreground tabular-nums">
                               {state.taskCount}
                             </span>
                           </div>

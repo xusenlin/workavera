@@ -48,7 +48,6 @@ import {
 } from "@/components/ui/select"
 import {
   Sheet,
-  SheetClose,
   SheetContent,
   SheetDescription,
   SheetFooter,
@@ -411,7 +410,6 @@ export function ReadingPage() {
         onOpenChange={(open) => !open && selectItem(null)}
       >
         <SheetContent
-          showCloseButton={false}
           className="w-full overflow-hidden sm:!w-[48rem] sm:!max-w-3xl"
         >
           <SheetHeader className="shrink-0 border-b pr-14">
@@ -443,9 +441,6 @@ export function ReadingPage() {
                 Delete
               </Button>
               <div className="flex gap-2">
-                <SheetClose asChild>
-                  <Button variant="ghost">Cancel</Button>
-                </SheetClose>
                 <Button
                   variant="secondary"
                   onClick={() => void handleSummarize()}

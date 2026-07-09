@@ -29,15 +29,19 @@ export function ContactsPage() {
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2.5">
-            <div className="bg-primary text-primary-foreground flex size-9 items-center justify-center rounded-lg">
-              <HugeiconsIcon icon={ContactBookIcon} strokeWidth={2} className="size-4" />
+            <div className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+              <HugeiconsIcon
+                icon={ContactBookIcon}
+                strokeWidth={2}
+                className="size-4"
+              />
             </div>
             <h1 className="text-2xl font-semibold tracking-tight">Contacts</h1>
-            <span className="text-muted-foreground text-sm">
+            <span className="text-sm text-muted-foreground">
               {contacts.length}
             </span>
           </div>
-          <p className="text-muted-foreground text-sm">
+          <p className="text-sm text-muted-foreground">
             Browse teammates and the people connected to your workspace.
           </p>
         </div>

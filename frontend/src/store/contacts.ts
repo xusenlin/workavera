@@ -91,7 +91,9 @@ export const useContactsStore = create<ContactState>((set, get) => ({
         favorites.map((favorite) => [favorite.contact, favorite.id])
       )
       set({
-        contacts: records.map((record) => toContact(record, favoriteRecords[record.id] != null)),
+        contacts: records.map((record) =>
+          toContact(record, favoriteRecords[record.id] != null)
+        ),
         favoriteRecords,
         loading: false,
       })
@@ -130,10 +132,12 @@ export const useContactsStore = create<ContactState>((set, get) => ({
         return
       }
 
-      const favorite = await pb.collection("contact_favorites").create<ContactFavoriteRecord>({
-        owner: ownerId,
-        contact: id,
-      })
+      const favorite = await pb
+        .collection("contact_favorites")
+        .create<ContactFavoriteRecord>({
+          owner: ownerId,
+          contact: id,
+        })
       set((state) => ({
         favoriteRecords: { ...state.favoriteRecords, [id]: favorite.id },
         contacts: state.contacts.map((contact) =>

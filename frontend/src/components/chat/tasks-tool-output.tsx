@@ -137,7 +137,9 @@ export function TasksToolCard({ part }: { part: TasksToolPart }) {
   const navigate = useNavigate()
 
   const result = parseTaskResult(part.output)
-  const states = (result?.states ?? []).sort((a, b) => a.sortOrder - b.sortOrder)
+  const states = (result?.states ?? []).sort(
+    (a, b) => a.sortOrder - b.sortOrder
+  )
   const tasks = result?.tasks ?? []
 
   // Group tasks by state id, sorted by rank within each group.
@@ -221,8 +223,10 @@ export function TasksToolCard({ part }: { part: TasksToolPart }) {
                         className="size-2 rounded-full"
                         style={{ backgroundColor: state.color }}
                       />
-                      <span className="text-sm font-semibold">{state.name}</span>
-                      <span className="bg-muted text-muted-foreground rounded-full px-1.5 py-0.5 text-xs tabular-nums">
+                      <span className="text-sm font-semibold">
+                        {state.name}
+                      </span>
+                      <span className="rounded-full bg-muted px-1.5 py-0.5 text-xs text-muted-foreground tabular-nums">
                         {stateTasks.length}
                       </span>
                     </div>
@@ -230,7 +234,11 @@ export function TasksToolCard({ part }: { part: TasksToolPart }) {
                     {/* Task cards */}
                     <div className="space-y-1.5">
                       {stateTasks.map((task) => (
-                        <TaskItem key={task.id} task={task} onClick={() => navigate("/board")} />
+                        <TaskItem
+                          key={task.id}
+                          task={task}
+                          onClick={() => navigate("/board")}
+                        />
                       ))}
                     </div>
                   </div>
@@ -246,7 +254,7 @@ export function TasksToolCard({ part }: { part: TasksToolPart }) {
                 if (orphanTasks.length === 0) return null
                 return (
                   <div className="w-60 shrink-0 space-y-1.5">
-                    <div className="text-muted-foreground text-xs font-medium">
+                    <div className="text-xs font-medium text-muted-foreground">
                       Other
                     </div>
                     <div className="space-y-1.5">
@@ -287,7 +295,13 @@ export function TasksToolCard({ part }: { part: TasksToolPart }) {
   )
 }
 
-function TaskItem({ task, onClick }: { task: TaskSummary; onClick: () => void }) {
+function TaskItem({
+  task,
+  onClick,
+}: {
+  task: TaskSummary
+  onClick: () => void
+}) {
   const priorityMeta = PRIORITY_META.find((p) => p.value === task.priority)
   const overdue = isOverdue(task.dueDate)
 
@@ -312,12 +326,16 @@ function TaskItem({ task, onClick }: { task: TaskSummary; onClick: () => void })
       )}
 
       {/* Title */}
-      <p className="text-sm font-medium leading-snug">{task.title}</p>
+      <p className="text-sm leading-snug font-medium">{task.title}</p>
 
       {/* Description */}
       {task.description && (
-        <div className="text-muted-foreground mt-1 flex items-center gap-1 text-xs">
-          <HugeiconsIcon icon={TextAlignLeftIcon} strokeWidth={2} className="size-3 shrink-0" />
+        <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+          <HugeiconsIcon
+            icon={TextAlignLeftIcon}
+            strokeWidth={2}
+            className="size-3 shrink-0"
+          />
           <span className="truncate">{task.description}</span>
         </div>
       )}
@@ -345,10 +363,16 @@ function TaskItem({ task, onClick }: { task: TaskSummary; onClick: () => void })
             <span
               className={cn(
                 "flex items-center gap-0.5 text-[10px]",
-                overdue ? "text-destructive font-medium" : "text-muted-foreground"
+                overdue
+                  ? "font-medium text-destructive"
+                  : "text-muted-foreground"
               )}
             >
-              <HugeiconsIcon icon={Calendar03Icon} strokeWidth={2} className="size-3" />
+              <HugeiconsIcon
+                icon={Calendar03Icon}
+                strokeWidth={2}
+                className="size-3"
+              />
               {formatDate(task.dueDate)}
             </span>
           )}
@@ -360,8 +384,18 @@ function TaskItem({ task, onClick }: { task: TaskSummary; onClick: () => void })
             {task.assignees.slice(0, 3).map((assignee) => {
               const src = assigneeAvatarUrl(assignee)
               return (
-                <Avatar key={assignee.id} size="sm" className="ring-2 ring-card">
-                  {src && <AvatarImage src={src} alt={assignee.name} className="object-cover" />}
+                <Avatar
+                  key={assignee.id}
+                  size="sm"
+                  className="ring-2 ring-card"
+                >
+                  {src && (
+                    <AvatarImage
+                      src={src}
+                      alt={assignee.name}
+                      className="object-cover"
+                    />
+                  )}
                   <AvatarFallback className="text-[9px]">
                     {assignee.name.charAt(0).toUpperCase()}
                   </AvatarFallback>
@@ -369,7 +403,7 @@ function TaskItem({ task, onClick }: { task: TaskSummary; onClick: () => void })
               )
             })}
             {task.assignees.length > 3 && (
-              <div className="bg-muted text-muted-foreground ring-2 ring-card flex size-6 items-center justify-center rounded-full text-[9px]">
+              <div className="flex size-6 items-center justify-center rounded-full bg-muted text-[9px] text-muted-foreground ring-2 ring-card">
                 +{task.assignees.length - 3}
               </div>
             )}

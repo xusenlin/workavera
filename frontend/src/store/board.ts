@@ -105,7 +105,10 @@ type BoardState = {
     labels: LabelInput[]
     members: { userId: string; role: ProjectRole }[]
   }) => Promise<void>
-  updateProject: (id: string, patch: { name?: string; description?: string }) => Promise<void>
+  updateProject: (
+    id: string,
+    patch: { name?: string; description?: string }
+  ) => Promise<void>
   removeProject: (id: string) => Promise<void>
   toggleProjectCollapse: (id: string) => void
   addState: (projectId: string, input: StateInput) => Promise<void>
@@ -115,7 +118,10 @@ type BoardState = {
   addLabel: (projectId: string, input: LabelInput) => Promise<void>
   updateLabel: (id: string, patch: Partial<LabelInput>) => Promise<void>
   removeLabel: (id: string) => Promise<void>
-  addMember: (projectId: string, input: { userId: string; role: ProjectRole }) => Promise<void>
+  addMember: (
+    projectId: string,
+    input: { userId: string; role: ProjectRole }
+  ) => Promise<void>
   updateMember: (id: string, patch: { role: ProjectRole }) => Promise<void>
   removeMember: (id: string) => Promise<void>
   addTodo: (todo: TodoInput) => Promise<void>
@@ -242,7 +248,8 @@ function toMember(record: MemberRecord): Member {
     userId: record.user,
     role: record.role,
     name: user?.name || user?.email || "Unknown member",
-    avatar: user?.avatar && user ? pb.files.getURL(user, user.avatar) : undefined,
+    avatar:
+      user?.avatar && user ? pb.files.getURL(user, user.avatar) : undefined,
   }
 }
 
@@ -281,7 +288,8 @@ function todoPatchToRecord(patch: Partial<Omit<Todo, "id">>) {
   if (patch.projectId !== undefined) body.project = patch.projectId
   if (patch.stateId !== undefined) body.state = patch.stateId
   if (patch.title !== undefined) body.title = patch.title
-  if (patch.description !== undefined) body.description = patch.description || ""
+  if (patch.description !== undefined)
+    body.description = patch.description || ""
   if (patch.priority !== undefined) body.priority = patch.priority
   if (patch.labels !== undefined) body.labels = patch.labels
   if (patch.members !== undefined) body.assignees = patch.members
@@ -291,22 +299,33 @@ function todoPatchToRecord(patch: Partial<Omit<Todo, "id">>) {
 }
 
 async function loadBoardPage(page: number) {
-  const [templates, projectResult, states, todos, labels, members] = await Promise.all([
-    pb.collection(COLLECTIONS.templates).getFullList<TemplateRecord>({ sort: "name", requestKey: null }),
-    pb.collection(COLLECTIONS.projects).getList<ProjectRecord>(page + 1, PROJECTS_PER_PAGE, {
-      filter: "archived = false",
-      sort: "-created",
-      requestKey: null,
-    }),
-    pb.collection(COLLECTIONS.states).getFullList<StateRecord>({ sort: "sort_order", requestKey: null }),
-    pb.collection(COLLECTIONS.tasks).getFullList<TodoRecord>({ sort: "rank", requestKey: null }),
-    pb.collection(COLLECTIONS.labels).getFullList<LabelRecord>({ sort: "name", requestKey: null }),
-    pb.collection(COLLECTIONS.members).getFullList<MemberRecord>({
-      expand: "user",
-      sort: "created",
-      requestKey: null,
-    }),
-  ])
+  const [templates, projectResult, states, todos, labels, members] =
+    await Promise.all([
+      pb
+        .collection(COLLECTIONS.templates)
+        .getFullList<TemplateRecord>({ sort: "name", requestKey: null }),
+      pb
+        .collection(COLLECTIONS.projects)
+        .getList<ProjectRecord>(page + 1, PROJECTS_PER_PAGE, {
+          filter: "archived = false",
+          sort: "-created",
+          requestKey: null,
+        }),
+      pb
+        .collection(COLLECTIONS.states)
+        .getFullList<StateRecord>({ sort: "sort_order", requestKey: null }),
+      pb
+        .collection(COLLECTIONS.tasks)
+        .getFullList<TodoRecord>({ sort: "rank", requestKey: null }),
+      pb
+        .collection(COLLECTIONS.labels)
+        .getFullList<LabelRecord>({ sort: "name", requestKey: null }),
+      pb.collection(COLLECTIONS.members).getFullList<MemberRecord>({
+        expand: "user",
+        sort: "created",
+        requestKey: null,
+      }),
+    ])
 
   return {
     templates: templates.map(toTemplate),
@@ -322,7 +341,9 @@ async function loadBoardPage(page: number) {
 }
 
 async function connectRealtime(
-  set: (patch: Partial<BoardState> | ((state: BoardState) => Partial<BoardState>)) => void
+  set: (
+    patch: Partial<BoardState> | ((state: BoardState) => Partial<BoardState>)
+  ) => void
 ) {
   realtimeUnsubscribers.forEach((unsubscribe) => unsubscribe())
   realtimeUnsubscribers = []
@@ -396,7 +417,10 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       expandedProjectId = snapshot.projects[0]?.id ?? null
       set({
         ...snapshot,
-        projects: snapshot.projects.map((p) => ({ ...p, collapsed: p.id !== expandedProjectId })),
+        projects: snapshot.projects.map((p) => ({
+          ...p,
+          collapsed: p.id !== expandedProjectId,
+        })),
         initialized: true,
       })
       if (connectionWanted) await connectRealtime(set)
@@ -416,7 +440,10 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       expandedProjectId = snapshot.projects[0]?.id ?? null
       set({
         ...snapshot,
-        projects: snapshot.projects.map((p) => ({ ...p, collapsed: p.id !== expandedProjectId })),
+        projects: snapshot.projects.map((p) => ({
+          ...p,
+          collapsed: p.id !== expandedProjectId,
+        })),
       })
     } catch (error) {
       const message = messageFromError(error, "Could not load the board")
@@ -461,11 +488,15 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   updateProject: async (id, patch) => {
     try {
-      const record = await pb.collection(COLLECTIONS.projects).update<ProjectRecord>(id, {
-        name: patch.name,
-        description: patch.description,
-      })
-      set((state) => ({ projects: upsertById(state.projects, toProject(record)) }))
+      const record = await pb
+        .collection(COLLECTIONS.projects)
+        .update<ProjectRecord>(id, {
+          name: patch.name,
+          description: patch.description,
+        })
+      set((state) => ({
+        projects: upsertById(state.projects, toProject(record)),
+      }))
     } catch (error) {
       const message = messageFromError(error, "Could not update the project")
       set({ error: message })
@@ -508,16 +539,21 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     }),
 
   addState: async (projectId, input) => {
-    const sameProject = get().states.filter((state) => state.projectId === projectId)
-    const sortOrder = Math.max(0, ...sameProject.map((state) => state.sortOrder)) + 1024
+    const sameProject = get().states.filter(
+      (state) => state.projectId === projectId
+    )
+    const sortOrder =
+      Math.max(0, ...sameProject.map((state) => state.sortOrder)) + 1024
     try {
-      const record = await pb.collection(COLLECTIONS.states).create<StateRecord>({
-        project: projectId,
-        name: input.name,
-        color: input.color,
-        category: input.category,
-        sort_order: sortOrder,
-      })
+      const record = await pb
+        .collection(COLLECTIONS.states)
+        .create<StateRecord>({
+          project: projectId,
+          name: input.name,
+          color: input.color,
+          category: input.category,
+          sort_order: sortOrder,
+        })
       set((state) => ({ states: upsertById(state.states, toState(record)) }))
     } catch (error) {
       const message = messageFromError(error, "Could not add the state")
@@ -529,7 +565,9 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   updateState: async (id, patch) => {
     try {
-      const record = await pb.collection(COLLECTIONS.states).update<StateRecord>(id, patch)
+      const record = await pb
+        .collection(COLLECTIONS.states)
+        .update<StateRecord>(id, patch)
       set((state) => ({ states: upsertById(state.states, toState(record)) }))
     } catch (error) {
       const message = messageFromError(error, "Could not update the state")
@@ -546,7 +584,10 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         states: state.states.filter((item) => item.id !== id),
       }))
     } catch (error) {
-      const message = messageFromError(error, "Move or delete the tasks in this state first")
+      const message = messageFromError(
+        error,
+        "Move or delete the tasks in this state first"
+      )
       set({ error: message })
       toast.error(message)
       throw new Error(message, { cause: error })
@@ -568,11 +609,17 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       sortOrder: (index + 1) * 1024,
     }))
     set((current) => ({
-      states: current.states.map((item) => updates.find((next) => next.id === item.id) || item),
+      states: current.states.map(
+        (item) => updates.find((next) => next.id === item.id) || item
+      ),
     }))
     try {
       await Promise.all(
-        updates.map((item) => pb.collection(COLLECTIONS.states).update(item.id, { sort_order: item.sortOrder }))
+        updates.map((item) =>
+          pb
+            .collection(COLLECTIONS.states)
+            .update(item.id, { sort_order: item.sortOrder })
+        )
       )
     } catch (error) {
       const snapshot = await loadBoardSnapshot()
@@ -585,11 +632,13 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   addLabel: async (projectId, input) => {
     try {
-      const record = await pb.collection(COLLECTIONS.labels).create<LabelRecord>({
-        project: projectId,
-        name: input.name,
-        color: input.color,
-      })
+      const record = await pb
+        .collection(COLLECTIONS.labels)
+        .create<LabelRecord>({
+          project: projectId,
+          name: input.name,
+          color: input.color,
+        })
       set((state) => ({ labels: upsertById(state.labels, toLabel(record)) }))
     } catch (error) {
       const message = messageFromError(error, "Could not add the label")
@@ -601,7 +650,9 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   updateLabel: async (id, patch) => {
     try {
-      const record = await pb.collection(COLLECTIONS.labels).update<LabelRecord>(id, patch)
+      const record = await pb
+        .collection(COLLECTIONS.labels)
+        .update<LabelRecord>(id, patch)
       set((state) => ({ labels: upsertById(state.labels, toLabel(record)) }))
     } catch (error) {
       const message = messageFromError(error, "Could not update the label")
@@ -639,11 +690,13 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   addMember: async (projectId, input) => {
     try {
-      const record = await pb.collection(COLLECTIONS.members).create<MemberRecord>({
-        project: projectId,
-        user: input.userId,
-        role: input.role,
-      })
+      const record = await pb
+        .collection(COLLECTIONS.members)
+        .create<MemberRecord>({
+          project: projectId,
+          user: input.userId,
+          role: input.role,
+        })
       set((state) => ({ members: upsertById(state.members, toMember(record)) }))
     } catch (error) {
       const message = messageFromError(error, "Could not add the member")
@@ -655,7 +708,9 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   updateMember: async (id, patch) => {
     try {
-      const record = await pb.collection(COLLECTIONS.members).update<MemberRecord>(id, { role: patch.role })
+      const record = await pb
+        .collection(COLLECTIONS.members)
+        .update<MemberRecord>(id, { role: patch.role })
       set((state) => ({ members: upsertById(state.members, toMember(record)) }))
     } catch (error) {
       const message = messageFromError(error, "Could not update the member")
@@ -668,7 +723,9 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   removeMember: async (id) => {
     try {
       await pb.collection(COLLECTIONS.members).delete(id)
-      set((state) => ({ members: state.members.filter((member) => member.id !== id) }))
+      set((state) => ({
+        members: state.members.filter((member) => member.id !== id),
+      }))
     } catch (error) {
       const message = messageFromError(error, "Could not remove the member")
       set({ error: message })
@@ -678,7 +735,10 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   },
 
   addTodo: async (todo) => {
-    const sameState = get().todos.filter((item) => item.projectId === todo.projectId && item.stateId === todo.stateId)
+    const sameState = get().todos.filter(
+      (item) =>
+        item.projectId === todo.projectId && item.stateId === todo.stateId
+    )
     const rank = Math.max(0, ...sameState.map((item) => item.rank)) + 1024
     try {
       const record = await pb.collection(COLLECTIONS.tasks).create<TodoRecord>({
@@ -703,7 +763,9 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   updateTodo: async (id, patch) => {
     try {
-      const record = await pb.collection(COLLECTIONS.tasks).update<TodoRecord>(id, todoPatchToRecord(patch))
+      const record = await pb
+        .collection(COLLECTIONS.tasks)
+        .update<TodoRecord>(id, todoPatchToRecord(patch))
       set((state) => ({ todos: upsertById(state.todos, toTodo(record)) }))
     } catch (error) {
       const message = messageFromError(error, "Could not update the task")
@@ -734,14 +796,22 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     const before = target[toIndex - 1]
     const after = target[toIndex]
     const rank =
-      before && after ? (before.rank + after.rank) / 2 : before ? before.rank + 1024 : after ? after.rank - 1024 : 1024
+      before && after
+        ? (before.rank + after.rank) / 2
+        : before
+          ? before.rank + 1024
+          : after
+            ? after.rank - 1024
+            : 1024
     const optimistic = { ...dragged, stateId: toStateId, rank }
     set((state) => ({ todos: upsertById(state.todos, optimistic) }))
     try {
-      const record = await pb.collection(COLLECTIONS.tasks).update<TodoRecord>(id, {
-        state: toStateId,
-        rank,
-      })
+      const record = await pb
+        .collection(COLLECTIONS.tasks)
+        .update<TodoRecord>(id, {
+          state: toStateId,
+          rank,
+        })
       set((state) => ({ todos: upsertById(state.todos, toTodo(record)) }))
     } catch (error) {
       set((state) => ({

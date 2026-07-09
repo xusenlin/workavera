@@ -122,7 +122,11 @@ function templateToDrafts(
 
 type UserOption = { id: string; name: string; avatar?: string }
 
-export function ProjectSheet({ open, onOpenChange, project }: ProjectSheetProps) {
+export function ProjectSheet({
+  open,
+  onOpenChange,
+  project,
+}: ProjectSheetProps) {
   const isEdit = project !== null
 
   const templates = useBoardStore((s) => s.templates)
@@ -136,21 +140,28 @@ export function ProjectSheet({ open, onOpenChange, project }: ProjectSheetProps)
   // when the selected project changes, so initializers run fresh each time).
   const initialTemplateId = (() => {
     if (isEdit) return BLANK_TEMPLATE
-    const defaultTemplate = templates.find((t) => t.name === "Software Development")
+    const defaultTemplate = templates.find(
+      (t) => t.name === "Software Development"
+    )
     return defaultTemplate?.id || templates[0]?.id || BLANK_TEMPLATE
   })()
-  const initialDrafts = isEdit ? emptyDrafts : templateToDrafts(initialTemplateId, templates)
+  const initialDrafts = isEdit
+    ? emptyDrafts
+    : templateToDrafts(initialTemplateId, templates)
 
   // In add mode, seed member drafts with the current user as owner (immutable).
-  const initialMembers: MemberDraft[] = isEdit || !currentUser
-    ? []
-    : [{
-        id: "current-user",
-        userId: currentUser.id,
-        name: currentUser.name,
-        avatar: currentUser.avatar,
-        role: "owner" as ProjectRole,
-      }]
+  const initialMembers: MemberDraft[] =
+    isEdit || !currentUser
+      ? []
+      : [
+          {
+            id: "current-user",
+            userId: currentUser.id,
+            name: currentUser.name,
+            avatar: currentUser.avatar,
+            role: "owner" as ProjectRole,
+          },
+        ]
 
   // Basic info
   const [name, setName] = useState(project?.name ?? "")
@@ -160,13 +171,18 @@ export function ProjectSheet({ open, onOpenChange, project }: ProjectSheetProps)
   const [templateId, setTemplateId] = useState(initialTemplateId)
 
   // Draft collections (add mode - local state; edit mode - not used)
-  const [stateDrafts, setStateDrafts] = useState<StateDraft[]>(initialDrafts.states)
-  const [labelDrafts, setLabelDrafts] = useState<LabelDraft[]>(initialDrafts.labels)
+  const [stateDrafts, setStateDrafts] = useState<StateDraft[]>(
+    initialDrafts.states
+  )
+  const [labelDrafts, setLabelDrafts] = useState<LabelDraft[]>(
+    initialDrafts.labels
+  )
   const [newState, setNewState] = useState<StateDraft>(emptyStateDraft)
   const [newLabel, setNewLabel] = useState<LabelDraft>(emptyLabelDraft)
 
   // Member drafts (add mode - local state collected for batch submission)
-  const [memberDrafts, setMemberDrafts] = useState<MemberDraft[]>(initialMembers)
+  const [memberDrafts, setMemberDrafts] =
+    useState<MemberDraft[]>(initialMembers)
 
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -191,7 +207,11 @@ export function ProjectSheet({ open, onOpenChange, project }: ProjectSheetProps)
           description: description.trim() || undefined,
           states: stateDrafts
             .filter((s) => s.name.trim())
-            .map((s) => ({ name: s.name.trim(), color: s.color, category: s.category })),
+            .map((s) => ({
+              name: s.name.trim(),
+              color: s.color,
+              category: s.category,
+            })),
           labels: labelDrafts
             .filter((l) => l.name.trim())
             .map((l) => ({ name: l.name.trim(), color: l.color })),
@@ -271,7 +291,7 @@ export function ProjectSheet({ open, onOpenChange, project }: ProjectSheetProps)
                 </SelectContent>
               </Select>
               {templateId !== BLANK_TEMPLATE && (
-                <p className="text-muted-foreground text-xs">
+                <p className="text-xs text-muted-foreground">
                   {templates.find((t) => t.id === templateId)?.description}
                 </p>
               )}
@@ -279,16 +299,33 @@ export function ProjectSheet({ open, onOpenChange, project }: ProjectSheetProps)
           )}
 
           {/* States */}
-          <StatesSection isEdit={isEdit} project={project} drafts={stateDrafts} setDrafts={setStateDrafts} newState={newState} setNewState={setNewState} />
+          <StatesSection
+            isEdit={isEdit}
+            project={project}
+            drafts={stateDrafts}
+            setDrafts={setStateDrafts}
+            newState={newState}
+            setNewState={setNewState}
+          />
 
           {/* Labels */}
-          <LabelsSection isEdit={isEdit} project={project} drafts={labelDrafts} setDrafts={setLabelDrafts} newLabel={newLabel} setNewLabel={setNewLabel} />
+          <LabelsSection
+            isEdit={isEdit}
+            project={project}
+            drafts={labelDrafts}
+            setDrafts={setLabelDrafts}
+            newLabel={newLabel}
+            setNewLabel={setNewLabel}
+          />
 
           {/* Members */}
           {isEdit && project ? (
             <MembersSection project={project} />
           ) : (
-            <MembersAddSection drafts={memberDrafts} setDrafts={setMemberDrafts} />
+            <MembersAddSection
+              drafts={memberDrafts}
+              setDrafts={setMemberDrafts}
+            />
           )}
         </div>
 
@@ -309,7 +346,10 @@ export function ProjectSheet({ open, onOpenChange, project }: ProjectSheetProps)
             <SheetClose asChild>
               <Button variant="ghost">Cancel</Button>
             </SheetClose>
-            <Button onClick={() => void handleSave()} disabled={!name.trim() || saving}>
+            <Button
+              onClick={() => void handleSave()}
+              disabled={!name.trim() || saving}
+            >
               {saving ? "Saving…" : isEdit ? "Save changes" : "Create project"}
             </Button>
           </div>
@@ -321,13 +361,16 @@ export function ProjectSheet({ open, onOpenChange, project }: ProjectSheetProps)
           <AlertDialogHeader>
             <AlertDialogTitle>Delete project?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete <strong>{project?.name}</strong> and all tasks
-              inside it. This action cannot be undone.
+              This will permanently delete <strong>{project?.name}</strong> and
+              all tasks inside it. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={() => void handleDelete()}>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => void handleDelete()}
+            >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -398,7 +441,8 @@ function StateListEditor({
   const updateDraft = (id: string, key: keyof StateDraft, value: string) => {
     setDrafts(drafts.map((d) => (d.id === id ? { ...d, [key]: value } : d)))
   }
-  const removeDraft = (id: string) => setDrafts(drafts.filter((d) => d.id !== id))
+  const removeDraft = (id: string) =>
+    setDrafts(drafts.filter((d) => d.id !== id))
   const moveDraft = (index: number, direction: -1 | 1) => {
     const next = [...drafts]
     const target = index + direction
@@ -408,7 +452,14 @@ function StateListEditor({
   }
   const addDraft = () => {
     if (!newState.name.trim()) return
-    setDrafts([...drafts, { ...newState, id: `draft-state-${Date.now()}`, name: newState.name.trim() }])
+    setDrafts([
+      ...drafts,
+      {
+        ...newState,
+        id: `draft-state-${Date.now()}`,
+        name: newState.name.trim(),
+      },
+    ])
     setNewState(emptyStateDraft)
   }
 
@@ -417,9 +468,24 @@ function StateListEditor({
       <FieldLabel>Workflow states</FieldLabel>
       <div className="flex flex-col gap-2">
         {drafts.map((draft, index) => (
-          <StateRow key={draft.id} draft={draft} index={index} total={drafts.length} onUpdate={(k, v) => updateDraft(draft.id, k, v)} onRemove={() => removeDraft(draft.id)} onMove={(dir) => moveDraft(index, dir)} />
+          <StateRow
+            key={draft.id}
+            draft={draft}
+            index={index}
+            total={drafts.length}
+            onUpdate={(k, v) => updateDraft(draft.id, k, v)}
+            onRemove={() => removeDraft(draft.id)}
+            onMove={(dir) => moveDraft(index, dir)}
+          />
         ))}
-        <StateRow isNew draft={newState} index={0} total={0} onUpdate={(k, v) => setNewState({ ...newState, [k]: v })} onAdd={addDraft} />
+        <StateRow
+          isNew
+          draft={newState}
+          index={0}
+          total={0}
+          onUpdate={(k, v) => setNewState({ ...newState, [k]: v })}
+          onAdd={addDraft}
+        />
       </div>
     </div>
   )
@@ -445,7 +511,12 @@ function StateRow({
   onAdd?: () => void
 }) {
   return (
-    <div className={cn("grid gap-2 rounded-xl border p-3 md:grid-cols-[1fr_8rem_auto]", isNew && "border-dashed")}>
+    <div
+      className={cn(
+        "grid gap-2 rounded-xl border p-3 md:grid-cols-[1fr_8rem_auto]",
+        isNew && "border-dashed"
+      )}
+    >
       <div className="flex items-center gap-2">
         <ColorPicker
           value={draft.color}
@@ -462,7 +533,10 @@ function StateRow({
           }}
         />
       </div>
-      <Select value={draft.category} onValueChange={(v) => onUpdate("category", v)}>
+      <Select
+        value={draft.category}
+        onValueChange={(v) => onUpdate("category", v)}
+      >
         <SelectTrigger className="w-full">
           <SelectValue />
         </SelectTrigger>
@@ -477,10 +551,22 @@ function StateRow({
       <div className="flex items-center justify-end gap-1">
         {!isNew && onMove && (
           <>
-            <Button variant="ghost" size="icon-sm" disabled={index === 0} onClick={() => onMove(-1)} aria-label="Move up">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              disabled={index === 0}
+              onClick={() => onMove(-1)}
+              aria-label="Move up"
+            >
               <HugeiconsIcon icon={ArrowUp01Icon} strokeWidth={2} />
             </Button>
-            <Button variant="ghost" size="icon-sm" disabled={index === total - 1} onClick={() => onMove(1)} aria-label="Move down">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              disabled={index === total - 1}
+              onClick={() => onMove(1)}
+              aria-label="Move down"
+            >
               <HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} />
             </Button>
           </>
@@ -491,7 +577,13 @@ function StateRow({
             Add
           </Button>
         ) : (
-          <Button variant="ghost" size="icon-sm" className="text-destructive hover:text-destructive" onClick={onRemove} aria-label="Delete state">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="text-destructive hover:text-destructive"
+            onClick={onRemove}
+            aria-label="Delete state"
+          >
             <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
           </Button>
         )}
@@ -523,7 +615,11 @@ function StatesEditSection({ project }: { project: Project }) {
   const updateDraft = (id: string, key: keyof StateDraft, value: string) => {
     setDrafts((prev) => ({
       ...prev,
-      [id]: { ...projectStates.find((s) => s.id === id)!, ...prev[id], [key]: value },
+      [id]: {
+        ...projectStates.find((s) => s.id === id)!,
+        ...prev[id],
+        [key]: value,
+      },
     }))
   }
 
@@ -532,7 +628,11 @@ function StatesEditSection({ project }: { project: Project }) {
     if (!draft?.name.trim()) return
     setSavingId(id)
     try {
-      await updateState(id, { name: draft.name.trim(), color: draft.color, category: draft.category })
+      await updateState(id, {
+        name: draft.name.trim(),
+        color: draft.color,
+        category: draft.category,
+      })
       setDrafts((prev) => {
         const next = { ...prev }
         delete next[id]
@@ -549,7 +649,11 @@ function StatesEditSection({ project }: { project: Project }) {
     if (!newState.name.trim()) return
     setSavingId("new")
     try {
-      await addState(project.id, { name: newState.name.trim(), color: newState.color, category: newState.category })
+      await addState(project.id, {
+        name: newState.name.trim(),
+        color: newState.color,
+        category: newState.category,
+      })
       setNewState(emptyStateDraft)
     } catch {
       // The board error banner displays the server response.
@@ -566,7 +670,10 @@ function StatesEditSection({ project }: { project: Project }) {
           const draft = { ...state, ...drafts[state.id] }
           const taskCount = todos.filter((t) => t.stateId === state.id).length
           return (
-            <div key={state.id} className="grid gap-2 rounded-xl border p-3 md:grid-cols-[1fr_8rem_auto]">
+            <div
+              key={state.id}
+              className="grid gap-2 rounded-xl border p-3 md:grid-cols-[1fr_8rem_auto]"
+            >
               <div className="flex items-center gap-2">
                 <ColorPicker
                   value={draft.color}
@@ -576,10 +683,15 @@ function StatesEditSection({ project }: { project: Project }) {
                 />
                 <Input
                   value={draft.name}
-                  onChange={(e) => updateDraft(state.id, "name", e.target.value)}
+                  onChange={(e) =>
+                    updateDraft(state.id, "name", e.target.value)
+                  }
                 />
               </div>
-              <Select value={draft.category} onValueChange={(v) => updateDraft(state.id, "category", v)}>
+              <Select
+                value={draft.category}
+                onValueChange={(v) => updateDraft(state.id, "category", v)}
+              >
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
@@ -592,30 +704,73 @@ function StatesEditSection({ project }: { project: Project }) {
                 </SelectContent>
               </Select>
               <div className="flex items-center justify-end gap-1">
-                <Button variant="ghost" size="icon-sm" disabled={index === 0} onClick={() => void reorderState(state.id, -1).catch(() => {})} aria-label="Move up">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  disabled={index === 0}
+                  onClick={() =>
+                    void reorderState(state.id, -1).catch(() => {})
+                  }
+                  aria-label="Move up"
+                >
                   <HugeiconsIcon icon={ArrowUp01Icon} strokeWidth={2} />
                 </Button>
-                <Button variant="ghost" size="icon-sm" disabled={index === projectStates.length - 1} onClick={() => void reorderState(state.id, 1).catch(() => {})} aria-label="Move down">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  disabled={index === projectStates.length - 1}
+                  onClick={() => void reorderState(state.id, 1).catch(() => {})}
+                  aria-label="Move down"
+                >
                   <HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} />
                 </Button>
-                <Button variant="ghost" size="sm" disabled={!draft.name.trim() || savingId === state.id} onClick={() => void handleSave(state.id)}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={!draft.name.trim() || savingId === state.id}
+                  onClick={() => void handleSave(state.id)}
+                >
                   Save
                 </Button>
-                <Button variant="ghost" size="icon-sm" className="text-destructive hover:text-destructive" disabled={taskCount > 0} title={taskCount > 0 ? `${taskCount} tasks must be moved first` : "Delete"} onClick={() => void removeState(state.id).catch(() => undefined)} aria-label="Delete state">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-destructive hover:text-destructive"
+                  disabled={taskCount > 0}
+                  title={
+                    taskCount > 0
+                      ? `${taskCount} tasks must be moved first`
+                      : "Delete"
+                  }
+                  onClick={() =>
+                    void removeState(state.id).catch(() => undefined)
+                  }
+                  aria-label="Delete state"
+                >
                   <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
                 </Button>
               </div>
               {taskCount > 0 && (
-                <p className="text-muted-foreground text-xs md:col-span-3">
-                  {taskCount} task{taskCount === 1 ? "" : "s"} must be moved or deleted first.
+                <p className="text-xs text-muted-foreground md:col-span-3">
+                  {taskCount} task{taskCount === 1 ? "" : "s"} must be moved or
+                  deleted first.
                 </p>
               )}
             </div>
           )
         })}
 
-        <StateRow isNew draft={newState} index={0} total={0} onUpdate={(k, v) => setNewState({ ...newState, [k]: v })} onAdd={() => void handleAdd()} />
-        {savingId === "new" && <p className="text-muted-foreground text-xs">Adding state…</p>}
+        <StateRow
+          isNew
+          draft={newState}
+          index={0}
+          total={0}
+          onUpdate={(k, v) => setNewState({ ...newState, [k]: v })}
+          onAdd={() => void handleAdd()}
+        />
+        {savingId === "new" && (
+          <p className="text-xs text-muted-foreground">Adding state…</p>
+        )}
       </div>
     </div>
   )
@@ -643,7 +798,14 @@ function LabelsSection({
   if (isEdit && project) {
     return <LabelsEditSection project={project} />
   }
-  return <LabelListEditor drafts={drafts} setDrafts={setDrafts} newLabel={newLabel} setNewLabel={setNewLabel} />
+  return (
+    <LabelListEditor
+      drafts={drafts}
+      setDrafts={setDrafts}
+      newLabel={newLabel}
+      setNewLabel={setNewLabel}
+    />
+  )
 }
 
 function LabelListEditor({
@@ -660,10 +822,18 @@ function LabelListEditor({
   const updateDraft = (id: string, key: keyof LabelDraft, value: string) => {
     setDrafts(drafts.map((d) => (d.id === id ? { ...d, [key]: value } : d)))
   }
-  const removeDraft = (id: string) => setDrafts(drafts.filter((d) => d.id !== id))
+  const removeDraft = (id: string) =>
+    setDrafts(drafts.filter((d) => d.id !== id))
   const addDraft = () => {
     if (!newLabel.name.trim()) return
-    setDrafts([...drafts, { ...newLabel, id: `draft-label-${Date.now()}`, name: newLabel.name.trim() }])
+    setDrafts([
+      ...drafts,
+      {
+        ...newLabel,
+        id: `draft-label-${Date.now()}`,
+        name: newLabel.name.trim(),
+      },
+    ])
     setNewLabel(emptyLabelDraft)
   }
 
@@ -672,9 +842,20 @@ function LabelListEditor({
       <FieldLabel>Labels</FieldLabel>
       <div className="flex flex-col gap-2">
         {drafts.map((draft) => (
-          <LabelRow key={draft.id} draft={draft} isNew={false} onUpdate={(k, v) => updateDraft(draft.id, k, v)} onRemove={() => removeDraft(draft.id)} />
+          <LabelRow
+            key={draft.id}
+            draft={draft}
+            isNew={false}
+            onUpdate={(k, v) => updateDraft(draft.id, k, v)}
+            onRemove={() => removeDraft(draft.id)}
+          />
         ))}
-        <LabelRow isNew draft={newLabel} onUpdate={(k, v) => setNewLabel({ ...newLabel, [k]: v })} onAdd={addDraft} />
+        <LabelRow
+          isNew
+          draft={newLabel}
+          onUpdate={(k, v) => setNewLabel({ ...newLabel, [k]: v })}
+          onAdd={addDraft}
+        />
       </div>
     </div>
   )
@@ -694,7 +875,12 @@ function LabelRow({
   onAdd?: () => void
 }) {
   return (
-    <div className={cn("flex items-center gap-2 rounded-xl border p-3", isNew && "border-dashed")}>
+    <div
+      className={cn(
+        "flex items-center gap-2 rounded-xl border p-3",
+        isNew && "border-dashed"
+      )}
+    >
       <ColorPicker
         value={draft.color}
         onChange={(v) => onUpdate("color", v)}
@@ -715,7 +901,13 @@ function LabelRow({
           Add
         </Button>
       ) : (
-        <Button variant="ghost" size="icon-sm" className="text-destructive hover:text-destructive" onClick={onRemove} aria-label="Delete label">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="text-destructive hover:text-destructive"
+          onClick={onRemove}
+          aria-label="Delete label"
+        >
           <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
         </Button>
       )}
@@ -737,7 +929,10 @@ function LabelsEditSection({ project }: { project: Project }) {
   const [drafts, setDrafts] = useState<Record<string, LabelDraft>>({})
   const [newLabel, setNewLabel] = useState<LabelDraft>(emptyLabelDraft)
   const [savingId, setSavingId] = useState<string | null>(null)
-  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<{
+    id: string
+    name: string
+  } | null>(null)
 
   const projectLabels = labels
     .filter((l) => l.projectId === project.id)
@@ -778,7 +973,10 @@ function LabelsEditSection({ project }: { project: Project }) {
     if (!newLabel.name.trim()) return
     setSavingId("new")
     try {
-      await addLabel(project.id, { name: newLabel.name.trim(), color: newLabel.color })
+      await addLabel(project.id, {
+        name: newLabel.name.trim(),
+        color: newLabel.color,
+      })
       setNewLabel(emptyLabelDraft)
     } catch {
       // The board error banner displays the server response.
@@ -806,9 +1004,14 @@ function LabelsEditSection({ project }: { project: Project }) {
       <div className="flex flex-col gap-2">
         {projectLabels.map((label) => {
           const draft = { ...label, ...drafts[label.id] }
-          const taskCount = todos.filter((t) => t.labels.includes(label.id)).length
+          const taskCount = todos.filter((t) =>
+            t.labels.includes(label.id)
+          ).length
           return (
-            <div key={label.id} className="flex items-center gap-2 rounded-xl border p-3">
+            <div
+              key={label.id}
+              className="flex items-center gap-2 rounded-xl border p-3"
+            >
               <ColorPicker
                 value={draft.color}
                 onChange={(v) => updateDraft(label.id, "color", v)}
@@ -819,33 +1022,59 @@ function LabelsEditSection({ project }: { project: Project }) {
                 value={draft.name}
                 onChange={(e) => updateDraft(label.id, "name", e.target.value)}
               />
-              <span className="text-muted-foreground w-14 shrink-0 text-right text-xs tabular-nums">
+              <span className="w-14 shrink-0 text-right text-xs text-muted-foreground tabular-nums">
                 {taskCount} task{taskCount === 1 ? "" : "s"}
               </span>
-              <Button variant="ghost" size="sm" disabled={!draft.name.trim() || savingId === label.id} onClick={() => void handleSave(label.id)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={!draft.name.trim() || savingId === label.id}
+                onClick={() => void handleSave(label.id)}
+              >
                 Save
               </Button>
-              <Button variant="ghost" size="icon-sm" className="text-destructive hover:text-destructive" disabled={savingId === label.id} onClick={() => setPendingDelete({ id: label.id, name: label.name })} aria-label={`Delete ${label.name}`}>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-destructive hover:text-destructive"
+                disabled={savingId === label.id}
+                onClick={() =>
+                  setPendingDelete({ id: label.id, name: label.name })
+                }
+                aria-label={`Delete ${label.name}`}
+              >
                 <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
               </Button>
             </div>
           )
         })}
 
-        <LabelRow isNew draft={newLabel} onUpdate={(k, v) => setNewLabel({ ...newLabel, [k]: v })} onAdd={() => void handleAdd()} />
+        <LabelRow
+          isNew
+          draft={newLabel}
+          onUpdate={(k, v) => setNewLabel({ ...newLabel, [k]: v })}
+          onAdd={() => void handleAdd()}
+        />
       </div>
 
-      <AlertDialog open={Boolean(pendingDelete)} onOpenChange={(v) => !v && setPendingDelete(null)}>
+      <AlertDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(v) => !v && setPendingDelete(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete label?</AlertDialogTitle>
             <AlertDialogDescription>
-              The label <strong>{pendingDelete?.name}</strong> will be removed from this project and all tasks using it.
+              The label <strong>{pendingDelete?.name}</strong> will be removed
+              from this project and all tasks using it.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={() => void handleDelete()}>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => void handleDelete()}
+            >
               Delete label
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -908,7 +1137,10 @@ function MembersAddSection({
       <FieldLabel>Members</FieldLabel>
       <div className="flex flex-col gap-2">
         {drafts.map((member) => (
-          <div key={member.id} className="flex items-center gap-2 rounded-xl border p-3">
+          <div
+            key={member.id}
+            className="flex items-center gap-2 rounded-xl border p-3"
+          >
             <Avatar size="sm">
               {member.avatar && (
                 <AvatarImage
@@ -921,24 +1153,30 @@ function MembersAddSection({
                 {member.name.charAt(0).toUpperCase()}
               </AvatarFallback>
             </Avatar>
-            <span className="min-w-0 flex-1 truncate text-sm font-medium">{member.name}</span>
+            <span className="min-w-0 flex-1 truncate text-sm font-medium">
+              {member.name}
+            </span>
             {member.role === "owner" ? (
-              <span className="text-muted-foreground text-xs">Owner</span>
+              <span className="text-xs text-muted-foreground">Owner</span>
             ) : (
               <>
                 <Select
                   value={member.role}
-                  onValueChange={(v) => handleRoleChange(member.id, v as ProjectRole)}
+                  onValueChange={(v) =>
+                    handleRoleChange(member.id, v as ProjectRole)
+                  }
                 >
                   <SelectTrigger className="w-28">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {ROLE_OPTIONS.filter((r) => r.value !== "owner").map((r) => (
-                      <SelectItem key={r.value} value={r.value}>
-                        {r.label}
-                      </SelectItem>
-                    ))}
+                    {ROLE_OPTIONS.filter((r) => r.value !== "owner").map(
+                      (r) => (
+                        <SelectItem key={r.value} value={r.value}>
+                          {r.label}
+                        </SelectItem>
+                      )
+                    )}
                   </SelectContent>
                 </Select>
                 <Button
@@ -970,7 +1208,10 @@ function MembersAddSection({
                 ))}
               </SelectContent>
             </Select>
-            <Select value={selectedRole} onValueChange={(v) => setSelectedRole(v as ProjectRole)}>
+            <Select
+              value={selectedRole}
+              onValueChange={(v) => setSelectedRole(v as ProjectRole)}
+            >
               <SelectTrigger className="w-28">
                 <SelectValue />
               </SelectTrigger>
@@ -1033,7 +1274,10 @@ function MembersSection({ project }: { project: Project }) {
     if (!selectedUserId) return
     setSaving(true)
     try {
-      await addMember(project.id, { userId: selectedUserId, role: selectedRole })
+      await addMember(project.id, {
+        userId: selectedUserId,
+        role: selectedRole,
+      })
       setSelectedUserId("")
       setSelectedRole("member")
     } catch {
@@ -1048,31 +1292,57 @@ function MembersSection({ project }: { project: Project }) {
       <FieldLabel>Members</FieldLabel>
       <div className="flex flex-col gap-2">
         {projectMembers.map((member) => (
-          <div key={member.id} className="flex items-center gap-2 rounded-xl border p-3">
+          <div
+            key={member.id}
+            className="flex items-center gap-2 rounded-xl border p-3"
+          >
             <Avatar size="sm">
-              {member.avatar && <AvatarImage src={member.avatar} alt={member.name} className="object-cover" />}
+              {member.avatar && (
+                <AvatarImage
+                  src={member.avatar}
+                  alt={member.name}
+                  className="object-cover"
+                />
+              )}
               <AvatarFallback className="text-[9px]">
                 {member.name.charAt(0).toUpperCase()}
               </AvatarFallback>
             </Avatar>
-            <span className="min-w-0 flex-1 truncate text-sm font-medium">{member.name}</span>
+            <span className="min-w-0 flex-1 truncate text-sm font-medium">
+              {member.name}
+            </span>
             {member.role === "owner" ? (
-              <span className="text-muted-foreground text-xs">Owner</span>
+              <span className="text-xs text-muted-foreground">Owner</span>
             ) : (
               <>
-                <Select value={member.role} onValueChange={(v) => void updateMember(member.id, { role: v as ProjectRole }).catch(() => {})}>
+                <Select
+                  value={member.role}
+                  onValueChange={(v) =>
+                    void updateMember(member.id, {
+                      role: v as ProjectRole,
+                    }).catch(() => {})
+                  }
+                >
                   <SelectTrigger className="w-28">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {ROLE_OPTIONS.filter((r) => r.value !== "owner").map((r) => (
-                      <SelectItem key={r.value} value={r.value}>
-                        {r.label}
-                      </SelectItem>
-                    ))}
+                    {ROLE_OPTIONS.filter((r) => r.value !== "owner").map(
+                      (r) => (
+                        <SelectItem key={r.value} value={r.value}>
+                          {r.label}
+                        </SelectItem>
+                      )
+                    )}
                   </SelectContent>
                 </Select>
-                <Button variant="ghost" size="icon-sm" className="text-destructive hover:text-destructive" onClick={() => void removeMember(member.id).catch(() => {})} aria-label={`Remove ${member.name}`}>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => void removeMember(member.id).catch(() => {})}
+                  aria-label={`Remove ${member.name}`}
+                >
                   <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
                 </Button>
               </>
@@ -1095,7 +1365,10 @@ function MembersSection({ project }: { project: Project }) {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={selectedRole} onValueChange={(v) => setSelectedRole(v as ProjectRole)}>
+            <Select
+              value={selectedRole}
+              onValueChange={(v) => setSelectedRole(v as ProjectRole)}
+            >
               <SelectTrigger className="w-28">
                 <SelectValue />
               </SelectTrigger>
@@ -1107,7 +1380,11 @@ function MembersSection({ project }: { project: Project }) {
                 ))}
               </SelectContent>
             </Select>
-            <Button size="sm" disabled={!selectedUserId || saving} onClick={() => void handleAdd()}>
+            <Button
+              size="sm"
+              disabled={!selectedUserId || saving}
+              onClick={() => void handleAdd()}
+            >
               <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
               Add
             </Button>

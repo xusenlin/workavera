@@ -88,7 +88,10 @@ export const useLlmSettingsStore = create<LlmSettingsState>((set, get) => ({
         localStorage.removeItem("llm-models-storage")
         set({ models: sortModels(models), initialized: true })
       } catch (error) {
-        const message = messageFromError(error, "Could not load model configurations")
+        const message = messageFromError(
+          error,
+          "Could not load model configurations"
+        )
         set({ error: message, initialized: false })
         toast.error(message)
       } finally {

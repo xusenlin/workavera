@@ -7,11 +7,7 @@ import { Calendar03Icon, TextAlignLeftIcon } from "@hugeicons/core-free-icons"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-import {
-  PRIORITY_META,
-  useBoardStore,
-  type Todo,
-} from "@/store/board"
+import { PRIORITY_META, useBoardStore, type Todo } from "@/store/board"
 
 type TodoCardProps = {
   todo: Todo
@@ -61,7 +57,8 @@ export function TodoCard({ todo, onEdit }: TodoCardProps) {
   const todoLabels = labels.filter((l) => todo.labels.includes(l.id))
   const todoMembers = members.filter(
     (member) =>
-      member.projectId === todo.projectId && todo.members.includes(member.userId)
+      member.projectId === todo.projectId &&
+      todo.members.includes(member.userId)
   )
   const priorityMeta = PRIORITY_META.find((p) => p.value === todo.priority)
   const overdue = isOverdue(todo.dueDate)
@@ -94,12 +91,16 @@ export function TodoCard({ todo, onEdit }: TodoCardProps) {
       )}
 
       {/* Title */}
-      <p className="text-sm font-medium leading-snug">{todo.title}</p>
+      <p className="text-sm leading-snug font-medium">{todo.title}</p>
 
       {/* Description indicator */}
       {todo.description && (
-        <div className="text-muted-foreground mt-1.5 flex items-center gap-1 text-xs">
-          <HugeiconsIcon icon={TextAlignLeftIcon} strokeWidth={2} className="size-3" />
+        <div className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground">
+          <HugeiconsIcon
+            icon={TextAlignLeftIcon}
+            strokeWidth={2}
+            className="size-3"
+          />
           <span className="truncate">{todo.description}</span>
         </div>
       )}
@@ -127,10 +128,16 @@ export function TodoCard({ todo, onEdit }: TodoCardProps) {
             <span
               className={cn(
                 "flex items-center gap-0.5 text-[10px]",
-                overdue ? "text-destructive font-medium" : "text-muted-foreground"
+                overdue
+                  ? "font-medium text-destructive"
+                  : "text-muted-foreground"
               )}
             >
-              <HugeiconsIcon icon={Calendar03Icon} strokeWidth={2} className="size-3" />
+              <HugeiconsIcon
+                icon={Calendar03Icon}
+                strokeWidth={2}
+                className="size-3"
+              />
               {formatDate(todo.dueDate)}
             </span>
           )}
@@ -140,11 +147,7 @@ export function TodoCard({ todo, onEdit }: TodoCardProps) {
         {todoMembers.length > 0 && (
           <div className="flex -space-x-1.5">
             {todoMembers.slice(0, 3).map((member) => (
-              <Avatar
-                key={member.id}
-                size="sm"
-                className="ring-2 ring-card"
-              >
+              <Avatar key={member.id} size="sm" className="ring-2 ring-card">
                 {member.avatar && (
                   <AvatarImage
                     src={member.avatar}
@@ -158,7 +161,7 @@ export function TodoCard({ todo, onEdit }: TodoCardProps) {
               </Avatar>
             ))}
             {todoMembers.length > 3 && (
-              <div className="bg-muted text-muted-foreground ring-2 ring-card flex size-6 items-center justify-center rounded-full text-[9px]">
+              <div className="flex size-6 items-center justify-center rounded-full bg-muted text-[9px] text-muted-foreground ring-2 ring-card">
                 +{todoMembers.length - 3}
               </div>
             )}

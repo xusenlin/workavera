@@ -56,9 +56,7 @@ export function AppHeader() {
   const { user, logout } = useAuthStore()
   const [confirmLogout, setConfirmLogout] = useState(false)
 
-  const currentNav = flatNavItems.find(
-    (item) => location.pathname === item.url
-  )
+  const currentNav = flatNavItems.find((item) => location.pathname === item.url)
 
   const handleLogout = () => {
     logout()
@@ -68,7 +66,10 @@ export function AppHeader() {
   return (
     <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-2 border-b bg-background/80 px-4 backdrop-blur-md">
       <SidebarTrigger className="-ml-1" />
-      <Separator orientation="vertical" className="mr-1 h-4 data-vertical:self-center" />
+      <Separator
+        orientation="vertical"
+        className="mr-1 h-4 data-vertical:self-center"
+      />
 
       <Breadcrumb>
         <BreadcrumbList>
@@ -93,7 +94,7 @@ export function AppHeader() {
         <HugeiconsIcon
           icon={Search02Icon}
           strokeWidth={2}
-          className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2"
+          className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
         />
         <Input
           placeholder="Search..."
@@ -102,11 +103,19 @@ export function AppHeader() {
       </div>
 
       <div className="ml-auto flex items-center gap-1 lg:ml-2">
-        <Button variant="ghost" size="icon-sm" className="hidden sm:flex" aria-label="Notifications">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="hidden sm:flex"
+          aria-label="Notifications"
+        >
           <HugeiconsIcon icon={BellIcon} strokeWidth={2} />
         </Button>
         <ThemeToggle />
-        <Separator orientation="vertical" className="mx-1 h-4 data-vertical:self-center" />
+        <Separator
+          orientation="vertical"
+          className="mx-1 h-4 data-vertical:self-center"
+        />
 
         {/* User menu */}
         <DropdownMenu>
@@ -116,7 +125,9 @@ export function AppHeader() {
                 {user?.avatar && (
                   <AvatarImage src={user.avatar} alt={user.name} />
                 )}
-                <AvatarFallback>{user ? getInitials(user.name) : "?"}</AvatarFallback>
+                <AvatarFallback>
+                  {user ? getInitials(user.name) : "?"}
+                </AvatarFallback>
               </Avatar>
               <span className="hidden text-sm font-medium sm:inline">
                 {user?.name ?? "Guest"}
@@ -129,7 +140,9 @@ export function AppHeader() {
                 {user?.avatar && (
                   <AvatarImage src={user.avatar} alt={user.name} />
                 )}
-                <AvatarFallback>{user ? getInitials(user.name) : "?"}</AvatarFallback>
+                <AvatarFallback>
+                  {user ? getInitials(user.name) : "?"}
+                </AvatarFallback>
               </Avatar>
               <div className="grid min-w-0 flex-1">
                 <span className="truncate text-sm font-medium text-foreground">
@@ -152,7 +165,10 @@ export function AppHeader() {
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive" onClick={() => setConfirmLogout(true)}>
+            <DropdownMenuItem
+              variant="destructive"
+              onClick={() => setConfirmLogout(true)}
+            >
               <HugeiconsIcon icon={Logout02Icon} strokeWidth={2} />
               <span>Log out</span>
             </DropdownMenuItem>

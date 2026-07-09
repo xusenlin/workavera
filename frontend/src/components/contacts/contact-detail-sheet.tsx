@@ -28,7 +28,11 @@ function getInitials(name: string) {
   return name.charAt(0).toUpperCase()
 }
 
-export function ContactDetailSheet({ open, onOpenChange, contact }: ContactDetailSheetProps) {
+export function ContactDetailSheet({
+  open,
+  onOpenChange,
+  contact,
+}: ContactDetailSheetProps) {
   const toggleFavorite = useContactsStore((s) => s.toggleFavorite)
   const statusMeta = STATUS_META.find((s) => s.value === contact?.status)
 
@@ -52,7 +56,9 @@ export function ContactDetailSheet({ open, onOpenChange, contact }: ContactDetai
                 </AvatarFallback>
               </Avatar>
               <div className="flex min-w-0 flex-col gap-1">
-                <span className="truncate text-base font-semibold">{contact.name}</span>
+                <span className="truncate text-base font-semibold">
+                  {contact.name}
+                </span>
                 {contact.title && (
                   <span className="truncate text-sm text-muted-foreground">
                     {contact.title}
@@ -72,7 +78,7 @@ export function ContactDetailSheet({ open, onOpenChange, contact }: ContactDetai
 
             <div className="flex flex-col gap-1">
               <span className="text-sm font-medium">User ID</span>
-              <span className="break-all font-mono text-xs text-muted-foreground">
+              <span className="font-mono text-xs break-all text-muted-foreground">
                 {contact.id}
               </span>
             </div>
@@ -80,8 +86,12 @@ export function ContactDetailSheet({ open, onOpenChange, contact }: ContactDetai
             <Separator />
 
             <div className="flex flex-col gap-3">
-              {contact.email && <InfoRow icon={Mail02Icon} label={contact.email} />}
-              {contact.phone && <InfoRow icon={Call02Icon} label={contact.phone} />}
+              {contact.email && (
+                <InfoRow icon={Mail02Icon} label={contact.email} />
+              )}
+              {contact.phone && (
+                <InfoRow icon={Call02Icon} label={contact.phone} />
+              )}
               {!contact.email && !contact.phone && (
                 <p className="text-sm text-muted-foreground">
                   No public contact details have been added yet.
@@ -94,7 +104,7 @@ export function ContactDetailSheet({ open, onOpenChange, contact }: ContactDetai
                 <Separator />
                 <div className="flex flex-col gap-2">
                   <span className="text-sm font-medium">Bio</span>
-                  <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+                  <p className="text-sm whitespace-pre-wrap text-muted-foreground">
                     {contact.notes}
                   </p>
                 </div>
@@ -105,7 +115,10 @@ export function ContactDetailSheet({ open, onOpenChange, contact }: ContactDetai
 
         <SheetFooter className="flex-row items-center justify-between gap-2">
           {contact ? (
-            <Button variant="ghost" onClick={() => void toggleFavorite(contact.id)}>
+            <Button
+              variant="ghost"
+              onClick={() => void toggleFavorite(contact.id)}
+            >
               <HugeiconsIcon
                 icon={StarIcon}
                 strokeWidth={2}

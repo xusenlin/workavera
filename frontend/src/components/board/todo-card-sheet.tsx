@@ -99,7 +99,9 @@ export function TodoCardSheet({
   const members = useBoardStore((s) => s.members)
   const states = useBoardStore((s) => s.states)
 
-  const [form, setForm] = useState<FormState>(() => initialForm(todo, defaultStateId))
+  const [form, setForm] = useState<FormState>(() =>
+    initialForm(todo, defaultStateId)
+  )
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
@@ -122,8 +124,12 @@ export function TodoCardSheet({
   const projectStates = states
     .filter((state) => state.projectId === currentProjectId)
     .sort((a, b) => a.sortOrder - b.sortOrder)
-  const projectLabels = labels.filter((label) => label.projectId === currentProjectId)
-  const projectMembers = members.filter((member) => member.projectId === currentProjectId)
+  const projectLabels = labels.filter(
+    (label) => label.projectId === currentProjectId
+  )
+  const projectMembers = members.filter(
+    (member) => member.projectId === currentProjectId
+  )
 
   const handleSave = async () => {
     if (!form.title.trim() || !form.stateId) return
@@ -278,7 +284,9 @@ export function TodoCardSheet({
                         ? "text-white"
                         : "bg-muted text-muted-foreground hover:bg-muted/70"
                     )}
-                    style={selected ? { backgroundColor: label.color } : undefined}
+                    style={
+                      selected ? { backgroundColor: label.color } : undefined
+                    }
                   >
                     <span
                       className="size-2 rounded-full"
@@ -352,7 +360,10 @@ export function TodoCardSheet({
             <SheetClose asChild>
               <Button variant="ghost">Cancel</Button>
             </SheetClose>
-            <Button onClick={() => void handleSave()} disabled={!form.title.trim() || !form.stateId}>
+            <Button
+              onClick={() => void handleSave()}
+              disabled={!form.title.trim() || !form.stateId}
+            >
               {todo ? "Save changes" : "Add task"}
             </Button>
           </div>
@@ -370,7 +381,10 @@ export function TodoCardSheet({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={() => void handleDelete()}>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => void handleDelete()}
+            >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

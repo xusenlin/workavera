@@ -31,9 +31,12 @@ export function StatusColumn({
     <div className="flex w-72 shrink-0 flex-col">
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="size-2 rounded-full" style={{ backgroundColor: state.color }} />
+          <span
+            className="size-2 rounded-full"
+            style={{ backgroundColor: state.color }}
+          />
           <span className="text-sm font-semibold">{state.name}</span>
-          <span className="bg-muted text-muted-foreground rounded-full px-1.5 py-0.5 text-xs tabular-nums">
+          <span className="rounded-full bg-muted px-1.5 py-0.5 text-xs text-muted-foreground tabular-nums">
             {todos.length}
           </span>
         </div>
@@ -50,11 +53,14 @@ export function StatusColumn({
       <div
         ref={setNodeRef}
         className={cn(
-          "bg-muted/30 no-scrollbar flex max-h-[calc(100vh-24rem)] min-h-24 flex-1 flex-col gap-2 overflow-y-auto rounded-xl p-2 transition-colors",
+          "no-scrollbar flex max-h-[calc(100vh-24rem)] min-h-24 flex-1 flex-col gap-2 overflow-y-auto rounded-xl bg-muted/30 p-2 transition-colors",
           isOver && "bg-primary/5 ring-1 ring-primary/20"
         )}
       >
-        <SortableContext items={todos.map((todo) => todo.id)} strategy={verticalListSortingStrategy}>
+        <SortableContext
+          items={todos.map((todo) => todo.id)}
+          strategy={verticalListSortingStrategy}
+        >
           {todos.map((todo) => (
             <TodoCard key={todo.id} todo={todo} onEdit={onEditTask} />
           ))}
@@ -63,7 +69,7 @@ export function StatusColumn({
         {todos.length === 0 && (
           <button
             onClick={() => onAddTask(state.id)}
-            className="text-muted-foreground hover:text-foreground hover:bg-muted/50 flex flex-1 items-center justify-center rounded-lg border border-dashed py-4 text-xs transition-colors"
+            className="flex flex-1 items-center justify-center rounded-lg border border-dashed py-4 text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
           >
             + Add task
           </button>

@@ -76,7 +76,9 @@ function ActiveChat({ conversation }: { conversation: ChatConversation }) {
         const pendingTitle = pendingTitleRef.current
         pendingTitleRef.current = null
         if (conversation.title === "New conversation" && pendingTitle) {
-          await renameConversation(conversation.id, pendingTitle).catch(() => {})
+          await renameConversation(conversation.id, pendingTitle).catch(
+            () => {}
+          )
         }
         void refreshConversations()
       },
@@ -148,7 +150,9 @@ export function ChatArea() {
   if (!activeConversation) {
     return (
       <div className="flex flex-1 flex-col">
-        <ChatEmptyState onCreate={() => void createConversation().catch(() => {})} />
+        <ChatEmptyState
+          onCreate={() => void createConversation().catch(() => {})}
+        />
       </div>
     )
   }

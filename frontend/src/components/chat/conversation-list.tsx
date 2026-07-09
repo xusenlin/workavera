@@ -187,7 +187,9 @@ function ConversationItem({
                 Rename
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => void archiveConversation(conversation.id).catch(() => {})}
+                onClick={() =>
+                  void archiveConversation(conversation.id).catch(() => {})
+                }
                 disabled={conversation.status === "archived"}
               >
                 <HugeiconsIcon icon={Archive02Icon} strokeWidth={2} />
@@ -218,7 +220,9 @@ function ConversationItem({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-                onClick={() => void deleteConversation(conversation.id).catch(() => {})}
+              onClick={() =>
+                void deleteConversation(conversation.id).catch(() => {})
+              }
             >
               Delete
             </AlertDialogAction>
@@ -281,8 +285,7 @@ export function ConversationList() {
       : conversations
 
     const sorted = [...filtered].sort(
-      (a, b) =>
-        new Date(b.updated).getTime() - new Date(a.updated).getTime()
+      (a, b) => new Date(b.updated).getTime() - new Date(a.updated).getTime()
     )
 
     return {

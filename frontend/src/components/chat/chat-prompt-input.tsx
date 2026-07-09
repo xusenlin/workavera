@@ -67,7 +67,8 @@ export function ChatPromptInput({
       if (appId) setText(`Edit AI micro app ${appId}: `)
     }
     window.addEventListener("ai-micro-app-edit", handleMicroAppEdit)
-    return () => window.removeEventListener("ai-micro-app-edit", handleMicroAppEdit)
+    return () =>
+      window.removeEventListener("ai-micro-app-edit", handleMicroAppEdit)
   }, [])
 
   const handleSubmit = async (message: PromptInputMessage) => {

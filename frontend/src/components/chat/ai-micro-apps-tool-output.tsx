@@ -100,7 +100,9 @@ function safeJsonParse(value: string): unknown {
   }
 }
 
-function appsFromResult(result: AIMicroAppToolResult | null): AIMicroAppSummary[] {
+function appsFromResult(
+  result: AIMicroAppToolResult | null
+): AIMicroAppSummary[] {
   if (!result) return []
   if (Array.isArray(result.items)) return result.items
   if (result.id) return [result]
@@ -112,10 +114,16 @@ function previewUrlFor(app: AIMicroAppSummary) {
 }
 
 function isMutationTool(toolName: string) {
-  return toolName === "replace_in_ai_micro_app" || toolName === "write_ai_micro_app_chunk"
+  return (
+    toolName === "replace_in_ai_micro_app" ||
+    toolName === "write_ai_micro_app_chunk"
+  )
 }
 
-function mutationSummary(toolName: string, result: AIMicroAppToolResult | null) {
+function mutationSummary(
+  toolName: string,
+  result: AIMicroAppToolResult | null
+) {
   if (toolName === "replace_in_ai_micro_app") {
     const count = result?.replacements ?? 0
     return count === 1 ? "Replaced 1 match" : `Replaced ${count} matches`
@@ -195,7 +203,9 @@ export function AIMicroAppsToolCard({ part }: { part: DynamicToolUIPart }) {
         {part.state === "output-available" && compactMutation && !isError ? (
           <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/20 px-3 py-2">
             <div className="min-w-0">
-              <p className="text-sm font-medium">{mutationSummary(part.toolName, result)}</p>
+              <p className="text-sm font-medium">
+                {mutationSummary(part.toolName, result)}
+              </p>
               {result?.id ? (
                 <p className="mt-0.5 truncate text-xs text-muted-foreground">
                   {result.name || "AI micro app"} · {result.id}
@@ -215,7 +225,9 @@ export function AIMicroAppsToolCard({ part }: { part: DynamicToolUIPart }) {
           </div>
         ) : null}
 
-        {part.state === "output-available" && apps.length > 0 && !compactMutation ? (
+        {part.state === "output-available" &&
+        apps.length > 0 &&
+        !compactMutation ? (
           <div className="space-y-2">
             {apps.map((app) => (
               <div key={app.id} className="rounded-md border bg-card p-3">
@@ -226,7 +238,10 @@ export function AIMicroAppsToolCard({ part }: { part: DynamicToolUIPart }) {
                         {app.name || "Untitled micro app"}
                       </span>
                       {app.appStatus ? (
-                        <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+                        <Badge
+                          variant="outline"
+                          className="h-5 px-1.5 text-[10px]"
+                        >
                           {app.appStatus}
                         </Badge>
                       ) : null}
@@ -238,7 +253,11 @@ export function AIMicroAppsToolCard({ part }: { part: DynamicToolUIPart }) {
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button variant="outline" size="sm" asChild>
-                    <a href={previewUrlFor(app)} target="_blank" rel="noreferrer">
+                    <a
+                      href={previewUrlFor(app)}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
                       <HugeiconsIcon icon={ArrowUpRightIcon} strokeWidth={2} />
                       Open
                     </a>
@@ -271,7 +290,10 @@ export function AIMicroAppsToolCard({ part }: { part: DynamicToolUIPart }) {
           </div>
         ) : null}
 
-        {part.state === "output-available" && apps.length === 0 && !isError && !compactMutation ? (
+        {part.state === "output-available" &&
+        apps.length === 0 &&
+        !isError &&
+        !compactMutation ? (
           <div className="flex flex-col items-center gap-2 rounded-md border border-dashed bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">
             <HugeiconsIcon
               icon={AppWindowIcon}

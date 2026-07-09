@@ -25,10 +25,7 @@ type ChatState = {
   togglePin: (id: string) => Promise<void>
   renameConversation: (id: string, title: string) => Promise<void>
   archiveConversation: (id: string) => Promise<void>
-  loadArchived: (
-    page?: number,
-    perPage?: number
-  ) => Promise<ConversationsPage>
+  loadArchived: (page?: number, perPage?: number) => Promise<ConversationsPage>
   unarchiveConversation: (id: string) => Promise<void>
 }
 
@@ -43,11 +40,13 @@ type ConversationsPage = {
 let initializationPromise: Promise<void> | null = null
 
 async function fetchPage(page: number) {
-  return pb.collection("chat_conversations").getList<Conversation>(page, PER_PAGE, {
-    filter: "status = 'active'",
-    sort: "-pinned,-last_message_at,-updated",
-    requestKey: null,
-  })
+  return pb
+    .collection("chat_conversations")
+    .getList<Conversation>(page, PER_PAGE, {
+      filter: "status = 'active'",
+      sort: "-pinned,-last_message_at,-updated",
+      requestKey: null,
+    })
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -80,7 +79,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
         })
         localStorage.removeItem("chat-storage")
       } catch (error) {
-        const message = extractErrorMessage(error, "Could not load conversations")
+        const message = extractErrorMessage(
+          error,
+          "Could not load conversations"
+        )
         set({ error: message, initialized: false })
         toast.error(message)
       } finally {
@@ -150,7 +152,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       await pb.collection("chat_conversations").delete(id)
       set((state) => {
-        const conversations = state.conversations.filter((item) => item.id !== id)
+        const conversations = state.conversations.filter(
+          (item) => item.id !== id
+        )
         const totalItems = Math.max(0, state.totalItems - 1)
         const totalPages = totalItems > 0 ? Math.ceil(totalItems / PER_PAGE) : 0
         return {
@@ -205,9 +209,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   archiveConversation: async (id) => {
     try {
-      await pb.collection("chat_conversations").update(id, { status: "archived" })
+      await pb
+        .collection("chat_conversations")
+        .update(id, { status: "archived" })
       set((state) => {
-        const conversations = state.conversations.filter((item) => item.id !== id)
+        const conversations = state.conversations.filter(
+          (item) => item.id !== id
+        )
         const totalItems = Math.max(0, state.totalItems - 1)
         const totalPages = totalItems > 0 ? Math.ceil(totalItems / PER_PAGE) : 0
         return {
@@ -227,11 +235,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   loadArchived: async (page = 1, perPage = 10) => {
-    return pb.collection("chat_conversations").getList<Conversation>(page, perPage, {
-      filter: "status = 'archived'",
-      sort: "-last_message_at,-updated",
-      requestKey: null,
-    })
+    return pb
+      .collection("chat_conversations")
+      .getList<Conversation>(page, perPage, {
+        filter: "status = 'archived'",
+        sort: "-last_message_at,-updated",
+        requestKey: null,
+      })
   },
 
   unarchiveConversation: async (id) => {
@@ -246,7 +256,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
         activeConversationId: state.activeConversationId ?? conversation.id,
       }))
     } catch (error) {
-      toast.error(extractErrorMessage(error, "Could not unarchive conversation"))
+      toast.error(
+        extractErrorMessage(error, "Could not unarchive conversation")
+      )
       throw error
     }
   },

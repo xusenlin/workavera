@@ -112,9 +112,7 @@ export function AvatarPicker({ value, name, onChange }: AvatarPickerProps) {
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-4">
         <Avatar size="lg" className="size-20">
-          {value && (
-            <AvatarImage src={value} alt={name} />
-          )}
+          {value && <AvatarImage src={value} alt={name} />}
           <AvatarFallback className="text-2xl">
             {getInitials(name || "?")}
           </AvatarFallback>

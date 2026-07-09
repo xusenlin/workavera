@@ -69,13 +69,18 @@ export function KanbanBoard({ onEditProject }: KanbanBoardProps) {
     if (!targetStateId || targetProjectId !== dragged.projectId) return
 
     const targetTodos = todos
-      .filter((todo) => todo.stateId === targetStateId && todo.id !== dragged.id)
+      .filter(
+        (todo) => todo.stateId === targetStateId && todo.id !== dragged.id
+      )
       .sort((a, b) => a.rank - b.rank)
-    const overIndex = over.data.current?.type === "todo"
-      ? targetTodos.findIndex((todo) => todo.id === over.id)
-      : targetTodos.length
+    const overIndex =
+      over.data.current?.type === "todo"
+        ? targetTodos.findIndex((todo) => todo.id === over.id)
+        : targetTodos.length
 
-    void moveTodo(dragged.id, targetStateId, Math.max(0, overIndex)).catch(() => {})
+    void moveTodo(dragged.id, targetStateId, Math.max(0, overIndex)).catch(
+      () => {}
+    )
   }
 
   const handleAddTask = (projectId: string, stateId: string) => {
@@ -103,9 +108,11 @@ export function KanbanBoard({ onEditProject }: KanbanBoardProps) {
   return (
     <>
       {error && (
-        <div className="border-destructive/30 bg-destructive/5 text-destructive mb-4 flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm">
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
           <span>{error}</span>
-          <Button variant="ghost" size="sm" onClick={clearError}>Dismiss</Button>
+          <Button variant="ghost" size="sm" onClick={clearError}>
+            Dismiss
+          </Button>
         </div>
       )}
 
@@ -129,9 +136,9 @@ export function KanbanBoard({ onEditProject }: KanbanBoardProps) {
           ))}
 
           {projects.length === 0 && initialized && (
-            <div className="bg-muted/20 flex min-h-48 flex-col items-center justify-center rounded-xl border border-dashed p-8 text-center">
+            <div className="flex min-h-48 flex-col items-center justify-center rounded-xl border border-dashed bg-muted/20 p-8 text-center">
               <p className="text-sm font-medium">No projects yet</p>
-              <p className="text-muted-foreground mt-1 text-xs">
+              <p className="mt-1 text-xs text-muted-foreground">
                 Create a project from a template to start planning work.
               </p>
             </div>
@@ -149,7 +156,7 @@ export function KanbanBoard({ onEditProject }: KanbanBoardProps) {
 
       {projectTotalPages > 0 && (
         <div className="flex items-center justify-between gap-2">
-          <span className="text-muted-foreground text-xs">
+          <span className="text-xs text-muted-foreground">
             {projectTotalItems} project{projectTotalItems === 1 ? "" : "s"}
           </span>
           <div className="flex items-center gap-2">
@@ -161,7 +168,7 @@ export function KanbanBoard({ onEditProject }: KanbanBoardProps) {
             >
               Previous
             </Button>
-            <span className="text-muted-foreground text-xs tabular-nums">
+            <span className="text-xs text-muted-foreground tabular-nums">
               {projectPage + 1} / {projectTotalPages}
             </span>
             <Button

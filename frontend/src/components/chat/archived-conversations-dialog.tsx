@@ -134,7 +134,7 @@ export function ArchivedConversationsDialog({
                   type="button"
                   variant="ghost"
                   size="icon-sm"
-                  className="text-muted-foreground hover:text-foreground cursor-pointer rounded-md p-1.5 transition-colors"
+                  className="cursor-pointer rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground"
                   aria-label="Unarchive"
                   onClick={() => void handleUnarchive(conversation.id)}
                 >

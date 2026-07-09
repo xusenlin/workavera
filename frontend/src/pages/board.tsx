@@ -27,12 +27,16 @@ export function BoardPage() {
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2.5">
-            <div className="bg-primary text-primary-foreground flex size-9 items-center justify-center rounded-lg">
-              <HugeiconsIcon icon={KanbanIcon} strokeWidth={2} className="size-4" />
+            <div className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+              <HugeiconsIcon
+                icon={KanbanIcon}
+                strokeWidth={2}
+                className="size-4"
+              />
             </div>
             <h1 className="text-2xl font-semibold tracking-tight">Board</h1>
           </div>
-          <p className="text-muted-foreground text-sm">
+          <p className="text-sm text-muted-foreground">
             Manage projects and tasks in a Kanban board. Drag cards between
             columns to update status.
           </p>

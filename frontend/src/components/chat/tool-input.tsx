@@ -48,5 +48,7 @@ function formatValue(key: string, value: unknown): string {
 }
 
 function trimLong(value: string): string {
-  return value.length > 160 ? value.slice(0, 160) + `... (${value.length} chars)` : value
+  return value.length > 160
+    ? value.slice(0, 160) + `... (${value.length} chars)`
+    : value
 }

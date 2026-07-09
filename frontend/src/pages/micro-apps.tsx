@@ -56,20 +56,24 @@ export function AIMicroAppsPage() {
         const filter = trimmed
           ? `name ~ "${trimmed}" || description ~ "${trimmed}"`
           : undefined
-        const result = await pb.collection("ai_micro_apps").getList<AIMicroAppRecord>(page, PAGE_SIZE, {
-          sort: "-updated",
-          filter,
-          requestKey: null,
-          signal: controller.signal,
-        })
+        const result = await pb
+          .collection("ai_micro_apps")
+          .getList<AIMicroAppRecord>(page, PAGE_SIZE, {
+            sort: "-updated",
+            filter,
+            requestKey: null,
+            signal: controller.signal,
+          })
         setApps(result.items)
         setTotalPages(result.totalPages || 1)
         setTotalItems(result.totalItems)
         setSelectedId((current) => {
           const requestedId = searchParams.get("app")
           if (result.items.length === 0) return null
-          if (requestedId && result.items.some((app) => app.id === requestedId)) return requestedId
-          if (current && result.items.some((app) => app.id === current)) return current
+          if (requestedId && result.items.some((app) => app.id === requestedId))
+            return requestedId
+          if (current && result.items.some((app) => app.id === current))
+            return current
           return result.items[0].id
         })
       } catch (err) {
@@ -94,7 +98,9 @@ export function AIMicroAppsPage() {
           <div className="flex items-center justify-between">
             <span className="text-sm font-semibold">AI Micro Apps</span>
             {!loading && totalItems > 0 ? (
-              <span className="text-xs text-muted-foreground">{totalItems}</span>
+              <span className="text-xs text-muted-foreground">
+                {totalItems}
+              </span>
             ) : null}
           </div>
           <div className="relative">
@@ -116,7 +122,7 @@ export function AIMicroAppsPage() {
         </div>
 
         {error ? (
-          <div className="border-destructive/30 bg-destructive/5 text-destructive m-2 rounded-lg border px-3 py-2 text-sm">
+          <div className="m-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
             {error}
           </div>
         ) : null}
@@ -128,24 +134,24 @@ export function AIMicroAppsPage() {
             <EmptyState />
           ) : (
             <div className="flex flex-col gap-1">
-                {apps.map((app) => (
-                  <button
-                    key={app.id}
-                    type="button"
-                    onClick={() => setSelectedId(app.id)}
-                    className={cn(
-                      "flex w-full cursor-pointer flex-col gap-1 rounded-lg px-3 py-2.5 text-left transition-colors",
-                      selectedId === app.id ? "bg-muted" : "hover:bg-muted/60"
-                    )}
-                  >
-                    <span className="line-clamp-1 text-sm font-medium text-foreground/90">
-                      {app.name}
-                    </span>
-                    <span className="line-clamp-2 text-xs text-muted-foreground">
-                      {app.description || "No description"}
-                    </span>
-                  </button>
-                ))}
+              {apps.map((app) => (
+                <button
+                  key={app.id}
+                  type="button"
+                  onClick={() => setSelectedId(app.id)}
+                  className={cn(
+                    "flex w-full cursor-pointer flex-col gap-1 rounded-lg px-3 py-2.5 text-left transition-colors",
+                    selectedId === app.id ? "bg-muted" : "hover:bg-muted/60"
+                  )}
+                >
+                  <span className="line-clamp-1 text-sm font-medium text-foreground/90">
+                    {app.name}
+                  </span>
+                  <span className="line-clamp-2 text-xs text-muted-foreground">
+                    {app.description || "No description"}
+                  </span>
+                </button>
+              ))}
             </div>
           )}
         </div>
@@ -158,7 +164,9 @@ export function AIMicroAppsPage() {
                   text="Prev"
                   onClick={() => setPage((current) => Math.max(1, current - 1))}
                   className={
-                    page <= 1 || loading ? "pointer-events-none opacity-50" : "cursor-pointer"
+                    page <= 1 || loading
+                      ? "pointer-events-none opacity-50"
+                      : "cursor-pointer"
                   }
                 />
               </PaginationItem>
@@ -168,7 +176,9 @@ export function AIMicroAppsPage() {
               <PaginationItem>
                 <PaginationNext
                   text="Next"
-                  onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                  onClick={() =>
+                    setPage((current) => Math.min(totalPages, current + 1))
+                  }
                   className={
                     page >= totalPages || loading
                       ? "pointer-events-none opacity-50"
@@ -182,41 +192,47 @@ export function AIMicroAppsPage() {
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col bg-background">
-          {selectedApp ? (
-            <>
-              <div className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-4">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{selectedApp.name}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {selectedApp.description || "Self-contained micro app"}
-                  </p>
-                </div>
-                <Button variant="ghost" size="icon-sm" asChild>
-                  <a
-                    href={`/api/ai-micro-apps/${selectedApp.id}/preview`}
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label="Open in new tab"
-                  >
-                    <HugeiconsIcon icon={ArrowUpRightIcon} strokeWidth={2} className="size-4" />
-                  </a>
-                </Button>
+        {selectedApp ? (
+          <>
+            <div className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-4">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold">
+                  {selectedApp.name}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {selectedApp.description || "Self-contained micro app"}
+                </p>
               </div>
+              <Button variant="ghost" size="icon-sm" asChild>
+                <a
+                  href={`/api/ai-micro-apps/${selectedApp.id}/preview`}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label="Open in new tab"
+                >
+                  <HugeiconsIcon
+                    icon={ArrowUpRightIcon}
+                    strokeWidth={2}
+                    className="size-4"
+                  />
+                </a>
+              </Button>
+            </div>
 
-              <div className="relative flex-1 overflow-hidden">
-                <iframe
-                  key={selectedApp.id}
-                  title={`${selectedApp.name} preview`}
-                  src={`/api/ai-micro-apps/${selectedApp.id}/preview`}
-                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-                  referrerPolicy="no-referrer"
-                  className="h-full w-full bg-white"
-                />
-              </div>
-            </>
-          ) : (
-            <PreviewEmptyState />
-          )}
+            <div className="relative flex-1 overflow-hidden">
+              <iframe
+                key={selectedApp.id}
+                title={`${selectedApp.name} preview`}
+                src={`/api/ai-micro-apps/${selectedApp.id}/preview`}
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                referrerPolicy="no-referrer"
+                className="h-full w-full bg-white"
+              />
+            </div>
+          </>
+        ) : (
+          <PreviewEmptyState />
+        )}
       </div>
     </div>
   )
@@ -241,10 +257,14 @@ function ListSkeleton() {
 
 function EmptyState() {
   return (
-    <div className="text-muted-foreground flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center text-sm">
-      <HugeiconsIcon icon={AppWindowIcon} strokeWidth={2} className="size-8 opacity-40" />
+    <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center text-sm text-muted-foreground">
+      <HugeiconsIcon
+        icon={AppWindowIcon}
+        strokeWidth={2}
+        className="size-8 opacity-40"
+      />
       <div>
-        <p className="text-foreground font-medium">No AI micro apps yet</p>
+        <p className="font-medium text-foreground">No AI micro apps yet</p>
         <p className="mt-1 text-xs">Ask the assistant to create one.</p>
       </div>
     </div>
@@ -253,8 +273,12 @@ function EmptyState() {
 
 function PreviewEmptyState() {
   return (
-    <div className="text-muted-foreground flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center text-sm">
-      <HugeiconsIcon icon={HtmlFile01Icon} strokeWidth={2} className="size-8 opacity-40" />
+    <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center text-sm text-muted-foreground">
+      <HugeiconsIcon
+        icon={HtmlFile01Icon}
+        strokeWidth={2}
+        className="size-8 opacity-40"
+      />
       <p className="text-xs">Select an app to preview</p>
     </div>
   )

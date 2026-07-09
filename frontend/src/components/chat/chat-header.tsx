@@ -163,7 +163,9 @@ export function ChatHeader({ conversation }: { conversation: Conversation }) {
           <Button
             variant="ghost"
             size="icon-sm"
-            onClick={() => void archiveConversation(conversation.id).catch(() => {})}
+            onClick={() =>
+              void archiveConversation(conversation.id).catch(() => {})
+            }
             disabled={conversation.status === "archived"}
             aria-label="Archive"
           >

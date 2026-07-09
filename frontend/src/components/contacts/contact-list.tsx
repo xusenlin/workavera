@@ -48,7 +48,9 @@ function ContactCard({
     >
       <div className="flex items-start gap-3">
         <Avatar size="lg" className="size-11">
-          {contact.avatar && <AvatarImage src={contact.avatar} alt={contact.name} />}
+          {contact.avatar && (
+            <AvatarImage src={contact.avatar} alt={contact.name} />
+          )}
           <AvatarFallback className="text-base">
             {getInitials(contact.name)}
           </AvatarFallback>
@@ -67,12 +69,12 @@ function ContactCard({
             )}
           </div>
           {contact.title && (
-            <p className="text-muted-foreground truncate text-sm">
+            <p className="truncate text-sm text-muted-foreground">
               {contact.title}
               {contact.company ? ` · ${contact.company}` : ""}
             </p>
           )}
-          <p className="text-muted-foreground/70 truncate font-mono text-xs">
+          <p className="truncate font-mono text-xs text-muted-foreground/70">
             {contact.id}
           </p>
         </div>
@@ -110,8 +112,12 @@ function ContactCard({
           {meta?.label}
         </Badge>
         {contact.email && (
-          <span className="text-muted-foreground flex items-center gap-1 truncate text-xs">
-            <HugeiconsIcon icon={Mail02Icon} strokeWidth={2} className="size-3" />
+          <span className="flex items-center gap-1 truncate text-xs text-muted-foreground">
+            <HugeiconsIcon
+              icon={Mail02Icon}
+              strokeWidth={2}
+              className="size-3"
+            />
             <span className="truncate">{contact.email}</span>
           </span>
         )}
@@ -134,10 +140,12 @@ function ContactSection({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
-        <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+        <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
           {label}
         </span>
-        <span className="text-muted-foreground/60 text-xs">{contacts.length}</span>
+        <span className="text-xs text-muted-foreground/60">
+          {contacts.length}
+        </span>
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {contacts.map((contact) => (
@@ -202,7 +210,7 @@ export function ContactList({
           <HugeiconsIcon
             icon={Search02Icon}
             strokeWidth={2}
-            className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2"
+            className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
           />
           <Input
             placeholder="Search contacts by name, email, title..."
@@ -231,7 +239,7 @@ export function ContactList({
 
       {/* List */}
       {loading ? (
-        <div className="text-muted-foreground flex flex-col items-center gap-2 py-16 text-center text-sm">
+        <div className="flex flex-col items-center gap-2 py-16 text-center text-sm text-muted-foreground">
           <HugeiconsIcon
             icon={Search02Icon}
             strokeWidth={2}
@@ -240,7 +248,7 @@ export function ContactList({
           <p>Loading contacts...</p>
         </div>
       ) : error ? (
-        <div className="text-muted-foreground flex flex-col items-center gap-2 py-16 text-center text-sm">
+        <div className="flex flex-col items-center gap-2 py-16 text-center text-sm text-muted-foreground">
           <p>{error}</p>
         </div>
       ) : hasResults ? (
@@ -250,10 +258,14 @@ export function ContactList({
             contacts={favorites}
             onSelect={onSelect}
           />
-          <ContactSection label="All contacts" contacts={all} onSelect={onSelect} />
+          <ContactSection
+            label="All contacts"
+            contacts={all}
+            onSelect={onSelect}
+          />
         </div>
       ) : (
-        <div className="text-muted-foreground flex flex-col items-center gap-2 py-16 text-center text-sm">
+        <div className="flex flex-col items-center gap-2 py-16 text-center text-sm text-muted-foreground">
           <HugeiconsIcon
             icon={Search02Icon}
             strokeWidth={2}
@@ -289,12 +301,15 @@ function FilterChip({
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
         active
-          ? "bg-foreground text-background border-foreground"
-          : "text-muted-foreground hover:bg-muted border-border"
+          ? "border-foreground bg-foreground text-background"
+          : "border-border text-muted-foreground hover:bg-muted"
       )}
     >
       {color && (
-        <span className="size-2 rounded-full" style={{ backgroundColor: color }} />
+        <span
+          className="size-2 rounded-full"
+          style={{ backgroundColor: color }}
+        />
       )}
       {label}
     </button>

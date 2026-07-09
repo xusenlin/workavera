@@ -1,8 +1,5 @@
 import { HugeiconsIcon } from "@hugeicons/react"
-import {
-  ChevronDownIcon,
-  ContactBookIcon,
-} from "@hugeicons/core-free-icons"
+import { ChevronDownIcon, ContactBookIcon } from "@hugeicons/core-free-icons"
 import {
   CheckCircleIcon,
   CircleIcon,
@@ -15,11 +12,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import {
   Tooltip,
