@@ -15,6 +15,7 @@ import (
 	"github.com/xusenlin/workavera/internal/contacts"
 	"github.com/xusenlin/workavera/internal/llm"
 	"github.com/xusenlin/workavera/internal/microapps"
+	"github.com/xusenlin/workavera/internal/reading"
 	_ "github.com/xusenlin/workavera/migrations"
 )
 
@@ -27,6 +28,7 @@ func main() {
 	board.Register(app)
 	contacts.Register(app)
 	microapps.Register(app)
+	reading.Register(app)
 	llm.Register(app)
 	chat.Register(app)
 

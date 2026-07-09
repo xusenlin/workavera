@@ -36,8 +36,20 @@ export const navGroups: NavGroup[] = [
     ],
   },
   {
-    label: "Workspace",
+    label: "Workflow",
     items: [
+      {
+        title: "Reading",
+        url: "/reading",
+        icon: BookOpen01Icon,
+        description: "Bookmarks and reading list",
+      },
+      {
+        title: "Contacts",
+        url: "/contacts",
+        icon: ContactBookIcon,
+        description: "Manage clients, partners, and collaborators",
+      },
       {
         title: "Chat",
         url: "/chat",
@@ -57,27 +69,10 @@ export const navGroups: NavGroup[] = [
         description: "Create notes, team documents, and public content",
       },
       {
-        title: "Contacts",
-        url: "/contacts",
-        icon: ContactBookIcon,
-        description: "Manage clients, partners, and collaborators",
-      },
-    ],
-  },
-  {
-    label: "Personal",
-    items: [
-      {
         title: "Calendar",
         url: "/calendar",
         icon: Calendar03Icon,
         description: "Schedule and events",
-      },
-      {
-        title: "Reading",
-        url: "/reading",
-        icon: BookOpen01Icon,
-        description: "Bookmarks and reading list",
       },
       {
         title: "AI Micro Apps",
@@ -85,6 +80,11 @@ export const navGroups: NavGroup[] = [
         icon: AppWindowIcon,
         description: "AI-generated self-contained micro apps",
       },
+    ],
+  },
+  {
+    label: "System",
+    items: [
       {
         title: "Settings",
         url: "/settings",

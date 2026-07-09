@@ -31,6 +31,25 @@ func NewFantasyRunner(toolFactory FantasyToolFactory) *FantasyRunner {
 	return &FantasyRunner{toolFactory: toolFactory}
 }
 
+func GenerateText(ctx context.Context, config ModelConfig, systemPrompt, prompt string) (string, error) {
+	model, err := languageModel(ctx, config)
+	if err != nil {
+		return "", err
+	}
+	opts := []fantasy.AgentOption{
+		fantasy.WithStopConditions(fantasy.StepCountIs(1)),
+		fantasy.WithMaxOutputTokens(maxAgentOutputTokens),
+	}
+	if systemPrompt != "" {
+		opts = append(opts, fantasy.WithSystemPrompt(systemPrompt))
+	}
+	result, err := fantasy.NewAgent(model, opts...).Generate(ctx, fantasy.AgentCall{Prompt: prompt})
+	if err != nil {
+		return "", err
+	}
+	return result.Response.Content.Text(), nil
+}
+
 func (r *FantasyRunner) Stream(ctx context.Context, request Request, emit EmitFunc) (Result, error) {
 	model, err := languageModel(ctx, request.Model)
 	if err != nil {
