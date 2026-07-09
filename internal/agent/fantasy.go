@@ -13,7 +13,10 @@ import (
 	"charm.land/fantasy/providers/openaicompat"
 )
 
-const maxAgentSteps = 12
+const (
+	maxAgentSteps        = 12
+	maxAgentOutputTokens = 16384
+)
 
 // FantasyRunner adapts Fantasy to the application's AI SDK UI compatible
 // stream protocol. PocketBase and application-domain services stay outside
@@ -34,7 +37,10 @@ func (r *FantasyRunner) Stream(ctx context.Context, request Request, emit EmitFu
 		return Result{}, err
 	}
 
-	opts := []fantasy.AgentOption{fantasy.WithStopConditions(fantasy.StepCountIs(maxAgentSteps))}
+	opts := []fantasy.AgentOption{
+		fantasy.WithStopConditions(fantasy.StepCountIs(maxAgentSteps)),
+		fantasy.WithMaxOutputTokens(maxAgentOutputTokens),
+	}
 	if r.toolFactory != nil {
 		opts = append(opts, fantasy.WithTools(r.toolFactory(request.ActorID)...))
 	}

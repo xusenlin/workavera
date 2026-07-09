@@ -6,7 +6,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 
 export function DashboardLayout() {
   const { pathname } = useLocation()
-  const isFullBleed = pathname.startsWith("/chat")
+  const isFullBleed = pathname.startsWith("/chat") || pathname.startsWith("/micro-apps")
 
   return (
     <SidebarProvider>

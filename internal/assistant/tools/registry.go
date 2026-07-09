@@ -21,11 +21,12 @@ func (f *Factory) ForActor(actorID string) []fantasy.AgentTool {
 		newFetchAndShowContactsTool(f.app, actorID),
 		newFetchAndShowBoardProjectsTool(f.app, actorID),
 		newFetchAndShowTasksTool(f.app, actorID),
-		newCreateHTMLAppTool(f.app, actorID),
-		newUpdateHTMLAppTool(f.app, actorID),
-		newGetHTMLAppTool(f.app, actorID),
-		newListHTMLAppsTool(f.app, actorID),
-		newSearchHTMLAppTool(f.app, actorID),
-		newReplaceInHTMLAppTool(f.app, actorID),
+		newCreateAIMicroAppTool(f.app, actorID),
+		newUpdateAIMicroAppTool(f.app, actorID),
+		newGetAIMicroAppTool(f.app, actorID),
+		newListAIMicroAppsTool(f.app, actorID),
+		newSearchAIMicroAppTool(f.app, actorID),
+		newReplaceInAIMicroAppTool(f.app, actorID),
+		newWriteAIMicroAppChunkTool(f.app, actorID),
 	}
 }

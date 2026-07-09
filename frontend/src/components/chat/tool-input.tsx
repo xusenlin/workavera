@@ -1,12 +1,13 @@
 import { cn } from "@/lib/utils"
 
 type ToolInputProps = {
-  input: Record<string, unknown> | undefined
+  input: unknown
   className?: string
 }
 
 export function ToolInput({ input, className }: ToolInputProps) {
-  if (!input || Object.keys(input).length === 0) return null
+  const formatted = formatInput(input)
+  if (!formatted) return null
 
   return (
     <code
@@ -15,15 +16,37 @@ export function ToolInput({ input, className }: ToolInputProps) {
         className
       )}
     >
-      {Object.entries(input)
-        .map(([key, value]) => `${key.toUpperCase()}=${formatValue(value)}`)
-        .join("  ")}
+      {formatted}
     </code>
   )
 }
 
-function formatValue(value: unknown): string {
+function formatInput(input: unknown): string {
+  if (input === null || input === undefined) return ""
+  if (typeof input === "string") return trimLong(input)
+  if (typeof input !== "object") return trimLong(String(input))
+  if (Array.isArray(input)) return trimLong(JSON.stringify(input))
+
+  const entries = Object.entries(input as Record<string, unknown>)
+  if (entries.length === 0) return ""
+  return entries
+    .map(([key, value]) => `${key.toUpperCase()}=${formatValue(key, value)}`)
+    .join("  ")
+}
+
+function formatValue(key: string, value: unknown): string {
   if (value === null || value === undefined) return ""
   if (Array.isArray(value)) return value.join(",")
-  return String(value)
+  if (typeof value === "object") return trimLong(JSON.stringify(value))
+  if (typeof value !== "string") return String(value)
+
+  const normalizedKey = key.toLowerCase()
+  if (["html", "content", "find", "replace"].includes(normalizedKey)) {
+    return value.length > 120 ? `<${value.length} chars hidden>` : value
+  }
+  return trimLong(value)
+}
+
+function trimLong(value: string): string {
+  return value.length > 160 ? value.slice(0, 160) + `... (${value.length} chars)` : value
 }

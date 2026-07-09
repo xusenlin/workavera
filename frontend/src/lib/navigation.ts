@@ -80,10 +80,10 @@ export const navGroups: NavGroup[] = [
         description: "Bookmarks and reading list",
       },
       {
-        title: "HTML Apps",
-        url: "/html-apps",
+        title: "AI Micro Apps",
+        url: "/micro-apps",
         icon: AppWindowIcon,
-        description: "AI-generated self-contained HTML apps",
+        description: "AI-generated self-contained micro apps",
       },
       {
         title: "Settings",

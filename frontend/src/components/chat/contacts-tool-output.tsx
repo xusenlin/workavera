@@ -163,6 +163,18 @@ export function ContactsToolCard({ part }: { part: ContactsToolPart }) {
         {/* Parameters */}
         <ToolInput input={part.input} />
 
+        {isLoading && (
+          <div className="rounded-md border bg-muted/20 px-3 py-2">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <ClockIcon className="size-3.5 animate-spin" />
+              <span>Loading contacts...</span>
+            </div>
+            <div className="mt-2 h-1 overflow-hidden rounded-full bg-muted">
+              <div className="h-full w-1/2 animate-pulse rounded-full bg-primary/60" />
+            </div>
+          </div>
+        )}
+
         {/* Error */}
         {isError && (
           <div className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">

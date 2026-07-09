@@ -1,4 +1,4 @@
-package htmlapps
+package microapps
 
 import (
 	"context"
@@ -13,15 +13,15 @@ import (
 )
 
 const (
-	CollectionName = "html_apps"
-	previewPrefix  = "/api/html-apps/"
+	CollectionName = "ai_micro_apps"
+	previewPrefix  = "/api/ai-micro-apps/"
 	previewSuffix  = "/preview"
 )
 
 type CreateInput struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
-	HTML        string `json:"html"`
+	HTML        string `json:"html,omitempty"`
 }
 
 type UpdateInput struct {
@@ -57,6 +57,12 @@ type ReplaceInput struct {
 	ReplaceAll bool   `json:"replaceAll,omitempty"`
 }
 
+type WriteChunkInput struct {
+	ID      string `json:"id"`
+	Content string `json:"content"`
+	Mode    string `json:"mode,omitempty"`
+}
+
 type Result struct {
 	OK           bool          `json:"ok"`
 	ID           string        `json:"id"`
@@ -71,6 +77,7 @@ type Result struct {
 	Page         int           `json:"page,omitempty"`
 	PerPage      int           `json:"perPage,omitempty"`
 	HasMore      bool          `json:"hasMore,omitempty"`
+	SourceLength int           `json:"sourceLength,omitempty"`
 	Replacements int           `json:"replacements,omitempty"`
 	Error        string        `json:"error"`
 }
@@ -93,7 +100,7 @@ type SearchMatch struct {
 
 func Register(app core.App) {
 	app.OnServe().BindFunc(func(event *core.ServeEvent) error {
-		event.Router.GET("/api/html-apps/{id}/preview", preview)
+		event.Router.GET("/api/ai-micro-apps/{id}/preview", preview)
 		return event.Next()
 	})
 
@@ -113,13 +120,17 @@ func Create(ctx context.Context, app core.App, actorID string, input CreateInput
 	if name == "" {
 		return errorResult("", "invalid_input", "Name is required.")
 	}
-	file, err := htmlFile(input.HTML)
+	html := input.HTML
+	if strings.TrimSpace(html) == "" {
+		html = "<!doctype html>\n"
+	}
+	file, err := htmlFile(html)
 	if err != nil {
 		return errorResult("", "invalid_input", err.Error())
 	}
 	collection, err := app.FindCollectionByNameOrId(CollectionName)
 	if err != nil {
-		return errorResult("", "error", "HTML apps collection is unavailable.")
+		return errorResult("", "error", "AI micro apps collection is unavailable.")
 	}
 	record := core.NewRecord(collection)
 	record.Set("name", name)
@@ -128,7 +139,7 @@ func Create(ctx context.Context, app core.App, actorID string, input CreateInput
 	record.Set("status", "published")
 	record.Set("html_file", file)
 	if err := app.Save(record); err != nil {
-		return errorResult("", "error", "Could not create HTML app.")
+		return errorResult("", "error", "Could not create AI micro app.")
 	}
 	_ = ctx
 	return resultForRecord(record, "created")
@@ -172,7 +183,7 @@ func Update(ctx context.Context, app core.App, actorID string, input UpdateInput
 		return resultForRecord(record, "unchanged")
 	}
 	if err := app.Save(record); err != nil {
-		return errorResult(input.ID, "error", "Could not update HTML app.")
+		return errorResult(input.ID, "error", "Could not update AI micro app.")
 	}
 	_ = ctx
 	return resultForRecord(record, "updated")
@@ -187,7 +198,7 @@ func Get(ctx context.Context, app core.App, actorID string, input GetInput) Resu
 	if input.IncludeHTML {
 		html, err := readHTML(ctx, app, record)
 		if err != nil {
-			return errorResult(input.ID, "error", "Could not read HTML app source.")
+			return errorResult(input.ID, "error", "Could not read AI micro app source.")
 		}
 		res.HTML = html
 	}
@@ -221,7 +232,7 @@ func List(ctx context.Context, app core.App, actorID string, input ListInput) Re
 	}
 	records, err := app.FindRecordsByFilter(CollectionName, filter, "-updated", perPage+1, (page-1)*perPage, params)
 	if err != nil {
-		return errorResult("", "error", "Could not list HTML apps.")
+		return errorResult("", "error", "Could not list AI micro apps.")
 	}
 	if err := ctx.Err(); err != nil {
 		return errorResult("", "error", "Request was cancelled.")
@@ -248,7 +259,7 @@ func Search(ctx context.Context, app core.App, actorID string, input SearchInput
 	}
 	html, err := readHTML(ctx, app, record)
 	if err != nil {
-		return errorResult(input.ID, "error", "Could not read HTML app source.")
+		return errorResult(input.ID, "error", "Could not read AI micro app source.")
 	}
 	contextChars := input.ContextChars
 	if contextChars <= 0 {
@@ -287,13 +298,13 @@ func Replace(ctx context.Context, app core.App, actorID string, input ReplaceInp
 	}
 	html, err := readHTML(ctx, app, record)
 	if err != nil {
-		return errorResult(input.ID, "error", "Could not read HTML app source.")
+		return errorResult(input.ID, "error", "Could not read AI micro app source.")
 	}
 	updated, replacements := replaceHTML(html, input.Find, input.Replace, input.ReplaceAll)
 	if replacements == 0 {
 		res = resultForRecord(record, "not_found")
 		res.OK = false
-		res.Error = "Find text was not found in the HTML app."
+		res.Error = "Find text was not found in the AI micro app."
 		return res
 	}
 	file, err := htmlFile(updated)
@@ -302,21 +313,57 @@ func Replace(ctx context.Context, app core.App, actorID string, input ReplaceInp
 	}
 	record.Set("html_file", file)
 	if err := app.Save(record); err != nil {
-		return errorResult(input.ID, "error", "Could not update HTML app.")
+		return errorResult(input.ID, "error", "Could not update AI micro app.")
 	}
 	res = resultForRecord(record, "updated")
 	res.Replacements = replacements
 	return res
 }
 
+func WriteChunk(ctx context.Context, app core.App, actorID string, input WriteChunkInput) Result {
+	if input.Content == "" {
+		return errorResult(input.ID, "invalid_input", "Content is required.")
+	}
+	mode := strings.TrimSpace(input.Mode)
+	if mode == "" {
+		mode = "append"
+	}
+	if mode != "append" && mode != "replace" {
+		return errorResult(input.ID, "invalid_input", "Mode must be append or replace.")
+	}
+	record, res := findOwned(app, actorID, input.ID)
+	if !res.OK {
+		return res
+	}
+	html := input.Content
+	if mode == "append" {
+		current, err := readHTML(ctx, app, record)
+		if err != nil {
+			return errorResult(input.ID, "error", "Could not read AI micro app source.")
+		}
+		html = current + input.Content
+	}
+	file, err := htmlFile(html)
+	if err != nil {
+		return errorResult(input.ID, "invalid_input", err.Error())
+	}
+	record.Set("html_file", file)
+	if err := app.Save(record); err != nil {
+		return errorResult(input.ID, "error", "Could not update AI micro app.")
+	}
+	res = resultForRecord(record, "updated")
+	res.SourceLength = len(html)
+	return res
+}
+
 func preview(event *core.RequestEvent) error {
 	record, err := event.App.FindRecordById(CollectionName, event.Request.PathValue("id"))
 	if err != nil || record.GetString("status") != "published" {
-		return event.NotFoundError("HTML app not found.", nil)
+		return event.NotFoundError("AI micro app not found.", nil)
 	}
 	html, err := readHTML(event.Request.Context(), event.App, record)
 	if err != nil {
-		return event.NotFoundError("HTML app not found.", err)
+		return event.NotFoundError("AI micro app not found.", err)
 	}
 	event.Response.Header().Del("X-Frame-Options")
 	event.Response.Header().Set("Content-Security-Policy", "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data: https:; connect-src 'self' https:; frame-ancestors 'self'")
@@ -327,14 +374,14 @@ func preview(event *core.RequestEvent) error {
 
 func findOwned(app core.App, actorID string, id string) (*core.Record, Result) {
 	if strings.TrimSpace(id) == "" {
-		return nil, errorResult(id, "invalid_input", "HTML app id is required.")
+		return nil, errorResult(id, "invalid_input", "AI micro app id is required.")
 	}
 	record, err := app.FindRecordById(CollectionName, id)
 	if err != nil {
-		return nil, errorResult(id, "not_found", "HTML app not found.")
+		return nil, errorResult(id, "not_found", "AI micro app not found.")
 	}
 	if record.GetString("owner") != actorID {
-		return nil, errorResult(id, "forbidden", "You do not have access to this HTML app.")
+		return nil, errorResult(id, "forbidden", "You do not have access to this AI micro app.")
 	}
 	return record, Result{OK: true, ID: record.Id, PreviewURL: PreviewURL(record.Id), Error: ""}
 }

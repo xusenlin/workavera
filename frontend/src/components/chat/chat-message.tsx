@@ -23,6 +23,17 @@ import type { ChatUIMessage } from "@/types/chat"
 import { ContactsToolCard } from "./contacts-tool-output"
 import { BoardProjectsToolCard } from "./board-projects-tool-output"
 import { TasksToolCard } from "./tasks-tool-output"
+import { AIMicroAppsToolCard } from "./ai-micro-apps-tool-output"
+
+const aiMicroAppToolNames = new Set([
+  "create_ai_micro_app",
+  "update_ai_micro_app",
+  "get_ai_micro_app",
+  "list_ai_micro_apps",
+  "search_ai_micro_app",
+  "replace_in_ai_micro_app",
+  "write_ai_micro_app_chunk",
+])
 
 function MessageParts({ message }: { message: ChatUIMessage }) {
   return message.parts.map((part, index) => {
@@ -55,6 +66,9 @@ function MessageParts({ message }: { message: ChatUIMessage }) {
         }
         if (part.toolName === "fetch_and_show_tasks") {
           return <TasksToolCard key={part.toolCallId} part={part} />
+        }
+        if (aiMicroAppToolNames.has(part.toolName)) {
+          return <AIMicroAppsToolCard key={part.toolCallId} part={part} />
         }
         return (
           <Tool

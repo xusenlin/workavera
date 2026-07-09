@@ -21,6 +21,8 @@ import { isValidElement } from "react";
 
 import { CodeBlock } from "./code-block";
 
+const DISPLAY_CHAR_LIMIT = 1200;
+
 export type ToolProps = ComponentProps<typeof Collapsible>;
 
 export const Tool = ({ className, ...props }: ToolProps) => (
@@ -122,7 +124,7 @@ export const ToolInput = ({ className, input, ...props }: ToolInputProps) => (
       Parameters
     </h4>
     <div className="rounded-md bg-muted/50">
-      <CodeBlock code={JSON.stringify(input, null, 2)} language="json" />
+      <CodeBlock code={compactJsonForDisplay(input)} language="json" />
     </div>
   </div>
 );
@@ -146,10 +148,10 @@ export const ToolOutput = ({
 
   if (typeof output === "object" && !isValidElement(output)) {
     Output = (
-      <CodeBlock code={JSON.stringify(output, null, 2)} language="json" />
+      <CodeBlock code={compactJsonForDisplay(output)} language="json" />
     );
   } else if (typeof output === "string") {
-    Output = <CodeBlock code={output} language="json" />;
+    Output = <CodeBlock code={compactTextForDisplay(output)} language="json" />;
   }
 
   return (
@@ -171,3 +173,12 @@ export const ToolOutput = ({
     </div>
   );
 };
+
+function compactJsonForDisplay(value: unknown): string {
+  return compactTextForDisplay(JSON.stringify(value, null, 2));
+}
+
+function compactTextForDisplay(value: string): string {
+  if (value.length <= DISPLAY_CHAR_LIMIT) return value;
+  return `${value.slice(0, DISPLAY_CHAR_LIMIT)}\n... (${value.length} chars total, shortened in UI only)`;
+}

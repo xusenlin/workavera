@@ -6,19 +6,19 @@ import (
 	"github.com/pocketbase/pocketbase/tools/types"
 )
 
-const htmlAppsCollection = "html_apps"
+const aiMicroAppsCollection = "ai_micro_apps"
 
 func init() {
-	m.Register(createHTMLAppsCollection, dropHTMLAppsCollection)
+	m.Register(createAIMicroAppsCollection, dropAIMicroAppsCollection)
 }
 
-func createHTMLAppsCollection(app core.App) error {
+func createAIMicroAppsCollection(app core.App) error {
 	users, err := app.FindCollectionByNameOrId(usersCollectionName)
 	if err != nil {
 		return err
 	}
 
-	apps := core.NewBaseCollection(htmlAppsCollection)
+	apps := core.NewBaseCollection(aiMicroAppsCollection)
 	apps.Fields.Add(
 		&core.TextField{Name: "name", Required: true, Max: 120, Presentable: true},
 		&core.TextField{Name: "description", Max: 1000},
@@ -29,7 +29,7 @@ func createHTMLAppsCollection(app core.App) error {
 		&core.AutodateField{Name: "created", OnCreate: true},
 		&core.AutodateField{Name: "updated", OnCreate: true, OnUpdate: true},
 	)
-	apps.AddIndex("idx_html_apps_owner_updated", false, "owner, updated", "")
+	apps.AddIndex("idx_ai_micro_apps_owner_updated", false, "owner, updated", "")
 	apps.ListRule = types.Pointer(`@request.auth.id != "" && owner = @request.auth.id`)
 	apps.ViewRule = apps.ListRule
 	apps.CreateRule = types.Pointer(`@request.auth.id != ""`)
@@ -39,8 +39,8 @@ func createHTMLAppsCollection(app core.App) error {
 	return app.Save(apps)
 }
 
-func dropHTMLAppsCollection(app core.App) error {
-	collection, err := app.FindCollectionByNameOrId(htmlAppsCollection)
+func dropAIMicroAppsCollection(app core.App) error {
+	collection, err := app.FindCollectionByNameOrId(aiMicroAppsCollection)
 	if err != nil {
 		return err
 	}

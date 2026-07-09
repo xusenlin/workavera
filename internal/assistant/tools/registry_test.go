@@ -5,8 +5,8 @@ import "testing"
 func TestFactoryRegistersOnlyProductionTools(t *testing.T) {
 	factory := NewFactory(nil)
 	registered := factory.ForActor("actor-1")
-	if len(registered) != 9 {
-		t.Fatalf("expected nine production tools, got %d", len(registered))
+	if len(registered) != 10 {
+		t.Fatalf("expected ten production tools, got %d", len(registered))
 	}
 	names := map[string]bool{}
 	for _, tool := range registered {
@@ -16,12 +16,13 @@ func TestFactoryRegistersOnlyProductionTools(t *testing.T) {
 		"fetch_and_show_contacts",
 		"fetch_and_show_board_projects",
 		"fetch_and_show_tasks",
-		"create_html_app",
-		"update_html_app",
-		"get_html_app",
-		"list_html_apps",
-		"search_html_app",
-		"replace_in_html_app",
+		"create_ai_micro_app",
+		"update_ai_micro_app",
+		"get_ai_micro_app",
+		"list_ai_micro_apps",
+		"search_ai_micro_app",
+		"replace_in_ai_micro_app",
+		"write_ai_micro_app_chunk",
 	} {
 		if !names[name] {
 			t.Fatalf("missing production tool %q in registry: %#v", name, names)

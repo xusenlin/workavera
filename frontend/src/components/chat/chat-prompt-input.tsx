@@ -49,12 +49,26 @@ export function ChatPromptInput({
     string | null
   >(initialModelConfigId || null)
   const modelConfigId = selectedModelConfigId ?? defaultModelId
-  const [text, setText] = useState("")
+  const [text, setText] = useState(() => {
+    const appId = sessionStorage.getItem("aiMicroAppEditId")
+    if (!appId) return ""
+    sessionStorage.removeItem("aiMicroAppEditId")
+    return `Edit AI micro app ${appId}: `
+  })
   const activeRunId = useRef<string | null>(null)
 
   useEffect(() => {
     if (status === "ready" || status === "error") activeRunId.current = null
   }, [status])
+
+  useEffect(() => {
+    function handleMicroAppEdit(event: Event) {
+      const appId = (event as CustomEvent<string>).detail
+      if (appId) setText(`Edit AI micro app ${appId}: `)
+    }
+    window.addEventListener("ai-micro-app-edit", handleMicroAppEdit)
+    return () => window.removeEventListener("ai-micro-app-edit", handleMicroAppEdit)
+  }, [])
 
   const handleSubmit = async (message: PromptInputMessage) => {
     const content = message.text.trim()
