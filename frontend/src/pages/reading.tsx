@@ -107,6 +107,7 @@ export function ReadingPage() {
   const [addForm, setAddForm] = useState<ItemForm>(emptyForm)
   const [detailForm, setDetailForm] = useState<ItemForm>(emptyForm)
   const [summarizeError, setSummarizeError] = useState<string | null>(null)
+  const [summarizeConfirmOpen, setSummarizeConfirmOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<ReadingItem | null>(null)
 
   const items = useReadingStore((s) => s.items)
@@ -443,7 +444,7 @@ export function ReadingPage() {
               <div className="flex gap-2">
                 <Button
                   variant="secondary"
-                  onClick={() => void handleSummarize()}
+                  onClick={() => setSummarizeConfirmOpen(true)}
                   disabled={summarizing || saving || !detailForm.url.trim()}
                 >
                   {summarizing
@@ -497,6 +498,28 @@ export function ReadingPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={summarizeConfirmOpen}
+        onOpenChange={setSummarizeConfirmOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Fetch and summarize?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will fetch the article content from the URL and regenerate
+              the summary. Existing content, summary, and key points will be
+              overwritten.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void handleSummarize()}>
+              Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={deleteTarget != null}
