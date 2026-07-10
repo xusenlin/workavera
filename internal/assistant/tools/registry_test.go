@@ -5,8 +5,8 @@ import "testing"
 func TestFactoryRegistersOnlyProductionTools(t *testing.T) {
 	factory := NewFactory(nil)
 	registered := factory.ForActor("actor-1")
-	if len(registered) != 10 {
-		t.Fatalf("expected ten production tools, got %d", len(registered))
+	if len(registered) != 15 {
+		t.Fatalf("expected fifteen production tools, got %d", len(registered))
 	}
 	names := map[string]bool{}
 	for _, tool := range registered {
@@ -15,7 +15,12 @@ func TestFactoryRegistersOnlyProductionTools(t *testing.T) {
 	for _, name := range []string{
 		"contacts_search",
 		"board_search_projects",
+		"board_get_project",
 		"board_search_tasks",
+		"reading_search",
+		"reading_upsert",
+		"reading_get",
+		"reading_summarize",
 		"microapps_create",
 		"microapps_update",
 		"microapps_get",

@@ -22,6 +22,10 @@ type boardSearchTasksInput struct {
 	UserIDs   []string `json:"userIds,omitempty" description:"Optional list of user IDs to filter tasks where any of these users are assignees"`
 }
 
+type boardGetProjectInput struct {
+	ID string `json:"id" description:"Project ID (required)"`
+}
+
 func newBoardSearchProjectsTool(app core.App, actorID string) fantasy.AgentTool {
 	return fantasy.NewAgentTool(
 		"board_search_projects",
@@ -63,6 +67,25 @@ func newBoardSearchTasksTool(app core.App, actorID string) fantasy.AgentTool {
 			data, err := json.Marshal(result)
 			if err != nil {
 				return fantasy.NewTextErrorResponse("Failed to serialize board tasks results"), nil
+			}
+			return fantasy.NewTextResponse(string(data)), nil
+		},
+	)
+}
+
+func newBoardGetProjectTool(app core.App, actorID string) fantasy.AgentTool {
+	return fantasy.NewAgentTool(
+		"board_get_project",
+		"Get a single board project by ID, including its states with task counts.",
+		func(ctx context.Context, input boardGetProjectInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
+			result, err := board.GetVisibleProject(ctx, app, actorID, input.ID)
+			if err != nil {
+				app.Logger().Error("assistant board get project tool failed", "actorId", actorID, "error", err)
+				return fantasy.NewTextErrorResponse("Board project not found"), nil
+			}
+			data, err := json.Marshal(result)
+			if err != nil {
+				return fantasy.NewTextErrorResponse("Failed to serialize board project"), nil
 			}
 			return fantasy.NewTextResponse(string(data)), nil
 		},

@@ -120,6 +120,49 @@ func SearchVisibleProjects(ctx context.Context, app core.App, actorID string, op
 	return result, nil
 }
 
+// GetVisibleProject returns a single project by ID if it is visible to the
+// actor (owner or member). The result includes states with task counts.
+func GetVisibleProject(ctx context.Context, app core.App, actorID, projectID string) (ProjectSummary, error) {
+	if actorID == "" {
+		return ProjectSummary{}, errors.New("missing actor")
+	}
+	if err := ctx.Err(); err != nil {
+		return ProjectSummary{}, err
+	}
+	if _, err := app.FindRecordById("users", actorID); err != nil {
+		return ProjectSummary{}, errors.New("actor is not an active user")
+	}
+
+	projectID = strings.TrimSpace(projectID)
+	if projectID == "" {
+		return ProjectSummary{}, errors.New("project ID is required")
+	}
+
+	record, err := app.FindRecordById(boardProjectsCollection, projectID)
+	if err != nil {
+		return ProjectSummary{}, errors.New("project not found")
+	}
+	visible, err := projectVisibleTo(app, record, actorID)
+	if err != nil {
+		return ProjectSummary{}, err
+	}
+	if !visible {
+		return ProjectSummary{}, errors.New("project not found")
+	}
+
+	states, err := loadProjectStatesWithCounts(ctx, app, record.Id)
+	if err != nil {
+		return ProjectSummary{}, err
+	}
+	return ProjectSummary{
+		ID:          record.Id,
+		Name:        record.GetString("name"),
+		Description: record.GetString("description"),
+		Archived:    record.GetBool("archived"),
+		States:      states,
+	}, nil
+}
+
 // loadProjectStatesWithCounts returns the states of a project sorted by
 // sort_order, each annotated with the number of tasks currently in that state.
 func loadProjectStatesWithCounts(ctx context.Context, app core.App, projectID string) ([]ProjectStateSummary, error) {
