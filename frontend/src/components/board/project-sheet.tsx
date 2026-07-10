@@ -941,14 +941,18 @@ function LabelsEditSection({ project }: { project: Project }) {
   const updateDraft = (id: string, key: keyof LabelDraft, value: string) => {
     const original = projectLabels.find((l) => l.id === id)
     if (!original) return
-    setDrafts((prev) => ({
-      ...prev,
-      [id]: {
-        name: prev[id]?.name ?? original.name,
-        color: prev[id]?.color ?? original.color,
-        [key]: value,
-      },
-    }))
+    setDrafts((prev) => {
+      const existing = prev[id]
+      return {
+        ...prev,
+        [id]: {
+          id,
+          name: existing?.name ?? original.name,
+          color: existing?.color ?? original.color,
+          [key]: value,
+        },
+      }
+    })
   }
 
   const handleSave = async (id: string) => {

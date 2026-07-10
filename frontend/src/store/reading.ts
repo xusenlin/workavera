@@ -17,6 +17,7 @@ type ReadingItemRecord = RecordModel & {
   content_text?: string
   summary?: string
   key_points?: unknown
+  summary_language?: string
 }
 
 type BoardProjectRecord = RecordModel & {
@@ -36,6 +37,7 @@ export type ReadingItem = {
   contentText?: string
   summary?: string
   keyPoints: string[]
+  summaryLanguage?: string
   createdAt: string
   updatedAt: string
 }
@@ -55,6 +57,7 @@ export type ReadingItemInput = {
   contentText?: string
   summary?: string
   keyPoints?: string[]
+  summaryLanguage?: string
 }
 
 type ReadingState = {
@@ -108,6 +111,7 @@ function toReadingItem(record: ReadingItemRecord): ReadingItem {
     contentText: record.content_text || undefined,
     summary: record.summary || undefined,
     keyPoints: stringArray(record.key_points),
+    summaryLanguage: record.summary_language || undefined,
     createdAt: record.created,
     updatedAt: record.updated,
   }
@@ -126,6 +130,8 @@ function toRecord(input: Partial<ReadingItemInput>) {
     record.content_text = input.contentText || ""
   if (input.summary !== undefined) record.summary = input.summary || ""
   if (input.keyPoints !== undefined) record.key_points = input.keyPoints
+  if (input.summaryLanguage !== undefined)
+    record.summary_language = input.summaryLanguage || ""
   return record
 }
 

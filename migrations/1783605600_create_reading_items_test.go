@@ -38,6 +38,9 @@ func TestReadingItemsMigration(t *testing.T) {
 	if _, ok := items.Fields.GetByName("key_points").(*core.JSONField); !ok {
 		t.Fatal("reading items must expose key_points as JSON")
 	}
+	if _, ok := items.Fields.GetByName("summary_language").(*core.TextField); !ok {
+		t.Fatal("reading items must expose summary_language as a text field")
+	}
 	if items.Fields.GetByName("created") == nil || items.Fields.GetByName("updated") == nil {
 		t.Fatal("reading items must expose created and updated timestamps")
 	}

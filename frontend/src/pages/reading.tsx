@@ -4,10 +4,12 @@ import { HugeiconsIcon } from "@hugeicons/react"
 import {
   Add01Icon,
   Archive02Icon,
+  ArrowDown01Icon,
   ArrowUpRightIcon,
   BookOpen01Icon,
   Delete02Icon,
   Search02Icon,
+  Tick02Icon,
 } from "@hugeicons/core-free-icons"
 
 import { Badge } from "@/components/ui/badge"
@@ -29,6 +31,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command"
 import {
   Dialog,
   DialogContent,
@@ -39,6 +42,11 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import {
   Select,
   SelectContent,
@@ -84,6 +92,7 @@ type ItemForm = {
   summary: string
   keyPoints: string
   status: ReadingStatus
+  summaryLanguage: string
 }
 
 const emptyForm: ItemForm = {
@@ -96,7 +105,14 @@ const emptyForm: ItemForm = {
   summary: "",
   keyPoints: "",
   status: "unread",
+  summaryLanguage: "English",
 }
+
+const SUMMARY_LANGUAGES = [
+  { value: "English", label: "English" },
+  { value: "中文", label: "中文" },
+  { value: "日本語", label: "日本語" },
+]
 
 export function ReadingPage() {
   const [addOpen, setAddOpen] = useState(false)
@@ -148,7 +164,7 @@ export function ReadingPage() {
         ...item.tags,
         ...item.keyPoints,
       ]
-        .filter(Boolean)
+        .filter((value): value is string => Boolean(value))
         .some((value) => value.toLowerCase().includes(normalized))
     })
   }, [items, projectFilter, query, statusFilter])
@@ -177,7 +193,7 @@ export function ReadingPage() {
     if (!selectedItem) return
     setSummarizeError(null)
     const toastId = toast.loading(
-      "正在抓取文章内容并使用默认模型生成中文总结..."
+      `Fetching article and generating summary in ${detailForm.summaryLanguage || "English"}...`
     )
     try {
       await summarizeItem(selectedItem.id)
@@ -185,9 +201,9 @@ export function ReadingPage() {
         .getState()
         .items.find((item) => item.id === selectedItem.id)
       if (next) setDetailForm(toForm(next))
-      toast.success("文章已抓取并总结", { id: toastId })
+      toast.success("Article fetched and summarized", { id: toastId })
     } catch (error) {
-      const message = error instanceof Error ? error.message : "抓取或总结失败"
+      const message = error instanceof Error ? error.message : "Failed to fetch or summarize"
       setSummarizeError(message)
       toast.error(message, { id: toastId })
     }
@@ -630,6 +646,15 @@ function ItemFormFields({
         />
       </div>
       <div className="grid gap-2">
+        <Label>AI summary language</Label>
+        <LanguageCombobox
+          value={form.summaryLanguage}
+          onChange={(summaryLanguage) =>
+            setForm({ ...form, summaryLanguage })
+          }
+        />
+      </div>
+      <div className="grid gap-2">
         <Label htmlFor={compact ? "add-description" : "detail-description"}>
           Description
         </Label>
@@ -696,6 +721,63 @@ function StatusBadge({ status }: { status: ReadingStatus }) {
   return <Badge variant={meta.variant}>{meta.label}</Badge>
 }
 
+function LanguageCombobox({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (value: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <div className="relative">
+          <Input
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder="English, 中文, 日本語, ..."
+            className="pr-8"
+          />
+          <HugeiconsIcon
+            icon={ArrowDown01Icon}
+            strokeWidth={2}
+            className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted-foreground"
+          />
+        </div>
+      </PopoverTrigger>
+      <PopoverContent className="w-(--radix-popover-trigger-width) p-0" align="start">
+        <Command>
+          <CommandList>
+            <CommandGroup>
+              {SUMMARY_LANGUAGES.map((lang) => (
+                <CommandItem
+                  key={lang.value}
+                  value={lang.value}
+                  onSelect={() => {
+                    onChange(lang.value)
+                    setOpen(false)
+                  }}
+                >
+                  {lang.label}
+                  {value === lang.value ? (
+                    <HugeiconsIcon
+                      icon={Tick02Icon}
+                      strokeWidth={2}
+                      className="ml-auto size-4"
+                    />
+                  ) : null}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 function TagList({ tags }: { tags: string[] }) {
   if (tags.length === 0) return <span className="text-muted-foreground">-</span>
   return (
@@ -723,6 +805,7 @@ function toForm(item: ReadingItem): ItemForm {
     summary: item.summary || "",
     keyPoints: item.keyPoints.join("\n"),
     status: item.status,
+    summaryLanguage: item.summaryLanguage || "English",
   }
 }
 
@@ -737,6 +820,7 @@ function fromForm(form: ItemForm) {
     contentText: form.contentText.trim(),
     summary: form.summary.trim(),
     keyPoints: splitLines(form.keyPoints),
+    summaryLanguage: form.summaryLanguage.trim() || "English",
   }
 }
 

@@ -39,6 +39,7 @@ func createReadingItemsCollection(app core.App) error {
 		&core.TextField{Name: "content_text", Max: 256 * 1024},
 		&core.TextField{Name: "summary", Max: 64 * 1024},
 		&core.JSONField{Name: "key_points", MaxSize: 64 * 1024},
+		&core.TextField{Name: "summary_language", Max: 100},
 		&core.AutodateField{Name: "created", OnCreate: true},
 		&core.AutodateField{Name: "updated", OnCreate: true, OnUpdate: true},
 	)

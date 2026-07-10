@@ -73,7 +73,7 @@ func summarizeItem(event *core.RequestEvent) error {
 		return event.BadRequestError("Article was fetched, but the default model has no API key.", nil)
 	}
 
-	payload, err := summarizeContent(ctx, model, item.GetString("title"), item.GetString("url"), content)
+	payload, err := summarizeContent(ctx, model, item.GetString("title"), item.GetString("url"), content, item.GetString("summary_language"))
 	if err != nil {
 		return event.BadRequestError("Article was fetched, but summarization failed.", err)
 	}
@@ -178,28 +178,42 @@ func normalizeWhitespace(value string) string {
 	return strings.Join(strings.Fields(value), " ")
 }
 
-func summarizeContent(ctx context.Context, model workagent.ModelConfig, title, sourceURL, content string) (summaryPayload, error) {
+func summarizeContent(ctx context.Context, model workagent.ModelConfig, title, sourceURL, content, language string) (summaryPayload, error) {
 	if len(content) > 50000 {
 		content = content[:50000]
 	}
-	prompt := fmt.Sprintf(`请阅读下面的资料并用中文总结。
 
-要求：
-- 只输出 JSON，不要输出 Markdown 或解释文字。
-- JSON 字段必须是 summary 和 key_points。
-- summary 是 2 到 4 句中文摘要。
-- key_points 是 3 到 8 条中文要点数组。
+	systemPrompt, userPrompt := buildSummaryPrompt(title, sourceURL, content, language)
 
-标题：%s
-链接：%s
-正文：
-%s`, title, sourceURL, content)
-
-	text, err := workagent.GenerateText(ctx, model, "你是 Workavera 的阅读资料整理助手，负责把外部资料压缩成准确、可行动的中文摘要。", prompt)
+	text, err := workagent.GenerateText(ctx, model, systemPrompt, userPrompt)
 	if err != nil {
 		return summaryPayload{}, err
 	}
 	return parseSummaryPayload(text)
+}
+
+func buildSummaryPrompt(title, sourceURL, content, language string) (systemPrompt, userPrompt string) {
+	lang := strings.TrimSpace(language)
+	if lang == "" {
+		lang = "English"
+	}
+
+	systemPrompt = fmt.Sprintf("You are Workavera's reading assistant, responsible for compressing external materials into accurate, actionable summaries in %s.", lang)
+
+	userPrompt = fmt.Sprintf(`Read the following material and summarize it in %s.
+
+Requirements:
+- Output only JSON, no Markdown or explanatory text.
+- The JSON fields must be summary and key_points.
+- summary is a 2 to 4 sentence summary in %s.
+- key_points is an array of 3 to 8 key points in %s.
+
+Title: %s
+Link: %s
+Body:
+%s`, lang, lang, lang, title, sourceURL, content)
+
+	return systemPrompt, userPrompt
 }
 
 func parseSummaryPayload(text string) (summaryPayload, error) {

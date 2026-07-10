@@ -622,7 +622,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         )
       )
     } catch (error) {
-      const snapshot = await loadBoardSnapshot()
+      const snapshot = await loadBoardPage(get().projectPage)
       set({
         ...snapshot,
         error: messageFromError(error, "Could not reorder states"),
