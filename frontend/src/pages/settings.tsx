@@ -7,7 +7,6 @@ import {
   Brain02Icon,
   Delete02Icon,
   Edit01Icon,
-  Key01Icon,
   Pin02Icon,
   Share08Icon,
   Tick02Icon,
@@ -34,9 +33,20 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useLlmSettingsStore, type LlmModelConfig } from "@/store/llm-settings"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import {
+  useLlmSettingsStore,
+  DEFAULT_MAX_OUTPUT_TOKENS,
+  type LlmModelConfig,
+} from "@/store/llm-settings"
 
 export function SettingsPage() {
   const models = useLlmSettingsStore((state) => state.models)
@@ -215,80 +225,90 @@ export function SettingsPage() {
               </p>
             </div>
           ) : (
-            <ul className="flex flex-col">
-              {models.map((model, index) => (
-                <li key={model.id}>
-                  {index > 0 && <Separator />}
-                  <div className="flex items-center gap-3 px-6 py-3.5 transition-colors hover:bg-muted/30">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="truncate text-sm font-medium">
-                          {model.name}
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="pl-6">Model</TableHead>
+                  <TableHead className="hidden md:table-cell">Protocol</TableHead>
+                  <TableHead className="hidden sm:table-cell">
+                    Max tokens
+                  </TableHead>
+                  <TableHead className="pr-6 text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {models.map((model) => (
+                  <TableRow key={model.id}>
+                    <TableCell className="pl-6">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-medium">{model.name}</span>
+                        <span className="truncate text-xs text-muted-foreground">
+                          {model.modelId} · {model.baseUrl}
                         </span>
-                        <Badge variant="secondary" className="capitalize">
-                          {model.protocol}
-                        </Badge>
-                        {model.hasApiKey && (
-                          <Badge variant="outline" className="gap-1">
-                            <HugeiconsIcon icon={Key01Icon} strokeWidth={2} />
-                            Key configured
-                          </Badge>
-                        )}
                       </div>
-                      <p className="mt-1 truncate text-xs text-muted-foreground">
-                        {model.modelId} · {model.baseUrl}
-                      </p>
-                    </div>
-
-                    <div className="flex shrink-0 items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => {
-                          if (!model.isDefault) void handleSetDefault(model.id)
-                        }}
-                        className={
-                          model.isDefault
-                            ? "text-emerald-500 hover:text-emerald-500"
-                            : undefined
-                        }
-                        aria-label={
-                          model.isDefault ? "Default model" : "Set as default"
-                        }
-                        aria-pressed={model.isDefault}
-                      >
-                        <HugeiconsIcon icon={Pin02Icon} strokeWidth={2} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => openCopyDialog(model)}
-                        aria-label="Copy to users"
-                      >
-                        <HugeiconsIcon icon={Share08Icon} strokeWidth={2} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => openEditSheet(model)}
-                        aria-label="Edit model"
-                      >
-                        <HugeiconsIcon icon={Edit01Icon} strokeWidth={2} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => setDeleteModel(model)}
-                        className="text-muted-foreground hover:text-destructive"
-                        aria-label="Delete model"
-                      >
-                        <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
-                      </Button>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      <Badge variant="secondary" className="capitalize">
+                        {model.protocol}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell">
+                      {(model.maxOutputTokens > 0
+                        ? model.maxOutputTokens
+                        : DEFAULT_MAX_OUTPUT_TOKENS
+                      ).toLocaleString()}
+                    </TableCell>
+                    <TableCell className="pr-6">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => {
+                            if (!model.isDefault) void handleSetDefault(model.id)
+                          }}
+                          className={
+                            model.isDefault
+                              ? "text-emerald-500 hover:text-emerald-500"
+                              : undefined
+                          }
+                          aria-label={
+                            model.isDefault ? "Default model" : "Set as default"
+                          }
+                          aria-pressed={model.isDefault}
+                        >
+                          <HugeiconsIcon icon={Pin02Icon} strokeWidth={2} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => openCopyDialog(model)}
+                          aria-label="Copy to users"
+                        >
+                          <HugeiconsIcon icon={Share08Icon} strokeWidth={2} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => openEditSheet(model)}
+                          aria-label="Edit model"
+                        >
+                          <HugeiconsIcon icon={Edit01Icon} strokeWidth={2} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => setDeleteModel(model)}
+                          className="text-muted-foreground hover:text-destructive"
+                          aria-label="Delete model"
+                        >
+                          <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>

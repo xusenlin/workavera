@@ -25,31 +25,6 @@ func createChatCollections(app core.App) error {
 		return err
 	}
 
-	protocol, ok := models.Fields.GetByName("protocol").(*core.SelectField)
-	if ok {
-		protocol.Values = []string{"openai", "openai-compatible", "anthropic", "google"}
-		if err := app.Save(models); err != nil {
-			return err
-		}
-	}
-	modelRecords, err := app.FindAllRecords(llmModelsCollection)
-	if err != nil {
-		return err
-	}
-	for _, record := range modelRecords {
-		switch record.GetString("base_url") {
-		case "https://api.anthropic.com/v1":
-			record.Set("base_url", "https://api.anthropic.com")
-		case "https://generativelanguage.googleapis.com/v1beta":
-			record.Set("base_url", "https://generativelanguage.googleapis.com/")
-		default:
-			continue
-		}
-		if err := app.Save(record); err != nil {
-			return err
-		}
-	}
-
 	conversations := core.NewBaseCollection(chatConversationsCollection)
 	conversations.Fields.Add(
 		&core.RelationField{Name: "owner", CollectionId: users.Id, MaxSelect: 1, Required: true, CascadeDelete: true},
@@ -112,12 +87,6 @@ func dropChatCollections(app core.App) error {
 	if conversations, err := app.FindCollectionByNameOrId(chatConversationsCollection); err == nil {
 		if err := app.Delete(conversations); err != nil {
 			return err
-		}
-	}
-	if models, err := app.FindCollectionByNameOrId(llmModelsCollection); err == nil {
-		if protocol, ok := models.Fields.GetByName("protocol").(*core.SelectField); ok {
-			protocol.Values = []string{"openai", "anthropic", "google"}
-			return app.Save(models)
 		}
 	}
 	return nil

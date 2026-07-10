@@ -34,6 +34,7 @@ func modelConfig(record *core.Record) workagent.ModelConfig {
 	return workagent.ModelConfig{
 		ID: record.Id, Name: record.GetString("name"), ModelID: record.GetString("model_id"),
 		BaseURL: record.GetString("base_url"), APIKey: record.GetString("api_key"), Protocol: record.GetString("protocol"),
+		MaxOutputTokens: int(record.GetInt("max_output_tokens")),
 	}
 }
 

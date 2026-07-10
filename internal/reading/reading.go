@@ -284,12 +284,13 @@ func findDefaultModel(app core.App, ownerID string) (workagent.ModelConfig, erro
 		return workagent.ModelConfig{}, err
 	}
 	return workagent.ModelConfig{
-		ID:       record.Id,
-		Name:     record.GetString("name"),
-		ModelID:  record.GetString("model_id"),
-		BaseURL:  record.GetString("base_url"),
-		APIKey:   record.GetString("api_key"),
-		Protocol: record.GetString("protocol"),
+		ID:              record.Id,
+		Name:            record.GetString("name"),
+		ModelID:         record.GetString("model_id"),
+		BaseURL:         record.GetString("base_url"),
+		APIKey:          record.GetString("api_key"),
+		Protocol:        record.GetString("protocol"),
+		MaxOutputTokens: int(record.GetInt("max_output_tokens")),
 	}, nil
 }
 

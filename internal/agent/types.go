@@ -135,12 +135,13 @@ func (c StreamChunk) ValidForWire() bool {
 }
 
 type ModelConfig struct {
-	ID       string
-	Name     string
-	ModelID  string
-	BaseURL  string
-	APIKey   string
-	Protocol string
+	ID              string
+	Name            string
+	ModelID         string
+	BaseURL         string
+	APIKey          string
+	Protocol        string
+	MaxOutputTokens int
 }
 
 type Usage struct {

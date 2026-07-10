@@ -7,12 +7,15 @@ import { pb } from "@/lib/pocketbase"
 export type LlmProtocol =
   "openai" | "openai-compatible" | "anthropic" | "google"
 
+export const DEFAULT_MAX_OUTPUT_TOKENS = 16384
+
 export type LlmModelConfig = {
   id: string
   name: string
   modelId: string
   baseUrl: string
   protocol: LlmProtocol
+  maxOutputTokens: number
   isDefault: boolean
   hasApiKey: boolean
   created: string
@@ -24,6 +27,7 @@ export type LlmModelInput = {
   modelId: string
   baseUrl: string
   protocol: LlmProtocol
+  maxOutputTokens?: number
   apiKey?: string
 }
 

@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/sheet"
 import {
   useLlmSettingsStore,
+  DEFAULT_MAX_OUTPUT_TOKENS,
   type LlmModelConfig,
   type LlmModelInput,
   type LlmProtocol,
@@ -68,6 +69,10 @@ function createForm(model?: LlmModelConfig | null) {
     baseUrl: model?.baseUrl ?? DEFAULT_BASE_URLS.openai,
     apiKey: "",
     protocol: model?.protocol ?? ("openai" as LlmProtocol),
+    maxOutputTokens:
+      model?.maxOutputTokens && model.maxOutputTokens > 0
+        ? String(model.maxOutputTokens)
+        : "",
   }
 }
 
@@ -125,6 +130,17 @@ export function ModelSheet({ open, onOpenChange, model }: ModelSheetProps) {
       return
     }
 
+    const trimmedTokens = form.maxOutputTokens.trim()
+    let maxOutputTokens: number | undefined
+    if (trimmedTokens !== "") {
+      const parsed = Number(trimmedTokens)
+      if (!Number.isInteger(parsed) || parsed <= 0) {
+        setError("Max output tokens must be a positive whole number.")
+        return
+      }
+      maxOutputTokens = parsed
+    }
+
     setSaving(true)
     try {
       const input: LlmModelInput = {
@@ -132,6 +148,9 @@ export function ModelSheet({ open, onOpenChange, model }: ModelSheetProps) {
         modelId,
         baseUrl,
         protocol: form.protocol,
+      }
+      if (maxOutputTokens !== undefined) {
+        input.maxOutputTokens = maxOutputTokens
       }
       if (!model || form.apiKey.trim() || clearSavedKey) {
         input.apiKey = clearSavedKey ? "" : form.apiKey.trim()
@@ -282,6 +301,25 @@ export function ModelSheet({ open, onOpenChange, model }: ModelSheetProps) {
                 </Button>
               </div>
             )}
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="max-output-tokens">Max output tokens</Label>
+            <Input
+              id="max-output-tokens"
+              type="number"
+              min={1}
+              placeholder={String(DEFAULT_MAX_OUTPUT_TOKENS)}
+              value={form.maxOutputTokens}
+              onChange={(event) =>
+                setField("maxOutputTokens", event.target.value)
+              }
+            />
+            <p className="text-xs text-muted-foreground">
+              The maximum number of tokens the model can generate per step.
+              Leave blank to use the default of{" "}
+              {DEFAULT_MAX_OUTPUT_TOKENS.toLocaleString()}.
+            </p>
           </div>
 
           <div className="flex flex-col gap-2">

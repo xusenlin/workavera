@@ -34,6 +34,10 @@ func TestLLMModelsMigration(t *testing.T) {
 	if !ok || len(protocol.Values) != 4 || protocol.Values[0] != "openai" || protocol.Values[1] != "openai-compatible" || protocol.Values[2] != "anthropic" || protocol.Values[3] != "google" {
 		t.Fatalf("unexpected protocol field: %#v", protocol)
 	}
+	maxOutputTokens, ok := collection.Fields.GetByName("max_output_tokens").(*core.NumberField)
+	if !ok || !maxOutputTokens.OnlyInt {
+		t.Fatalf("unexpected max_output_tokens field: %#v", maxOutputTokens)
+	}
 	for _, name := range []string{"name", "model_id", "base_url", "is_default", "created", "updated"} {
 		if collection.Fields.GetByName(name) == nil {
 			t.Fatalf("missing field %s", name)

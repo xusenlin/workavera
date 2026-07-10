@@ -18,31 +18,34 @@ var supportedProtocols = map[string]struct{}{
 }
 
 type modelResponse struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	ModelID   string `json:"modelId"`
-	BaseURL   string `json:"baseUrl"`
-	Protocol  string `json:"protocol"`
-	IsDefault bool   `json:"isDefault"`
-	HasAPIKey bool   `json:"hasApiKey"`
-	Created   string `json:"created"`
-	Updated   string `json:"updated"`
+	ID              string `json:"id"`
+	Name            string `json:"name"`
+	ModelID         string `json:"modelId"`
+	BaseURL         string `json:"baseUrl"`
+	Protocol        string `json:"protocol"`
+	MaxOutputTokens int    `json:"maxOutputTokens"`
+	IsDefault       bool   `json:"isDefault"`
+	HasAPIKey       bool   `json:"hasApiKey"`
+	Created         string `json:"created"`
+	Updated         string `json:"updated"`
 }
 
 type createModelRequest struct {
-	Name     string `json:"name"`
-	ModelID  string `json:"modelId"`
-	BaseURL  string `json:"baseUrl"`
-	APIKey   string `json:"apiKey"`
-	Protocol string `json:"protocol"`
+	Name            string `json:"name"`
+	ModelID         string `json:"modelId"`
+	BaseURL         string `json:"baseUrl"`
+	APIKey          string `json:"apiKey"`
+	Protocol        string `json:"protocol"`
+	MaxOutputTokens *int   `json:"maxOutputTokens"`
 }
 
 type updateModelRequest struct {
-	Name     *string `json:"name"`
-	ModelID  *string `json:"modelId"`
-	BaseURL  *string `json:"baseUrl"`
-	APIKey   *string `json:"apiKey"`
-	Protocol *string `json:"protocol"`
+	Name            *string `json:"name"`
+	ModelID         *string `json:"modelId"`
+	BaseURL         *string `json:"baseUrl"`
+	APIKey          *string `json:"apiKey"`
+	Protocol        *string `json:"protocol"`
+	MaxOutputTokens *int    `json:"maxOutputTokens"`
 }
 
 type shareTargetResponse struct {
@@ -91,9 +94,13 @@ func createModel(event *core.RequestEvent) error {
 	if err := validateModel(request.Name, request.ModelID, request.BaseURL, request.Protocol); err != nil {
 		return event.BadRequestError(err.Error(), nil)
 	}
+	maxOutputTokens, err := validateMaxOutputTokens(request.MaxOutputTokens)
+	if err != nil {
+		return event.BadRequestError(err.Error(), nil)
+	}
 
 	var createdID string
-	err := event.App.RunInTransaction(func(txApp core.App) error {
+	err = event.App.RunInTransaction(func(txApp core.App) error {
 		collection, err := txApp.FindCollectionByNameOrId(modelsCollection)
 		if err != nil {
 			return err
@@ -117,6 +124,7 @@ func createModel(event *core.RequestEvent) error {
 		record.Set("base_url", request.BaseURL)
 		record.Set("api_key", request.APIKey)
 		record.Set("protocol", request.Protocol)
+		record.Set("max_output_tokens", maxOutputTokens)
 		record.Set("is_default", len(existing) == 0)
 		if err := txApp.Save(record); err != nil {
 			return err
@@ -166,10 +174,19 @@ func updateModel(event *core.RequestEvent) error {
 		return event.BadRequestError(err.Error(), nil)
 	}
 
+	maxOutputTokens := int(record.GetInt("max_output_tokens"))
+	if request.MaxOutputTokens != nil {
+		maxOutputTokens, err = validateMaxOutputTokens(request.MaxOutputTokens)
+		if err != nil {
+			return event.BadRequestError(err.Error(), nil)
+		}
+	}
+
 	record.Set("name", name)
 	record.Set("model_id", modelID)
 	record.Set("base_url", baseURL)
 	record.Set("protocol", protocol)
+	record.Set("max_output_tokens", maxOutputTokens)
 	if request.APIKey != nil {
 		record.Set("api_key", strings.TrimSpace(*request.APIKey))
 	}
@@ -345,6 +362,7 @@ func copyModel(event *core.RequestEvent) error {
 			copy.Set("base_url", source.GetString("base_url"))
 			copy.Set("api_key", source.GetString("api_key"))
 			copy.Set("protocol", source.GetString("protocol"))
+			copy.Set("max_output_tokens", source.GetInt("max_output_tokens"))
 			copy.Set("is_default", len(existing) == 0)
 			if err := txApp.Save(copy); err != nil {
 				return err
@@ -386,6 +404,16 @@ func validateModel(name, modelID, baseURL, protocol string) error {
 	return nil
 }
 
+// validateMaxOutputTokens normalizes an optional max output tokens request
+// value. A nil value (omitted) resolves to zero so the model keeps the default
+// limit; zero and negative values are also treated as "use the default".
+func validateMaxOutputTokens(value *int) (int, error) {
+	if value == nil || *value <= 0 {
+		return 0, nil
+	}
+	return *value, nil
+}
+
 func uniqueNonEmptyStrings(values []string) []string {
 	seen := make(map[string]struct{}, len(values))
 	result := make([]string, 0, len(values))
@@ -405,14 +433,15 @@ func uniqueNonEmptyStrings(values []string) []string {
 
 func toModelResponse(record *core.Record) modelResponse {
 	return modelResponse{
-		ID:        record.Id,
-		Name:      record.GetString("name"),
-		ModelID:   record.GetString("model_id"),
-		BaseURL:   record.GetString("base_url"),
-		Protocol:  record.GetString("protocol"),
-		IsDefault: record.GetBool("is_default"),
-		HasAPIKey: record.GetString("api_key") != "",
-		Created:   record.GetDateTime("created").String(),
-		Updated:   record.GetDateTime("updated").String(),
+		ID:              record.Id,
+		Name:            record.GetString("name"),
+		ModelID:         record.GetString("model_id"),
+		BaseURL:         record.GetString("base_url"),
+		Protocol:        record.GetString("protocol"),
+		MaxOutputTokens: int(record.GetInt("max_output_tokens")),
+		IsDefault:       record.GetBool("is_default"),
+		HasAPIKey:       record.GetString("api_key") != "",
+		Created:         record.GetDateTime("created").String(),
+		Updated:         record.GetDateTime("updated").String(),
 	}
 }
