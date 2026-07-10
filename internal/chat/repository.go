@@ -67,3 +67,32 @@ func saveMessageSnapshot(app core.App, messageID, status string, parts []workage
 	}
 	return app.Save(record)
 }
+
+func recoverInterruptedRuns(app core.App) error {
+	records, err := app.FindRecordsByFilter(messagesCollection, "role = 'assistant' && status = 'streaming'", "", 0, 0)
+	if err != nil {
+		return err
+	}
+	for _, record := range records {
+		metadata := messageMetadata(record)
+		metadata["finishReason"] = "error"
+		metadata["error"] = map[string]any{
+			"code":    "run_interrupted",
+			"message": "The chat run was interrupted by a server restart.",
+		}
+		record.Set("status", "error")
+		record.Set("metadata", metadata)
+		if err := app.Save(record); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func messageMetadata(record *core.Record) map[string]any {
+	metadata := map[string]any{}
+	if raw, ok := record.Get("metadata").(types.JSONRaw); ok && len(raw) > 0 {
+		_ = json.Unmarshal(raw, &metadata)
+	}
+	return metadata
+}

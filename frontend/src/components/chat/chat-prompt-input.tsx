@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import type { UseChatHelpers } from "@ai-sdk/react"
 import type { ChatStatus } from "ai"
@@ -29,6 +29,8 @@ type Props = {
   status: ChatStatus
   stop: UseChatHelpers<ChatUIMessage>["stop"]
   onMessageSubmitted?: (content: string) => void
+  activeRunId?: string | null
+  onRunStarted?: (runId: string) => void
 }
 
 export function ChatPromptInput({
@@ -39,6 +41,8 @@ export function ChatPromptInput({
   status,
   stop,
   onMessageSubmitted,
+  activeRunId,
+  onRunStarted,
 }: Props) {
   const models = useLlmSettingsStore((state) => state.models)
   const defaultModelId = useMemo(
@@ -55,12 +59,6 @@ export function ChatPromptInput({
     sessionStorage.removeItem("aiMicroAppEditId")
     return `Edit AI micro app ${appId}: `
   })
-  const activeRunId = useRef<string | null>(null)
-
-  useEffect(() => {
-    if (status === "ready" || status === "error") activeRunId.current = null
-  }, [status])
-
   useEffect(() => {
     function handleMicroAppEdit(event: Event) {
       const appId = (event as CustomEvent<string>).detail
@@ -82,7 +80,7 @@ export function ChatPromptInput({
       return
     }
     const runId = crypto.randomUUID()
-    activeRunId.current = runId
+    onRunStarted?.(runId)
     setText("")
     onMessageSubmitted?.(content)
     await sendMessage(
@@ -92,10 +90,9 @@ export function ChatPromptInput({
   }
 
   const handleStop = async () => {
-    const runId = activeRunId.current
     try {
-      if (runId) {
-        await pb.send(`/api/chat/runs/${runId}/stop`, {
+      if (activeRunId) {
+        await pb.send(`/api/chat/runs/${activeRunId}/stop`, {
           method: "POST",
           requestKey: null,
         })

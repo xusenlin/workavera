@@ -42,8 +42,11 @@ import {
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
+import { Spinner } from "@/components/ui/spinner"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { useAuthStore } from "@/store/auth"
+import { useChatRunsStore } from "@/store/chat-runs"
+import { useChatStore } from "@/store/chat"
 import { flatNavItems } from "@/lib/navigation"
 
 function getInitials(name: string) {
@@ -54,6 +57,9 @@ export function AppHeader() {
   const navigate = useNavigate()
   const location = useLocation()
   const { user, logout } = useAuthStore()
+  const activeRunCount = useChatRunsStore(
+    (state) => Object.keys(state.runs).length
+  )
   const [confirmLogout, setConfirmLogout] = useState(false)
 
   const currentNav = flatNavItems.find((item) => location.pathname === item.url)
@@ -61,6 +67,15 @@ export function AppHeader() {
   const handleLogout = () => {
     logout()
     navigate("/login", { replace: true })
+  }
+
+  const openActiveRun = () => {
+    const [run] = Object.values(useChatRunsStore.getState().runs).sort(
+      (left, right) => right.updated.localeCompare(left.updated)
+    )
+    if (!run) return
+    useChatStore.getState().setActiveConversation(run.conversationId)
+    navigate("/chat")
   }
 
   return (
@@ -88,6 +103,20 @@ export function AppHeader() {
           )}
         </BreadcrumbList>
       </Breadcrumb>
+
+      {activeRunCount > 0 && (
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="ml-auto gap-2"
+          onClick={openActiveRun}
+        >
+          <Spinner className="size-3.5" />
+          <span className="hidden sm:inline">AI is responding</span>
+          <span>· {activeRunCount}</span>
+        </Button>
+      )}
 
       {/* Search */}
       <div className="relative ml-auto hidden w-56 lg:block">

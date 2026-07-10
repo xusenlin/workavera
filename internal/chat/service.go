@@ -20,36 +20,57 @@ type service struct {
 }
 
 type activeRun struct {
-	id      string
-	ownerID string
-	cancel  context.CancelFunc
+	id             string
+	ownerID        string
+	conversationID string
+	cancel         context.CancelFunc
 
-	mu          sync.Mutex
-	subscribers map[chan workagent.StreamChunk]struct{}
-	done        bool
+	mu      sync.Mutex
+	history []workagent.StreamChunk
+	notify  chan struct{}
+	done    bool
 }
 
 func newService(app core.App, runner workagent.Runner) *service {
 	return &service{app: app, runner: runner, runs: make(map[string]*activeRun)}
 }
 
-func (s *service) registerRun(run *activeRun) {
+func (s *service) registerRun(run *activeRun) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if _, exists := s.runs[run.id]; exists {
+		return false
+	}
+	for _, active := range s.runs {
+		if active.conversationID == run.conversationID {
+			return false
+		}
+	}
 	s.runs[run.id] = run
+	return true
 }
 
-func (s *service) removeRun(id string) {
+func (s *service) removeRun(run *activeRun) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	delete(s.runs, id)
+	if s.runs[run.id] == run {
+		delete(s.runs, run.id)
+	}
 }
 
-func (s *service) cancelRun(id, ownerID string) bool {
+func (s *service) findRun(id, ownerID string) *activeRun {
 	s.mu.Lock()
 	run := s.runs[id]
 	s.mu.Unlock()
 	if run == nil || run.ownerID != ownerID {
+		return nil
+	}
+	return run
+}
+
+func (s *service) cancelRun(id, ownerID string) bool {
+	run := s.findRun(id, ownerID)
+	if run == nil {
 		return false
 	}
 	run.cancel()
@@ -68,47 +89,46 @@ func (s *service) cancelAll() {
 	}
 }
 
-func newActiveRun(id, ownerID string, cancel context.CancelFunc) *activeRun {
-	return &activeRun{id: id, ownerID: ownerID, cancel: cancel, subscribers: make(map[chan workagent.StreamChunk]struct{})}
-}
-
-func (r *activeRun) subscribe() chan workagent.StreamChunk {
-	ch := make(chan workagent.StreamChunk, 256)
-	r.mu.Lock()
-	if r.done {
-		close(ch)
-	} else {
-		r.subscribers[ch] = struct{}{}
+func newActiveRun(id, ownerID, conversationID string, cancel context.CancelFunc) *activeRun {
+	return &activeRun{
+		id:             id,
+		ownerID:        ownerID,
+		conversationID: conversationID,
+		cancel:         cancel,
+		notify:         make(chan struct{}),
 	}
-	r.mu.Unlock()
-	return ch
 }
 
-func (r *activeRun) unsubscribe(ch chan workagent.StreamChunk) {
+func (r *activeRun) readFrom(index int) ([]workagent.StreamChunk, bool, <-chan struct{}) {
 	r.mu.Lock()
-	delete(r.subscribers, ch)
-	r.mu.Unlock()
+	defer r.mu.Unlock()
+	if index < 0 {
+		index = 0
+	}
+	if index > len(r.history) {
+		index = len(r.history)
+	}
+	chunks := append([]workagent.StreamChunk(nil), r.history[index:]...)
+	return chunks, r.done, r.notify
 }
 
 func (r *activeRun) publish(chunk workagent.StreamChunk) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	for ch := range r.subscribers {
-		select {
-		case ch <- chunk:
-		default:
-			delete(r.subscribers, ch)
-			close(ch)
-		}
+	if r.done {
+		return
 	}
+	r.history = append(r.history, chunk)
+	close(r.notify)
+	r.notify = make(chan struct{})
 }
 
 func (r *activeRun) finish() {
 	r.mu.Lock()
-	r.done = true
-	for ch := range r.subscribers {
-		close(ch)
-		delete(r.subscribers, ch)
+	defer r.mu.Unlock()
+	if r.done {
+		return
 	}
-	r.mu.Unlock()
+	r.done = true
+	close(r.notify)
 }

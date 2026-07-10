@@ -45,11 +45,57 @@ func (errorRunner) Stream(context.Context, workagent.Request, workagent.EmitFunc
 	return workagent.Result{}, errors.New("provider-secret-diagnostic")
 }
 
+type blockingRunner struct {
+	started chan struct{}
+	release chan struct{}
+}
+
+func (runner *blockingRunner) Stream(ctx context.Context, _ workagent.Request, emit workagent.EmitFunc) (workagent.Result, error) {
+	for _, chunk := range []workagent.StreamChunk{
+		{Type: "start-step"},
+		{Type: "text-start", ID: "text-1"},
+		{Type: "text-delta", ID: "text-1", Delta: "before reconnect"},
+	} {
+		if err := emit(ctx, chunk); err != nil {
+			return workagent.Result{}, err
+		}
+	}
+	close(runner.started)
+	select {
+	case <-runner.release:
+	case <-ctx.Done():
+		return workagent.Result{}, ctx.Err()
+	}
+	for _, chunk := range []workagent.StreamChunk{
+		{Type: "text-delta", ID: "text-1", Delta: " after reconnect"},
+		{Type: "text-end", ID: "text-1"},
+		{Type: "finish-step"},
+	} {
+		if err := emit(ctx, chunk); err != nil {
+			return workagent.Result{}, err
+		}
+	}
+	return workagent.Result{FinishReason: "stop", StepCount: 1}, nil
+}
+
 type chatTestServer struct {
 	app     *tests.TestApp
 	handler http.Handler
 	token   string
 	modelID string
+}
+
+type signalingRecorder struct {
+	*httptest.ResponseRecorder
+	wrote chan struct{}
+}
+
+func (recorder *signalingRecorder) Write(data []byte) (int, error) {
+	select {
+	case recorder.wrote <- struct{}{}:
+	default:
+	}
+	return recorder.ResponseRecorder.Write(data)
 }
 
 func newChatTestServer(t *testing.T) *chatTestServer {
@@ -179,6 +225,129 @@ func TestChatStreamPersistsUIMessageAndUsesProtocol(t *testing.T) {
 	if len(result) != 2 || result[1].Parts[len(result[1].Parts)-1]["text"] != "Hello from the agent" {
 		t.Fatalf("unexpected messages: %#v", result)
 	}
+	if result[1].Metadata["runId"] != "00000000-0000-4000-8000-000000000001" {
+		t.Fatalf("run id was not persisted: %#v", result[1].Metadata)
+	}
+}
+
+func TestActiveRunCanReplayHistoryAndContinueStreaming(t *testing.T) {
+	runner := &blockingRunner{started: make(chan struct{}), release: make(chan struct{})}
+	server := newChatTestServerWithRunner(t, runner)
+	conversationID := server.createConversation(t)
+
+	initialDone := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		initialDone <- server.streamMessage(t, conversationID)
+	}()
+	<-runner.started
+	unauthorized := httptest.NewRecorder()
+	server.handler.ServeHTTP(
+		unauthorized,
+		httptest.NewRequest(http.MethodGet, "/api/chat/runs/00000000-0000-4000-8000-000000000001/stream", nil),
+	)
+	if unauthorized.Code != http.StatusUnauthorized {
+		t.Fatalf("expected unauthenticated resume to return 401, got %d", unauthorized.Code)
+	}
+
+	duplicate := server.request(t, http.MethodPost, "/api/chat/stream", `{
+		"runId":"00000000-0000-4000-8000-000000000002",
+		"conversationId":"`+conversationID+`",
+		"modelConfigId":"`+server.modelID+`",
+		"message":{"role":"user","parts":[{"type":"text","text":"Duplicate"}]}
+	}`)
+	if duplicate.Code != http.StatusConflict {
+		t.Fatalf("expected duplicate run conflict, got %d: %s", duplicate.Code, duplicate.Body.String())
+	}
+
+	resumeRecorder := &signalingRecorder{ResponseRecorder: httptest.NewRecorder(), wrote: make(chan struct{}, 1)}
+	resumeRequest := httptest.NewRequest(http.MethodGet, "/api/chat/runs/00000000-0000-4000-8000-000000000001/stream", nil)
+	resumeRequest.Header.Set("Authorization", server.token)
+	resumeDone := make(chan struct{})
+	go func() {
+		server.handler.ServeHTTP(resumeRecorder, resumeRequest)
+		close(resumeDone)
+	}()
+	<-resumeRecorder.wrote
+	close(runner.release)
+
+	initial := <-initialDone
+	<-resumeDone
+	resumed := resumeRecorder.ResponseRecorder
+	if initial.Code != http.StatusOK || resumed.Code != http.StatusOK {
+		t.Fatalf("unexpected stream statuses: initial=%d resumed=%d", initial.Code, resumed.Code)
+	}
+	for _, expected := range []string{"before reconnect", "after reconnect", "data: [DONE]"} {
+		if !strings.Contains(resumed.Body.String(), expected) {
+			t.Fatalf("resumed stream missing %q: %s", expected, resumed.Body.String())
+		}
+	}
+
+	completed := server.request(t, http.MethodGet, "/api/chat/runs/00000000-0000-4000-8000-000000000001/stream", "")
+	if completed.Code != http.StatusNoContent {
+		t.Fatalf("expected completed run to return 204, got %d", completed.Code)
+	}
+}
+
+func TestStoppedRunPersistsCancelledStatusAndRunID(t *testing.T) {
+	runner := &blockingRunner{started: make(chan struct{}), release: make(chan struct{})}
+	server := newChatTestServerWithRunner(t, runner)
+	conversationID := server.createConversation(t)
+
+	streamDone := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		streamDone <- server.streamMessage(t, conversationID)
+	}()
+	<-runner.started
+
+	stopped := server.request(t, http.MethodPost, "/api/chat/runs/00000000-0000-4000-8000-000000000001/stop", "")
+	if stopped.Code != http.StatusAccepted {
+		t.Fatalf("stop run: %d %s", stopped.Code, stopped.Body.String())
+	}
+	stream := <-streamDone
+	if !strings.Contains(stream.Body.String(), `"type":"abort"`) {
+		t.Fatalf("stopped stream did not emit abort: %s", stream.Body.String())
+	}
+
+	messages := server.request(t, http.MethodGet, "/api/chat/conversations/"+conversationID+"/messages", "")
+	var result []workagent.Message
+	if err := json.Unmarshal(messages.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if len(result) != 2 || result[1].Metadata["status"] != "cancelled" || result[1].Metadata["runId"] != "00000000-0000-4000-8000-000000000001" {
+		t.Fatalf("unexpected cancelled message: %#v", result)
+	}
+}
+
+func TestRecoverInterruptedRunsMarksStreamingMessagesAsError(t *testing.T) {
+	server := newChatTestServer(t)
+	conversationID := server.createConversation(t)
+	collection, err := server.app.FindCollectionByNameOrId(messagesCollection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	message := core.NewRecord(collection)
+	message.Set("conversation", conversationID)
+	message.Set("sequence", 0)
+	message.Set("role", "assistant")
+	message.Set("status", "streaming")
+	message.Set("parts", []workagent.Part{{"type": "text", "text": "partial", "state": "streaming"}})
+	message.Set("metadata", map[string]any{"runId": "interrupted-run"})
+	if err := server.app.Save(message); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := recoverInterruptedRuns(server.app); err != nil {
+		t.Fatal(err)
+	}
+	recovered, err := server.app.FindRecordById(messagesCollection, message.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata := messageMetadata(recovered)
+	errorMetadata, _ := metadata["error"].(map[string]any)
+	if recovered.GetString("status") != "error" || errorMetadata["code"] != "run_interrupted" || metadata["runId"] != "interrupted-run" {
+		t.Fatalf("unexpected recovered message: status=%s metadata=%#v", recovered.GetString("status"), metadata)
+	}
 }
 
 func TestPocketBaseApiRulesSeparateActiveAndArchivedConversations(t *testing.T) {
@@ -215,11 +384,11 @@ func TestPocketBaseApiRulesSeparateActiveAndArchivedConversations(t *testing.T) 
 		t.Fatalf("list archived conversations: %d %s", archivedList.Code, archivedList.Body.String())
 	}
 	var archivedPage struct {
-		Items      []struct {
+		Items []struct {
 			ID string `json:"id"`
 		} `json:"items"`
-		TotalItems  int `json:"totalItems"`
-		TotalPages  int `json:"totalPages"`
+		TotalItems int `json:"totalItems"`
+		TotalPages int `json:"totalPages"`
 	}
 	if err := json.Unmarshal(archivedList.Body.Bytes(), &archivedPage); err != nil {
 		t.Fatal(err)

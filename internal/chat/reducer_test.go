@@ -86,14 +86,17 @@ func TestMessageReducerPersistsReasoningProviderMetadata(t *testing.T) {
 	}
 }
 
-func TestUnsubscribeDoesNotCancelRun(t *testing.T) {
+func TestBufferedReaderDoesNotCancelRun(t *testing.T) {
 	cancelled := false
-	run := newActiveRun("run-1", "owner-1", func() { cancelled = true })
-	subscriber := run.subscribe()
-	run.unsubscribe(subscriber)
-	run.publish(workagent.StreamChunk{Type: "text-delta", ID: "text-1", Delta: "still running"})
+	run := newActiveRun("run-1", "owner-1", "conversation-1", func() { cancelled = true })
+	chunk := workagent.StreamChunk{Type: "text-delta", ID: "text-1", Delta: "still running"}
+	run.publish(chunk)
+	chunks, done, _ := run.readFrom(0)
+	if done || len(chunks) != 1 || chunks[0].Delta != chunk.Delta {
+		t.Fatalf("unexpected buffered chunks: %#v, done=%v", chunks, done)
+	}
 	if cancelled {
-		t.Fatal("disconnecting a subscriber must not cancel the background run")
+		t.Fatal("reading buffered chunks must not cancel the background run")
 	}
 	run.cancel()
 	if !cancelled {

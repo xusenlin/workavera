@@ -21,9 +21,13 @@ func Register(app core.App) {
 
 func register(app core.App, service *service) {
 	app.OnServe().BindFunc(func(event *core.ServeEvent) error {
+		if err := recoverInterruptedRuns(event.App); err != nil {
+			return err
+		}
 		group := event.Router.Group("/api/chat").Bind(apis.RequireAuth("users"))
 		group.GET("/conversations/{id}/messages", service.listMessages)
 		group.POST("/stream", service.stream)
+		group.GET("/runs/{id}/stream", service.resumeRun)
 		group.POST("/runs/{id}/stop", service.stopRun)
 		return event.Next()
 	})

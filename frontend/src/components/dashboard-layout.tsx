@@ -2,6 +2,7 @@ import { Outlet, useLocation } from "react-router"
 
 import { AppSidebar } from "@/components/app-sidebar"
 import { AppHeader } from "@/components/app-header"
+import { ChatRunMonitor } from "@/components/chat/chat-run-monitor"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 
 export function DashboardLayout() {
@@ -11,6 +12,7 @@ export function DashboardLayout() {
 
   return (
     <SidebarProvider>
+      <ChatRunMonitor />
       <AppSidebar />
       <SidebarInset>
         <AppHeader />

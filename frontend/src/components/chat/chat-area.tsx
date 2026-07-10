@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect } from "react"
 
 import { Chat01Icon, SparklesIcon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { useChat } from "@ai-sdk/react"
-import { DefaultChatTransport } from "ai"
 
 import {
   Conversation,
@@ -12,7 +11,7 @@ import {
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation"
 import { Button } from "@/components/ui/button"
-import { pb } from "@/lib/pocketbase"
+import { useChatRuntime } from "@/lib/chat-runtime"
 import { useChatStore } from "@/store/chat"
 import type {
   ChatUIMessage,
@@ -47,60 +46,22 @@ function ChatEmptyState({ onCreate }: { onCreate: () => void }) {
 }
 
 function ActiveChat({ conversation }: { conversation: ChatConversation }) {
-  const refreshConversations = useChatStore((state) => state.refresh)
   const renameConversation = useChatStore((state) => state.renameConversation)
-  const [loadingMessages, setLoadingMessages] = useState(true)
-  const pendingTitleRef = useRef<string | null>(null)
+  const { runtime, state: runtimeState } = useChatRuntime(conversation.id)
 
-  const transport = useMemo(
-    () =>
-      new DefaultChatTransport<ChatUIMessage>({
-        api: `${pb.baseURL}/api/chat/stream`,
-        headers: () => ({ Authorization: pb.authStore.token }),
-        prepareSendMessagesRequest: ({ messages, body, headers }) => ({
-          headers,
-          body: {
-            ...body,
-            message: messages.at(-1),
-          },
-        }),
-      }),
-    []
+  const { messages, sendMessage, status, stop, error } = useChat<ChatUIMessage>(
+    {
+      chat: runtime.chat,
+    }
   )
 
-  const { messages, setMessages, sendMessage, status, stop, error } =
-    useChat<ChatUIMessage>({
-      id: conversation.id,
-      transport,
-      onFinish: async () => {
-        const pendingTitle = pendingTitleRef.current
-        pendingTitleRef.current = null
-        if (conversation.title === "New conversation" && pendingTitle) {
-          await renameConversation(conversation.id, pendingTitle).catch(
-            () => {}
-          )
-        }
-        void refreshConversations()
-      },
-    })
-
   useEffect(() => {
-    let active = true
-    void pb
-      .send<ChatUIMessage[]>(
-        `/api/chat/conversations/${conversation.id}/messages`,
-        { method: "GET", requestKey: null }
-      )
-      .then((loaded) => {
-        if (active) setMessages(loaded)
-      })
-      .finally(() => {
-        if (active) setLoadingMessages(false)
-      })
-    return () => {
-      active = false
-    }
-  }, [conversation.id, setMessages])
+    void runtime.hydrate()
+  }, [runtime])
+
+  const loadingMessages = runtimeState.loading && !runtimeState.hydrated
+  const effectiveStatus =
+    runtimeState.activeRunId && status === "ready" ? "submitted" : status
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
@@ -117,7 +78,21 @@ function ActiveChat({ conversation }: { conversation: ChatConversation }) {
               <ChatMessageItem key={message.id} message={message} />
             ))
           )}
-          {error && <p className="text-sm text-destructive">{error.message}</p>}
+          {(error || runtimeState.recoveryError) && (
+            <div className="flex items-center gap-2 text-sm text-destructive">
+              <span>{error?.message ?? runtimeState.recoveryError}</span>
+              {runtimeState.activeRunId && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void runtime.retry()}
+                >
+                  Retry
+                </Button>
+              )}
+            </div>
+          )}
         </ConversationContent>
         <ConversationScrollButton />
       </Conversation>
@@ -126,11 +101,15 @@ function ActiveChat({ conversation }: { conversation: ChatConversation }) {
         modelConfigId={conversation.model_config}
         disabled={loadingMessages}
         sendMessage={sendMessage}
-        status={status}
+        status={effectiveStatus}
         stop={stop}
+        activeRunId={runtimeState.activeRunId}
+        onRunStarted={runtime.setActiveRunId}
         onMessageSubmitted={(content) => {
           if (conversation.title !== "New conversation") return
-          pendingTitleRef.current = content.slice(0, 16)
+          void renameConversation(conversation.id, content.slice(0, 16)).catch(
+            () => {}
+          )
         }}
       />
     </div>
