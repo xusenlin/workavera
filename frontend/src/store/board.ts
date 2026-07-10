@@ -692,11 +692,14 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     try {
       const record = await pb
         .collection(COLLECTIONS.members)
-        .create<MemberRecord>({
-          project: projectId,
-          user: input.userId,
-          role: input.role,
-        })
+        .create<MemberRecord>(
+          {
+            project: projectId,
+            user: input.userId,
+            role: input.role,
+          },
+          { expand: "user", requestKey: null }
+        )
       set((state) => ({ members: upsertById(state.members, toMember(record)) }))
     } catch (error) {
       const message = messageFromError(error, "Could not add the member")
@@ -710,7 +713,11 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     try {
       const record = await pb
         .collection(COLLECTIONS.members)
-        .update<MemberRecord>(id, { role: patch.role })
+        .update<MemberRecord>(
+          id,
+          { role: patch.role },
+          { expand: "user", requestKey: null }
+        )
       set((state) => ({ members: upsertById(state.members, toMember(record)) }))
     } catch (error) {
       const message = messageFromError(error, "Could not update the member")
