@@ -155,25 +155,40 @@ Owner 转移日志在转移事务中创建；其他项目活动由服务端 Reco
 
 ## 6. 内置模板
 
-### Software Development（默认）
+### Software Development（默认）/ 软件开发
 
-- 状态：Todo、In Progress、Testing、Done
-- 标签：Bug、Feature、Design、Docs、Refactor、API、Performance
+- 英文状态：Todo、In Progress、Testing、Done
+- 英文标签：Bug、Feature、Design、Docs、Refactor、API、Performance
+- 中文状态：待办、进行中、测试中、已完成
+- 中文标签：缺陷、功能、设计、文档、重构、API、性能
 
-### Simple Kanban
+### Simple Kanban / 简易看板
 
-- 状态：Backlog、In Progress、Done
-- 标签：Blocked、Improvement
+- 英文状态：Backlog、In Progress、Done
+- 英文标签：Blocked、Improvement
+- 中文状态：待处理、进行中、已完成
+- 中文标签：阻塞、改进
 
-### Content Production
+### Content Production / 内容生产
 
-- 状态：Ideas、Drafting、Review、Published
-- 标签：Article、Video、Social、Campaign
+- 英文状态：Ideas、Drafting、Review、Published
+- 英文标签：Article、Video、Social、Campaign
+- 中文状态：选题、撰写中、审核中、已发布
+- 中文标签：文章、视频、社交媒体、营销活动
 
-### Issue Tracking
+### Issue Tracking / 问题跟踪
 
-- 状态：Reported、Triaged、In Progress、Verification、Resolved
-- 标签：Bug、Incident、Regression、Security
+- 英文状态：Reported、Triaged、In Progress、Verification、Resolved
+- 英文标签：Bug、Incident、Regression、Security
+- 中文状态：已报告、已分诊、处理中、验证中、已解决
+- 中文标签：缺陷、事故、回归、安全
+
+### Self-Media Operations / 自媒体运营
+
+- 英文状态：Ideas、Creating、Scheduled、Published
+- 英文标签：Short Video、Article、Live Stream、Brand Partnership
+- 中文状态：选题池、创作中、待发布、已发布
+- 中文标签：短视频、图文、直播、品牌合作
 
 ## 7. 用户流程
 

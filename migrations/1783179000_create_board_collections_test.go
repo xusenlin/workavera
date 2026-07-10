@@ -4,6 +4,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tests"
 )
@@ -34,6 +35,22 @@ func TestBoardCollectionsMigration(t *testing.T) {
 	}
 	if len(templates) != len(boardTemplateSeeds) {
 		t.Fatalf("expected %d templates, got %d", len(boardTemplateSeeds), len(templates))
+	}
+	for _, name := range []string{
+		"Software Development", "软件开发",
+		"Simple Kanban", "简易看板",
+		"Content Production", "内容生产",
+		"Issue Tracking", "问题跟踪",
+		"Self-Media Operations", "自媒体运营",
+	} {
+		template, err := app.FindFirstRecordByFilter(
+			boardTemplatesCollection,
+			"name = {:name}",
+			dbx.Params{"name": name},
+		)
+		if err != nil || template.GetString("description") == "" {
+			t.Fatalf("missing bilingual template %q: %#v, %v", name, template, err)
+		}
 	}
 
 	tasks, err := app.FindCollectionByNameOrId(boardTasksCollection)

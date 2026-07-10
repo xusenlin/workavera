@@ -43,6 +43,25 @@ var boardTemplateSeeds = []boardTemplateSeed{
 		},
 	},
 	{
+		name:        "软件开发",
+		description: "规划、开发、测试并交付软件工作。",
+		states: []map[string]any{
+			{"name": "待办", "color": "#64748b", "category": "pending"},
+			{"name": "进行中", "color": "#3b82f6", "category": "active"},
+			{"name": "测试中", "color": "#f59e0b", "category": "active"},
+			{"name": "已完成", "color": "#22c55e", "category": "completed"},
+		},
+		labels: []map[string]any{
+			{"name": "缺陷", "color": "#ef4444"},
+			{"name": "功能", "color": "#3b82f6"},
+			{"name": "设计", "color": "#a855f7"},
+			{"name": "文档", "color": "#14b8a6"},
+			{"name": "重构", "color": "#6366f1"},
+			{"name": "API", "color": "#ec4899"},
+			{"name": "性能", "color": "#22c55e"},
+		},
+	},
+	{
 		name:        "Simple Kanban",
 		description: "A lightweight flow for small projects and everyday work.",
 		states: []map[string]any{
@@ -53,6 +72,19 @@ var boardTemplateSeeds = []boardTemplateSeed{
 		labels: []map[string]any{
 			{"name": "Blocked", "color": "#ef4444"},
 			{"name": "Improvement", "color": "#8b5cf6"},
+		},
+	},
+	{
+		name:        "简易看板",
+		description: "适用于小型项目和日常工作的轻量流程。",
+		states: []map[string]any{
+			{"name": "待处理", "color": "#64748b", "category": "pending"},
+			{"name": "进行中", "color": "#3b82f6", "category": "active"},
+			{"name": "已完成", "color": "#22c55e", "category": "completed"},
+		},
+		labels: []map[string]any{
+			{"name": "阻塞", "color": "#ef4444"},
+			{"name": "改进", "color": "#8b5cf6"},
 		},
 	},
 	{
@@ -72,6 +104,22 @@ var boardTemplateSeeds = []boardTemplateSeed{
 		},
 	},
 	{
+		name:        "内容生产",
+		description: "推动文章、视频和营销内容从选题走向发布。",
+		states: []map[string]any{
+			{"name": "选题", "color": "#64748b", "category": "pending"},
+			{"name": "撰写中", "color": "#3b82f6", "category": "active"},
+			{"name": "审核中", "color": "#f59e0b", "category": "active"},
+			{"name": "已发布", "color": "#22c55e", "category": "completed"},
+		},
+		labels: []map[string]any{
+			{"name": "文章", "color": "#3b82f6"},
+			{"name": "视频", "color": "#a855f7"},
+			{"name": "社交媒体", "color": "#ec4899"},
+			{"name": "营销活动", "color": "#f59e0b"},
+		},
+	},
+	{
 		name:        "Issue Tracking",
 		description: "Triage, resolve, and verify bugs and operational issues.",
 		states: []map[string]any{
@@ -86,6 +134,55 @@ var boardTemplateSeeds = []boardTemplateSeed{
 			{"name": "Incident", "color": "#f97316"},
 			{"name": "Regression", "color": "#8b5cf6"},
 			{"name": "Security", "color": "#dc2626"},
+		},
+	},
+	{
+		name:        "问题跟踪",
+		description: "分诊、解决并验证缺陷和运营问题。",
+		states: []map[string]any{
+			{"name": "已报告", "color": "#64748b", "category": "pending"},
+			{"name": "已分诊", "color": "#8b5cf6", "category": "pending"},
+			{"name": "处理中", "color": "#3b82f6", "category": "active"},
+			{"name": "验证中", "color": "#f59e0b", "category": "active"},
+			{"name": "已解决", "color": "#22c55e", "category": "completed"},
+		},
+		labels: []map[string]any{
+			{"name": "缺陷", "color": "#ef4444"},
+			{"name": "事故", "color": "#f97316"},
+			{"name": "回归", "color": "#8b5cf6"},
+			{"name": "安全", "color": "#dc2626"},
+		},
+	},
+	{
+		name:        "Self-Media Operations",
+		description: "Plan topics, create content, schedule releases, and review performance.",
+		states: []map[string]any{
+			{"name": "Ideas", "color": "#64748b", "category": "pending"},
+			{"name": "Creating", "color": "#3b82f6", "category": "active"},
+			{"name": "Scheduled", "color": "#f59e0b", "category": "active"},
+			{"name": "Published", "color": "#22c55e", "category": "completed"},
+		},
+		labels: []map[string]any{
+			{"name": "Short Video", "color": "#a855f7"},
+			{"name": "Article", "color": "#3b82f6"},
+			{"name": "Live Stream", "color": "#ef4444"},
+			{"name": "Brand Partnership", "color": "#f59e0b"},
+		},
+	},
+	{
+		name:        "自媒体运营",
+		description: "规划选题、内容创作、发布排期与数据复盘。",
+		states: []map[string]any{
+			{"name": "选题池", "color": "#64748b", "category": "pending"},
+			{"name": "创作中", "color": "#3b82f6", "category": "active"},
+			{"name": "待发布", "color": "#f59e0b", "category": "active"},
+			{"name": "已发布", "color": "#22c55e", "category": "completed"},
+		},
+		labels: []map[string]any{
+			{"name": "短视频", "color": "#a855f7"},
+			{"name": "图文", "color": "#3b82f6"},
+			{"name": "直播", "color": "#ef4444"},
+			{"name": "品牌合作", "color": "#f59e0b"},
 		},
 	},
 }
