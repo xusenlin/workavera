@@ -67,20 +67,22 @@ func SearchVisibleProjects(ctx context.Context, app core.App, actorID string, op
 		params["query"] = query
 	}
 	if len(options.UserIDs) > 0 {
-		userClauses := make([]string, 0, len(options.UserIDs))
-		for i, uid := range options.UserIDs {
-			key := fmt.Sprintf("user%d", i)
-			userClauses = append(userClauses, "user = {:"+key+"}")
-			params[key] = uid
-		}
-		memberFilter := strings.Join(userClauses, " || ")
-		memberRecords, err := app.FindRecordsByFilter(boardProjectMembersCollection, memberFilter, "", 0, 0, params)
+		taskRecords, err := app.FindRecordsByFilter(boardTasksCollection, "", "", 0, 0)
 		if err != nil {
 			return nil, err
 		}
+		wantedUsers := make(map[string]bool, len(options.UserIDs))
+		for _, uid := range options.UserIDs {
+			wantedUsers[uid] = true
+		}
 		projectIDSet := make(map[string]bool)
-		for _, mr := range memberRecords {
-			projectIDSet[mr.GetString("project")] = true
+		for _, task := range taskRecords {
+			for _, assigneeID := range task.GetStringSlice("assignees") {
+				if wantedUsers[assigneeID] {
+					projectIDSet[task.GetString("project")] = true
+					break
+				}
+			}
 		}
 		if len(projectIDSet) == 0 {
 			return []ProjectSummary{}, nil

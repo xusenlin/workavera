@@ -6,7 +6,7 @@ import { pb } from "@/lib/pocketbase"
 
 export type Priority = "low" | "medium" | "high" | "urgent"
 export type StateCategory = "pending" | "active" | "completed"
-export type ProjectRole = "owner" | "admin" | "member" | "viewer"
+export type MemberRole = "admin" | "member" | "viewer"
 
 export type TemplateState = {
   name: string
@@ -33,6 +33,8 @@ export type Project = {
   name: string
   description?: string
   ownerId: string
+  ownerName: string
+  ownerAvatar?: string
   archived: boolean
   collapsed: boolean
 }
@@ -57,9 +59,16 @@ export type Member = {
   id: string
   projectId: string
   userId: string
-  role: ProjectRole
+  role: MemberRole
   name: string
   avatar?: string
+}
+
+export type ProjectParticipant = {
+  userId: string
+  name: string
+  avatar?: string
+  role: "owner" | MemberRole
 }
 
 export type Todo = {
@@ -103,13 +112,14 @@ type BoardState = {
     description?: string
     states: StateInput[]
     labels: LabelInput[]
-    members: { userId: string; role: ProjectRole }[]
+    members: { userId: string; role: MemberRole }[]
   }) => Promise<void>
   updateProject: (
     id: string,
     patch: { name?: string; description?: string }
   ) => Promise<void>
   removeProject: (id: string) => Promise<void>
+  transferProjectOwner: (id: string, ownerId: string) => Promise<void>
   toggleProjectCollapse: (id: string) => void
   addState: (projectId: string, input: StateInput) => Promise<void>
   updateState: (id: string, patch: Partial<StateInput>) => Promise<void>
@@ -120,9 +130,9 @@ type BoardState = {
   removeLabel: (id: string) => Promise<void>
   addMember: (
     projectId: string,
-    input: { userId: string; role: ProjectRole }
+    input: { userId: string; role: MemberRole }
   ) => Promise<void>
-  updateMember: (id: string, patch: { role: ProjectRole }) => Promise<void>
+  updateMember: (id: string, patch: { role: MemberRole }) => Promise<void>
   removeMember: (id: string) => Promise<void>
   addTodo: (todo: TodoInput) => Promise<void>
   updateTodo: (id: string, patch: Partial<Omit<Todo, "id">>) => Promise<void>
@@ -143,6 +153,7 @@ type ProjectRecord = RecordModel & {
   description: string
   owner: string
   archived: boolean
+  expand?: { owner?: UserRecord }
 }
 
 type StateRecord = RecordModel & {
@@ -168,7 +179,7 @@ type UserRecord = RecordModel & {
 type MemberRecord = RecordModel & {
   project: string
   user: string
-  role: ProjectRole
+  role: MemberRole
   expand?: { user?: UserRecord }
 }
 
@@ -210,14 +221,44 @@ function toTemplate(record: TemplateRecord): BoardTemplate {
 }
 
 function toProject(record: ProjectRecord): Project {
+  const owner = record.expand?.owner
   return {
     id: record.id,
     name: record.name,
     description: record.description || undefined,
     ownerId: record.owner,
+    ownerName: owner?.name || owner?.email || "Unknown owner",
+    ownerAvatar:
+      owner?.avatar && owner ? pb.files.getURL(owner, owner.avatar) : undefined,
     archived: record.archived,
     collapsed: expandedProjectId === record.id,
   }
+}
+
+export function projectParticipants(
+  project: Project,
+  members: Member[]
+): ProjectParticipant[] {
+  const participants: ProjectParticipant[] = [
+    {
+      userId: project.ownerId,
+      name: project.ownerName,
+      avatar: project.ownerAvatar,
+      role: "owner",
+    },
+  ]
+  const seen = new Set([project.ownerId])
+  for (const member of members) {
+    if (member.projectId !== project.id || seen.has(member.userId)) continue
+    seen.add(member.userId)
+    participants.push({
+      userId: member.userId,
+      name: member.name,
+      avatar: member.avatar,
+      role: member.role,
+    })
+  }
+  return participants
 }
 
 function toState(record: StateRecord): ProjectState {
@@ -309,6 +350,7 @@ async function loadBoardPage(page: number) {
         .getList<ProjectRecord>(page + 1, PROJECTS_PER_PAGE, {
           filter: "archived = false",
           sort: "-created",
+          expand: "owner",
           requestKey: null,
         }),
       pb
@@ -358,7 +400,11 @@ async function connectRealtime(
         key === "members"
           ? { expand: "user", requestKey: null }
           : key === "projects"
-            ? { filter: "archived = false", requestKey: null }
+            ? {
+                filter: "archived = false",
+                expand: "owner",
+                requestKey: null,
+              }
             : { requestKey: null }
       const unsubscribe = await pb.collection(collection).subscribe<T>(
         "*",
@@ -490,10 +536,14 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     try {
       const record = await pb
         .collection(COLLECTIONS.projects)
-        .update<ProjectRecord>(id, {
-          name: patch.name,
-          description: patch.description,
-        })
+        .update<ProjectRecord>(
+          id,
+          {
+            name: patch.name,
+            description: patch.description,
+          },
+          { expand: "owner", requestKey: null }
+        )
       set((state) => ({
         projects: upsertById(state.projects, toProject(record)),
       }))
@@ -517,6 +567,26 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       }))
     } catch (error) {
       const message = messageFromError(error, "Could not delete the project")
+      set({ error: message })
+      toast.error(message)
+      throw new Error(message, { cause: error })
+    }
+  },
+
+  transferProjectOwner: async (id, ownerId) => {
+    set({ error: null })
+    try {
+      await pb.send(`/api/board/projects/${id}/owner`, {
+        method: "PATCH",
+        body: { ownerId },
+      })
+      const snapshot = await loadBoardPage(get().projectPage)
+      set(snapshot)
+    } catch (error) {
+      const message = messageFromError(
+        error,
+        "Could not transfer project ownership"
+      )
       set({ error: message })
       toast.error(message)
       throw new Error(message, { cause: error })

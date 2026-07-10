@@ -11,11 +11,29 @@ func Register(app *pocketbase.PocketBase) {
 	app.OnServe().BindFunc(func(event *core.ServeEvent) error {
 		event.Router.POST("/api/board/projects", createBoardProject).
 			Bind(apis.RequireAuth("users"))
+		event.Router.PATCH("/api/board/projects/{id}/owner", transferBoardProjectOwnerRequest).
+			Bind(apis.RequireAuth("users"))
 		return event.Next()
 	})
+
+	app.OnRecordUpdateRequest(boardProjectsCollection).BindFunc(logBoardProjectUpdate)
+
+	app.OnRecordCreateRequest(boardProjectMembersCollection).BindFunc(validateBoardProjectMemberRequest)
+	app.OnRecordUpdateRequest(boardProjectMembersCollection).BindFunc(validateBoardProjectMemberRequest)
+	app.OnRecordCreateRequest(boardProjectMembersCollection).BindFunc(logBoardProjectMemberCreate)
+	app.OnRecordUpdateRequest(boardProjectMembersCollection).BindFunc(logBoardProjectMemberUpdate)
+	app.OnRecordDeleteRequest(boardProjectMembersCollection).BindFunc(logBoardProjectMemberDelete)
+
+	app.OnRecordCreateRequest(boardProjectStatesCollection).BindFunc(logBoardProjectStateCreate)
+	app.OnRecordUpdateRequest(boardProjectStatesCollection).BindFunc(logBoardProjectStateUpdate)
+	app.OnRecordDeleteRequest(boardProjectStatesCollection).BindFunc(preventDeletingUsedBoardState)
+	app.OnRecordDeleteRequest(boardProjectStatesCollection).BindFunc(logBoardProjectStateDelete)
+
+	app.OnRecordCreateRequest(boardProjectLabelsCollection).BindFunc(logBoardProjectLabelCreate)
+	app.OnRecordUpdateRequest(boardProjectLabelsCollection).BindFunc(logBoardProjectLabelUpdate)
+	app.OnRecordDeleteRequest(boardProjectLabelsCollection).BindFunc(logBoardProjectLabelDelete)
 
 	app.OnRecordCreateRequest(boardTasksCollection).BindFunc(validateBoardTaskRequest)
 	app.OnRecordUpdateRequest(boardTasksCollection).BindFunc(validateBoardTaskRequest)
 	app.OnRecordDeleteRequest(boardTasksCollection).BindFunc(logBoardTaskDelete)
-	app.OnRecordDeleteRequest(boardProjectStatesCollection).BindFunc(preventDeletingUsedBoardState)
 }

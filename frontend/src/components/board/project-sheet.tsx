@@ -41,16 +41,17 @@ import {
 } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
+import { ProjectActivity } from "./project-activity"
 import {
   STATE_CATEGORY_META,
   useBoardStore,
   type BoardTemplate,
+  type MemberRole,
   type Project,
-  type ProjectRole,
   type StateCategory,
 } from "@/store/board"
 import { pb } from "@/lib/pocketbase"
-import { useAuthStore } from "@/store/auth"
+import { useAuthStore, type User } from "@/store/auth"
 
 type ProjectSheetProps = {
   open: boolean
@@ -78,7 +79,7 @@ type MemberDraft = {
   userId: string
   name: string
   avatar?: string
-  role: ProjectRole
+  role: MemberRole
 }
 
 const emptyStateDraft: StateDraft = {
@@ -122,6 +123,135 @@ function templateToDrafts(
 
 type UserOption = { id: string; name: string; avatar?: string }
 
+function OwnerSection({
+  project,
+  currentUser,
+  onTransferred,
+}: {
+  project: Project | null
+  currentUser: User | null
+  onTransferred: () => void
+}) {
+  const transferProjectOwner = useBoardStore((s) => s.transferProjectOwner)
+  const [userOptions, setUserOptions] = useState<UserOption[]>([])
+  const [selectedUserId, setSelectedUserId] = useState("")
+  const [confirmTransfer, setConfirmTransfer] = useState(false)
+  const [transferring, setTransferring] = useState(false)
+
+  useEffect(() => {
+    if (project) void loadUsers(setUserOptions)
+  }, [project])
+
+  const owner = project
+    ? {
+        id: project.ownerId,
+        name: project.ownerName,
+        avatar: project.ownerAvatar,
+      }
+    : currentUser
+  const transferTargets = project
+    ? userOptions.filter((user) => user.id !== project.ownerId)
+    : []
+  const selectedUser = transferTargets.find(
+    (user) => user.id === selectedUserId
+  )
+
+  const handleTransfer = async () => {
+    if (!project || !selectedUserId) return
+    setTransferring(true)
+    try {
+      await transferProjectOwner(project.id, selectedUserId)
+      setConfirmTransfer(false)
+      onTransferred()
+    } catch {
+      // The board error banner displays the server response.
+    } finally {
+      setTransferring(false)
+    }
+  }
+
+  if (!owner) return null
+
+  return (
+    <div className="flex flex-col gap-2">
+      <FieldLabel>Owner</FieldLabel>
+      <div className="flex items-center gap-2 rounded-xl border p-3">
+        <Avatar size="sm">
+          {owner.avatar && (
+            <AvatarImage
+              src={owner.avatar}
+              alt={owner.name}
+              className="object-cover"
+            />
+          )}
+          <AvatarFallback className="text-[9px]">
+            {owner.name.charAt(0).toUpperCase()}
+          </AvatarFallback>
+        </Avatar>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">
+          {owner.name}
+        </span>
+        <span className="text-xs text-muted-foreground">Owner</span>
+      </div>
+
+      {project && transferTargets.length > 0 && (
+        <div className="flex items-center gap-2 rounded-xl border border-dashed p-3">
+          <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+            <SelectTrigger className="min-w-0 flex-1">
+              <SelectValue placeholder="Select the new owner..." />
+            </SelectTrigger>
+            <SelectContent>
+              {transferTargets.map((user) => (
+                <SelectItem key={user.id} value={user.id}>
+                  {user.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!selectedUserId}
+            onClick={() => setConfirmTransfer(true)}
+          >
+            Transfer ownership
+          </Button>
+        </div>
+      )}
+
+      <AlertDialog open={confirmTransfer} onOpenChange={setConfirmTransfer}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Transfer project ownership?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {selectedUser ? (
+                <>
+                  <strong>{selectedUser.name}</strong> will become the project
+                  owner. You will become a regular member and will no longer be
+                  able to edit project settings.
+                </>
+              ) : (
+                "Select a new owner before continuing."
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={transferring}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!selectedUser || transferring}
+              onClick={() => void handleTransfer()}
+            >
+              Transfer ownership
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  )
+}
+
 export function ProjectSheet({
   open,
   onOpenChange,
@@ -149,19 +279,7 @@ export function ProjectSheet({
     ? emptyDrafts
     : templateToDrafts(initialTemplateId, templates)
 
-  // In add mode, seed member drafts with the current user as owner (immutable).
-  const initialMembers: MemberDraft[] =
-    isEdit || !currentUser
-      ? []
-      : [
-          {
-            id: "current-user",
-            userId: currentUser.id,
-            name: currentUser.name,
-            avatar: currentUser.avatar,
-            role: "owner" as ProjectRole,
-          },
-        ]
+  const initialMembers: MemberDraft[] = []
 
   // Basic info
   const [name, setName] = useState(project?.name ?? "")
@@ -215,9 +333,10 @@ export function ProjectSheet({
           labels: labelDrafts
             .filter((l) => l.name.trim())
             .map((l) => ({ name: l.name.trim(), color: l.color })),
-          members: memberDrafts
-            .filter((m) => m.role !== "owner")
-            .map((m) => ({ userId: m.userId, role: m.role })),
+          members: memberDrafts.map((m) => ({
+            userId: m.userId,
+            role: m.role,
+          })),
         })
       }
       onOpenChange(false)
@@ -318,6 +437,13 @@ export function ProjectSheet({
             setNewLabel={setNewLabel}
           />
 
+          {/* Owner */}
+          <OwnerSection
+            project={project}
+            currentUser={currentUser}
+            onTransferred={() => onOpenChange(false)}
+          />
+
           {/* Members */}
           {isEdit && project ? (
             <MembersSection project={project} />
@@ -325,8 +451,11 @@ export function ProjectSheet({
             <MembersAddSection
               drafts={memberDrafts}
               setDrafts={setMemberDrafts}
+              ownerId={currentUser?.id}
             />
           )}
+
+          {isEdit && project && <ProjectActivity projectId={project.id} />}
         </div>
 
         <SheetFooter className="flex-row items-center justify-between gap-2">
@@ -1095,20 +1224,24 @@ function LabelsEditSection({ project }: { project: Project }) {
 function MembersAddSection({
   drafts,
   setDrafts,
+  ownerId,
 }: {
   drafts: MemberDraft[]
   setDrafts: (members: MemberDraft[]) => void
+  ownerId?: string
 }) {
   const [userOptions, setUserOptions] = useState<UserOption[]>([])
   const [selectedUserId, setSelectedUserId] = useState("")
-  const [selectedRole, setSelectedRole] = useState<ProjectRole>("member")
+  const [selectedRole, setSelectedRole] = useState<MemberRole>("member")
 
   useEffect(() => {
     void loadUsers(setUserOptions)
   }, [])
 
   const memberUserIds = new Set(drafts.map((m) => m.userId))
-  const availableUsers = userOptions.filter((u) => !memberUserIds.has(u.id))
+  const availableUsers = userOptions.filter(
+    (u) => u.id !== ownerId && !memberUserIds.has(u.id)
+  )
 
   const handleAdd = () => {
     if (!selectedUserId) return
@@ -1132,7 +1265,7 @@ function MembersAddSection({
     setDrafts(drafts.filter((m) => m.id !== id))
   }
 
-  const handleRoleChange = (id: string, role: ProjectRole) => {
+  const handleRoleChange = (id: string, role: MemberRole) => {
     setDrafts(drafts.map((m) => (m.id === id ? { ...m, role } : m)))
   }
 
@@ -1160,40 +1293,32 @@ function MembersAddSection({
             <span className="min-w-0 flex-1 truncate text-sm font-medium">
               {member.name}
             </span>
-            {member.role === "owner" ? (
-              <span className="text-xs text-muted-foreground">Owner</span>
-            ) : (
-              <>
-                <Select
-                  value={member.role}
-                  onValueChange={(v) =>
-                    handleRoleChange(member.id, v as ProjectRole)
-                  }
-                >
-                  <SelectTrigger className="w-28">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ROLE_OPTIONS.filter((r) => r.value !== "owner").map(
-                      (r) => (
-                        <SelectItem key={r.value} value={r.value}>
-                          {r.label}
-                        </SelectItem>
-                      )
-                    )}
-                  </SelectContent>
-                </Select>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="text-destructive hover:text-destructive"
-                  onClick={() => handleRemove(member.id)}
-                  aria-label={`Remove ${member.name}`}
-                >
-                  <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
-                </Button>
-              </>
-            )}
+            <Select
+              value={member.role}
+              onValueChange={(v) =>
+                handleRoleChange(member.id, v as MemberRole)
+              }
+            >
+              <SelectTrigger className="w-28">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ROLE_OPTIONS.map((r) => (
+                  <SelectItem key={r.value} value={r.value}>
+                    {r.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-destructive hover:text-destructive"
+              onClick={() => handleRemove(member.id)}
+              aria-label={`Remove ${member.name}`}
+            >
+              <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
+            </Button>
           </div>
         ))}
 
@@ -1214,13 +1339,13 @@ function MembersAddSection({
             </Select>
             <Select
               value={selectedRole}
-              onValueChange={(v) => setSelectedRole(v as ProjectRole)}
+              onValueChange={(v) => setSelectedRole(v as MemberRole)}
             >
               <SelectTrigger className="w-28">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {ROLE_OPTIONS.filter((r) => r.value !== "owner").map((r) => (
+                {ROLE_OPTIONS.map((r) => (
                   <SelectItem key={r.value} value={r.value}>
                     {r.label}
                   </SelectItem>
@@ -1242,8 +1367,7 @@ function MembersAddSection({
 // Members section (edit mode)
 // ---------------------------------------------------------------------------
 
-const ROLE_OPTIONS: { value: ProjectRole; label: string }[] = [
-  { value: "owner", label: "Owner" },
+const ROLE_OPTIONS: { value: MemberRole; label: string }[] = [
   { value: "admin", label: "Admin" },
   { value: "member", label: "Member" },
   { value: "viewer", label: "Viewer" },
@@ -1257,7 +1381,7 @@ function MembersSection({ project }: { project: Project }) {
 
   const [userOptions, setUserOptions] = useState<UserOption[]>([])
   const [selectedUserId, setSelectedUserId] = useState("")
-  const [selectedRole, setSelectedRole] = useState<ProjectRole>("member")
+  const [selectedRole, setSelectedRole] = useState<MemberRole>("member")
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -1272,7 +1396,9 @@ function MembersSection({ project }: { project: Project }) {
 
   // Users not yet members
   const memberUserIds = new Set(projectMembers.map((m) => m.userId))
-  const availableUsers = userOptions.filter((u) => !memberUserIds.has(u.id))
+  const availableUsers = userOptions.filter(
+    (u) => u.id !== project.ownerId && !memberUserIds.has(u.id)
+  )
 
   const handleAdd = async () => {
     if (!selectedUserId) return
@@ -1315,42 +1441,34 @@ function MembersSection({ project }: { project: Project }) {
             <span className="min-w-0 flex-1 truncate text-sm font-medium">
               {member.name}
             </span>
-            {member.role === "owner" ? (
-              <span className="text-xs text-muted-foreground">Owner</span>
-            ) : (
-              <>
-                <Select
-                  value={member.role}
-                  onValueChange={(v) =>
-                    void updateMember(member.id, {
-                      role: v as ProjectRole,
-                    }).catch(() => {})
-                  }
-                >
-                  <SelectTrigger className="w-28">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ROLE_OPTIONS.filter((r) => r.value !== "owner").map(
-                      (r) => (
-                        <SelectItem key={r.value} value={r.value}>
-                          {r.label}
-                        </SelectItem>
-                      )
-                    )}
-                  </SelectContent>
-                </Select>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="text-destructive hover:text-destructive"
-                  onClick={() => void removeMember(member.id).catch(() => {})}
-                  aria-label={`Remove ${member.name}`}
-                >
-                  <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
-                </Button>
-              </>
-            )}
+            <Select
+              value={member.role}
+              onValueChange={(v) =>
+                void updateMember(member.id, {
+                  role: v as MemberRole,
+                }).catch(() => {})
+              }
+            >
+              <SelectTrigger className="w-28">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ROLE_OPTIONS.map((r) => (
+                  <SelectItem key={r.value} value={r.value}>
+                    {r.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-destructive hover:text-destructive"
+              onClick={() => void removeMember(member.id).catch(() => {})}
+              aria-label={`Remove ${member.name}`}
+            >
+              <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
+            </Button>
           </div>
         ))}
 
@@ -1371,13 +1489,13 @@ function MembersSection({ project }: { project: Project }) {
             </Select>
             <Select
               value={selectedRole}
-              onValueChange={(v) => setSelectedRole(v as ProjectRole)}
+              onValueChange={(v) => setSelectedRole(v as MemberRole)}
             >
               <SelectTrigger className="w-28">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {ROLE_OPTIONS.filter((r) => r.value !== "owner").map((r) => (
+                {ROLE_OPTIONS.map((r) => (
                   <SelectItem key={r.value} value={r.value}>
                     {r.label}
                   </SelectItem>

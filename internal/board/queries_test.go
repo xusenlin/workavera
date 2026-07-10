@@ -57,6 +57,30 @@ func TestSearchVisibleProjectsUsesOwnerOrMemberPolicy(t *testing.T) {
 	}
 }
 
+func TestSearchVisibleProjectsFiltersByTaskAssigneeIncludingOwner(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(app.Cleanup)
+
+	owner := createQueryTestUser(t, app, "owner-filter@example.com", "Owner")
+	project := createQueryTestProject(t, app, owner.Id, "Assigned", false)
+	state := createQueryTestState(t, app, project.Id)
+	createQueryTestTask(t, app, project.Id, state.Id, owner.Id, []string{owner.Id})
+
+	result, err := SearchVisibleProjects(context.Background(), app, owner.Id, ProjectSearchOptions{
+		Limit:   20,
+		UserIDs: []string{owner.Id},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result) != 1 || result[0].ID != project.Id {
+		t.Fatalf("expected project assigned to owner, got %#v", result)
+	}
+}
+
 func createQueryTestUser(t *testing.T, app core.App, email, name string) *core.Record {
 	t.Helper()
 	users, err := app.FindCollectionByNameOrId("users")
@@ -83,6 +107,43 @@ func createQueryTestProject(t *testing.T, app core.App, ownerID, name string, ar
 	record.Set("owner", ownerID)
 	record.Set("name", name)
 	record.Set("archived", archived)
+	if err := app.Save(record); err != nil {
+		t.Fatal(err)
+	}
+	return record
+}
+
+func createQueryTestState(t *testing.T, app core.App, projectID string) *core.Record {
+	t.Helper()
+	collection, err := app.FindCollectionByNameOrId(boardProjectStatesCollection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := core.NewRecord(collection)
+	record.Set("project", projectID)
+	record.Set("name", "Todo")
+	record.Set("color", "#64748b")
+	record.Set("category", "pending")
+	record.Set("sort_order", 1024)
+	if err := app.Save(record); err != nil {
+		t.Fatal(err)
+	}
+	return record
+}
+
+func createQueryTestTask(t *testing.T, app core.App, projectID, stateID, creatorID string, assignees []string) *core.Record {
+	t.Helper()
+	collection, err := app.FindCollectionByNameOrId(boardTasksCollection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := core.NewRecord(collection)
+	record.Set("project", projectID)
+	record.Set("state", stateID)
+	record.Set("title", "Assigned task")
+	record.Set("priority", "medium")
+	record.Set("assignees", assignees)
+	record.Set("created_by", creatorID)
 	if err := app.Save(record); err != nil {
 		t.Fatal(err)
 	}

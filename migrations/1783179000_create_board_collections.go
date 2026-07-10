@@ -150,7 +150,7 @@ func createBoardCollections(app core.App) error {
 	members.Fields.Add(
 		&core.RelationField{Name: "project", CollectionId: projects.Id, MaxSelect: 1, Required: true, CascadeDelete: true},
 		&core.RelationField{Name: "user", CollectionId: users.Id, MaxSelect: 1, Required: true},
-		&core.SelectField{Name: "role", Required: true, MaxSelect: 1, Values: []string{"owner", "admin", "member", "viewer"}},
+		&core.SelectField{Name: "role", Required: true, MaxSelect: 1, Values: []string{"admin", "member", "viewer"}},
 	)
 	addBoardTimestamps(members)
 	members.AddIndex("idx_board_members_project_user", true, "project, user", "")
@@ -234,8 +234,8 @@ func configureBoardRules(app core.App, projects, states, members, labels, tasks 
 	members.ListRule = types.Pointer(childRead)
 	members.ViewRule = members.ListRule
 	members.CreateRule = types.Pointer(projectOwner)
-	members.UpdateRule = types.Pointer(projectOwner + ` && @request.body.project:changed = false`)
-	members.DeleteRule = types.Pointer(projectOwner + ` && role != "owner"`)
+	members.UpdateRule = types.Pointer(projectOwner + ` && @request.body.project:changed = false && @request.body.user:changed = false`)
+	members.DeleteRule = types.Pointer(projectOwner)
 
 	labels.ListRule = types.Pointer(childRead)
 	labels.ViewRule = labels.ListRule

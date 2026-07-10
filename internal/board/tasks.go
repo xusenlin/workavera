@@ -16,6 +16,10 @@ func validateBoardTaskRequest(event *core.RecordRequestEvent) error {
 	if projectID == "" || stateID == "" {
 		return event.BadRequestError("Project and state are required.", nil)
 	}
+	project, err := event.App.FindRecordById(boardProjectsCollection, projectID)
+	if err != nil {
+		return event.BadRequestError("Project not found.", err)
+	}
 
 	state, err := event.App.FindRecordById(boardProjectStatesCollection, stateID)
 	if err != nil || state.GetString("project") != projectID {
@@ -33,21 +37,13 @@ func validateBoardTaskRequest(event *core.RecordRequestEvent) error {
 		}
 	}
 	for _, userID := range event.Record.GetStringSlice("assignees") {
-		_, err := event.App.FindFirstRecordByFilter(
-			boardProjectMembersCollection,
-			"project = {:project} && user = {:user}",
-			dbx.Params{"project": projectID, "user": userID},
-		)
-		if err != nil {
+		eligible, err := projectVisibleTo(event.App, project, userID)
+		if err != nil || !eligible {
 			return event.BadRequestError("Every assignee must be a project member.", err)
 		}
 	}
 
 	if event.Auth != nil {
-		project, err := event.App.FindRecordById(boardProjectsCollection, projectID)
-		if err != nil {
-			return event.BadRequestError("Project not found.", err)
-		}
 		if project.GetString("owner") != event.Auth.Id {
 			member, err := event.App.FindFirstRecordByFilter(
 				boardProjectMembersCollection,

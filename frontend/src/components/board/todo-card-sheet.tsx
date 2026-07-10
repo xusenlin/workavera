@@ -38,6 +38,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import {
   PRIORITY_META,
+  projectParticipants,
   useBoardStore,
   type Priority,
   type Todo,
@@ -97,6 +98,7 @@ export function TodoCardSheet({
   const removeTodo = useBoardStore((s) => s.removeTodo)
   const labels = useBoardStore((s) => s.labels)
   const members = useBoardStore((s) => s.members)
+  const projects = useBoardStore((s) => s.projects)
   const states = useBoardStore((s) => s.states)
 
   const [form, setForm] = useState<FormState>(() =>
@@ -127,9 +129,12 @@ export function TodoCardSheet({
   const projectLabels = labels.filter(
     (label) => label.projectId === currentProjectId
   )
-  const projectMembers = members.filter(
-    (member) => member.projectId === currentProjectId
+  const currentProject = projects.find(
+    (project) => project.id === currentProjectId
   )
+  const participants = currentProject
+    ? projectParticipants(currentProject, members)
+    : []
 
   const handleSave = async () => {
     if (!form.title.trim() || !form.stateId) return
@@ -303,17 +308,19 @@ export function TodoCardSheet({
             </div>
           </div>
 
-          {/* Members */}
+          {/* Assignees */}
           <div className="flex flex-col gap-2">
-            <Label>Members</Label>
+            <Label>Assignees</Label>
             <div className="flex flex-wrap gap-2">
-              {projectMembers.map((member) => {
-                const selected = form.members.includes(member.userId)
+              {participants.map((participant) => {
+                const selected = form.members.includes(participant.userId)
                 return (
                   <button
-                    key={member.id}
+                    key={participant.userId}
                     type="button"
-                    onClick={() => toggleArrayItem("members", member.userId)}
+                    onClick={() =>
+                      toggleArrayItem("members", participant.userId)
+                    }
                     className={cn(
                       "flex items-center gap-2 rounded-lg border px-2 py-1 text-xs transition-all",
                       selected
@@ -322,18 +329,23 @@ export function TodoCardSheet({
                     )}
                   >
                     <Avatar size="sm">
-                      {member.avatar && (
+                      {participant.avatar && (
                         <AvatarImage
-                          src={member.avatar}
-                          alt={member.name}
+                          src={participant.avatar}
+                          alt={participant.name}
                           className="object-cover"
                         />
                       )}
                       <AvatarFallback className="text-[9px]">
-                        {member.name.charAt(0).toUpperCase()}
+                        {participant.name.charAt(0).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
-                    {member.name}
+                    {participant.name}
+                    {participant.role === "owner" && (
+                      <span className="text-[10px] text-muted-foreground">
+                        Owner
+                      </span>
+                    )}
                   </button>
                 )
               })}

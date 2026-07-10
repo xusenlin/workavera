@@ -7,7 +7,12 @@ import { Calendar03Icon, TextAlignLeftIcon } from "@hugeicons/core-free-icons"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-import { PRIORITY_META, useBoardStore, type Todo } from "@/store/board"
+import {
+  PRIORITY_META,
+  projectParticipants,
+  useBoardStore,
+  type Todo,
+} from "@/store/board"
 
 type TodoCardProps = {
   todo: Todo
@@ -32,6 +37,7 @@ function formatDate(dueDate: string) {
 export function TodoCard({ todo, onEdit }: TodoCardProps) {
   const labels = useBoardStore((s) => s.labels)
   const members = useBoardStore((s) => s.members)
+  const projects = useBoardStore((s) => s.projects)
 
   const {
     attributes,
@@ -55,11 +61,12 @@ export function TodoCard({ todo, onEdit }: TodoCardProps) {
   }
 
   const todoLabels = labels.filter((l) => todo.labels.includes(l.id))
-  const todoMembers = members.filter(
-    (member) =>
-      member.projectId === todo.projectId &&
-      todo.members.includes(member.userId)
-  )
+  const project = projects.find((item) => item.id === todo.projectId)
+  const todoMembers = project
+    ? projectParticipants(project, members).filter((participant) =>
+        todo.members.includes(participant.userId)
+      )
+    : []
   const priorityMeta = PRIORITY_META.find((p) => p.value === todo.priority)
   const overdue = isOverdue(todo.dueDate)
 
@@ -147,7 +154,11 @@ export function TodoCard({ todo, onEdit }: TodoCardProps) {
         {todoMembers.length > 0 && (
           <div className="flex -space-x-1.5">
             {todoMembers.slice(0, 3).map((member) => (
-              <Avatar key={member.id} size="sm" className="ring-2 ring-card">
+              <Avatar
+                key={member.userId}
+                size="sm"
+                className="ring-2 ring-card"
+              >
                 {member.avatar && (
                   <AvatarImage
                     src={member.avatar}

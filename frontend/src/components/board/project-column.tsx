@@ -30,6 +30,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
+import { useAuthStore } from "@/store/auth"
 import {
   useBoardStore,
   type Project,
@@ -59,6 +60,7 @@ export function ProjectColumn({
   const removeProject = useBoardStore((store) => store.removeProject)
   const labels = useBoardStore((store) => store.labels)
   const members = useBoardStore((store) => store.members)
+  const currentUser = useAuthStore((store) => store.user)
   const [deleteOpen, setDeleteOpen] = useState(false)
 
   const projectTodos = todos.filter((todo) => todo.projectId === project.id)
@@ -69,6 +71,7 @@ export function ProjectColumn({
   const projectMembers = members.filter(
     (member) => member.projectId === project.id
   )
+  const isOwner = currentUser?.id === project.ownerId
 
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-card/50 p-4">
@@ -108,44 +111,44 @@ export function ProjectColumn({
               {projectLabels.length}
             </span>
           )}
-          {projectMembers.length > 0 && (
-            <span className="flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-xs text-muted-foreground tabular-nums">
-              <HugeiconsIcon
-                icon={UserGroup02Icon}
-                strokeWidth={2}
-                className="size-3"
-              />
-              {projectMembers.length}
-            </span>
-          )}
+          <span className="flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-xs text-muted-foreground tabular-nums">
+            <HugeiconsIcon
+              icon={UserGroup02Icon}
+              strokeWidth={2}
+              className="size-3"
+            />
+            {projectMembers.length + 1}
+          </span>
         </button>
 
-        <div className="ml-auto">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Project options"
-              >
-                <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onEditProject?.(project)}>
-                <HugeiconsIcon icon={Settings02Icon} strokeWidth={2} />
-                Edit project
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                variant="destructive"
-                onClick={() => setDeleteOpen(true)}
-              >
-                <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
-                Delete project
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        {isOwner && (
+          <div className="ml-auto">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Project options"
+                >
+                  <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => onEditProject?.(project)}>
+                  <HugeiconsIcon icon={Settings02Icon} strokeWidth={2} />
+                  Edit project
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  variant="destructive"
+                  onClick={() => setDeleteOpen(true)}
+                >
+                  <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
+                  Delete project
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
       </div>
 
       {project.description && !project.collapsed && (
@@ -182,13 +185,15 @@ export function ProjectColumn({
                 Add at least one state before creating tasks.
               </p>
             </div>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => onEditProject?.(project)}
-            >
-              Edit project
-            </Button>
+            {isOwner && (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => onEditProject?.(project)}
+              >
+                Edit project
+              </Button>
+            )}
           </div>
         )}
       </div>

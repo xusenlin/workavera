@@ -1,6 +1,7 @@
 package migrations
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/pocketbase/pocketbase/core"
@@ -50,9 +51,20 @@ func TestBoardCollectionsMigration(t *testing.T) {
 	if projects.Fields.GetByName("created") == nil || projects.Fields.GetByName("updated") == nil {
 		t.Fatal("board collections must expose created and updated timestamps")
 	}
+	members, err := app.FindCollectionByNameOrId(boardProjectMembersCollection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	role, ok := members.Fields.GetByName("role").(*core.SelectField)
+	if !ok || !slices.Equal(role.Values, []string{"admin", "member", "viewer"}) {
+		t.Fatalf("unexpected member roles: %#v", role)
+	}
 
 	if err := dropReadingItemsCollection(app); err != nil {
 		t.Fatalf("drop reading items: %v", err)
+	}
+	if err := dropBoardProjectOperationLogs(app); err != nil {
+		t.Fatalf("drop project operation logs: %v", err)
 	}
 	if err := dropBoardTaskOperationLogs(app); err != nil {
 		t.Fatalf("drop task operation logs: %v", err)
