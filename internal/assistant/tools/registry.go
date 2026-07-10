@@ -18,15 +18,15 @@ func NewFactory(app core.App) *Factory {
 
 func (f *Factory) ForActor(actorID string) []fantasy.AgentTool {
 	return []fantasy.AgentTool{
-		newFetchAndShowContactsTool(f.app, actorID),
-		newFetchAndShowBoardProjectsTool(f.app, actorID),
-		newFetchAndShowTasksTool(f.app, actorID),
-		newCreateAIMicroAppTool(f.app, actorID),
-		newUpdateAIMicroAppTool(f.app, actorID),
-		newGetAIMicroAppTool(f.app, actorID),
-		newListAIMicroAppsTool(f.app, actorID),
-		newSearchAIMicroAppTool(f.app, actorID),
-		newReplaceInAIMicroAppTool(f.app, actorID),
-		newWriteAIMicroAppChunkTool(f.app, actorID),
+		newContactsSearchTool(f.app, actorID),
+		newBoardSearchProjectsTool(f.app, actorID),
+		newBoardSearchTasksTool(f.app, actorID),
+		newMicroappsCreateTool(f.app, actorID),
+		newMicroappsUpdateTool(f.app, actorID),
+		newMicroappsGetTool(f.app, actorID),
+		newMicroappsListTool(f.app, actorID),
+		newMicroappsSearchTool(f.app, actorID),
+		newMicroappsReplaceTool(f.app, actorID),
+		newMicroappsWriteChunkTool(f.app, actorID),
 	}
 }

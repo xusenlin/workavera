@@ -26,13 +26,13 @@ import { TasksToolCard } from "./tasks-tool-output"
 import { AIMicroAppsToolCard } from "./ai-micro-apps-tool-output"
 
 const aiMicroAppToolNames = new Set([
-  "create_ai_micro_app",
-  "update_ai_micro_app",
-  "get_ai_micro_app",
-  "list_ai_micro_apps",
-  "search_ai_micro_app",
-  "replace_in_ai_micro_app",
-  "write_ai_micro_app_chunk",
+  "microapps_create",
+  "microapps_update",
+  "microapps_get",
+  "microapps_list",
+  "microapps_search",
+  "microapps_replace",
+  "microapps_write_chunk",
 ])
 
 function MessageParts({ message }: { message: ChatUIMessage }) {
@@ -58,13 +58,13 @@ function MessageParts({ message }: { message: ChatUIMessage }) {
           </Reasoning>
         )
       case "dynamic-tool":
-        if (part.toolName === "fetch_and_show_contacts") {
+        if (part.toolName === "contacts_search") {
           return <ContactsToolCard key={part.toolCallId} part={part} />
         }
-        if (part.toolName === "fetch_and_show_board_projects") {
+        if (part.toolName === "board_search_projects") {
           return <BoardProjectsToolCard key={part.toolCallId} part={part} />
         }
-        if (part.toolName === "fetch_and_show_tasks") {
+        if (part.toolName === "board_search_tasks") {
           return <TasksToolCard key={part.toolCallId} part={part} />
         }
         if (aiMicroAppToolNames.has(part.toolName)) {

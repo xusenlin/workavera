@@ -45,13 +45,13 @@ type AIMicroAppToolResult = AIMicroAppSummary & {
 }
 
 const toolNames = new Set([
-  "create_ai_micro_app",
-  "update_ai_micro_app",
-  "get_ai_micro_app",
-  "list_ai_micro_apps",
-  "search_ai_micro_app",
-  "replace_in_ai_micro_app",
-  "write_ai_micro_app_chunk",
+  "microapps_create",
+  "microapps_update",
+  "microapps_get",
+  "microapps_list",
+  "microapps_search",
+  "microapps_replace",
+  "microapps_write_chunk",
 ])
 
 const statusLabels: Partial<Record<DynamicToolUIPart["state"], string>> = {
@@ -115,8 +115,8 @@ function previewUrlFor(app: AIMicroAppSummary) {
 
 function isMutationTool(toolName: string) {
   return (
-    toolName === "replace_in_ai_micro_app" ||
-    toolName === "write_ai_micro_app_chunk"
+    toolName === "microapps_replace" ||
+    toolName === "microapps_write_chunk"
   )
 }
 
@@ -124,11 +124,11 @@ function mutationSummary(
   toolName: string,
   result: AIMicroAppToolResult | null
 ) {
-  if (toolName === "replace_in_ai_micro_app") {
+  if (toolName === "microapps_replace") {
     const count = result?.replacements ?? 0
     return count === 1 ? "Replaced 1 match" : `Replaced ${count} matches`
   }
-  if (toolName === "write_ai_micro_app_chunk") {
+  if (toolName === "microapps_write_chunk") {
     return result?.sourceLength
       ? `Saved source, ${result.sourceLength} chars total`
       : "Saved source chunk"

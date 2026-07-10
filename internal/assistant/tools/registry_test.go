@@ -13,16 +13,16 @@ func TestFactoryRegistersOnlyProductionTools(t *testing.T) {
 		names[tool.Info().Name] = true
 	}
 	for _, name := range []string{
-		"fetch_and_show_contacts",
-		"fetch_and_show_board_projects",
-		"fetch_and_show_tasks",
-		"create_ai_micro_app",
-		"update_ai_micro_app",
-		"get_ai_micro_app",
-		"list_ai_micro_apps",
-		"search_ai_micro_app",
-		"replace_in_ai_micro_app",
-		"write_ai_micro_app_chunk",
+		"contacts_search",
+		"board_search_projects",
+		"board_search_tasks",
+		"microapps_create",
+		"microapps_update",
+		"microapps_get",
+		"microapps_list",
+		"microapps_search",
+		"microapps_replace",
+		"microapps_write_chunk",
 	} {
 		if !names[name] {
 			t.Fatalf("missing production tool %q in registry: %#v", name, names)
