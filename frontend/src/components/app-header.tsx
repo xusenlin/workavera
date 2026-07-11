@@ -4,7 +4,6 @@ import { useLocation, useNavigate } from "react-router"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   Logout02Icon,
-  Search02Icon,
   Settings02Icon,
   UserCircle02Icon,
   BellIcon,
@@ -39,7 +38,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Spinner } from "@/components/ui/spinner"
@@ -118,20 +116,7 @@ export function AppHeader() {
         </Button>
       )}
 
-      {/* Search */}
-      <div className="relative ml-auto hidden w-56 lg:block">
-        <HugeiconsIcon
-          icon={Search02Icon}
-          strokeWidth={2}
-          className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
-        />
-        <Input
-          placeholder="Search..."
-          className="h-8 border-transparent bg-muted pl-8 text-sm shadow-none focus-visible:border-input"
-        />
-      </div>
-
-      <div className="ml-auto flex items-center gap-1 lg:ml-2">
+      <div className="ml-auto flex items-center gap-1">
         <Button
           variant="ghost"
           size="icon-sm"
