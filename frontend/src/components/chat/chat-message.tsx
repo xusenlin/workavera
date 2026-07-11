@@ -22,6 +22,7 @@ import type { ChatUIMessage } from "@/types/chat"
 
 import { ContactsToolCard } from "./contacts-tool-output"
 import { BoardProjectsToolCard } from "./board-projects-tool-output"
+import { BoardMutationToolCard } from "./board-mutation-tool-output"
 import { TasksToolCard } from "./tasks-tool-output"
 import { AIMicroAppsToolCard } from "./ai-micro-apps-tool-output"
 
@@ -33,6 +34,16 @@ const aiMicroAppToolNames = new Set([
   "microapps_search",
   "microapps_replace",
   "microapps_write_chunk",
+])
+
+const boardMutationToolNames = new Set([
+  "board_create_project",
+  "board_update_project",
+  "board_upsert_state",
+  "board_upsert_label",
+  "board_upsert_member",
+  "board_create_task",
+  "board_update_task",
 ])
 
 function MessageParts({ message }: { message: ChatUIMessage }) {
@@ -66,6 +77,9 @@ function MessageParts({ message }: { message: ChatUIMessage }) {
         }
         if (part.toolName === "board_search_tasks") {
           return <TasksToolCard key={part.toolCallId} part={part} />
+        }
+        if (boardMutationToolNames.has(part.toolName)) {
+          return <BoardMutationToolCard key={part.toolCallId} part={part} />
         }
         if (aiMicroAppToolNames.has(part.toolName)) {
           return <AIMicroAppsToolCard key={part.toolCallId} part={part} />

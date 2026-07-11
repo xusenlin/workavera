@@ -273,7 +273,7 @@ func createBoardCollections(app core.App) error {
 		&core.RelationField{Name: "state", CollectionId: states.Id, MaxSelect: 1, Required: true},
 		&core.TextField{Name: "title", Required: true, Max: 240, Presentable: true},
 		&core.TextField{Name: "description", Max: 10000},
-		&core.SelectField{Name: "priority", Required: true, MaxSelect: 1, Values: []string{"low", "medium", "high", "urgent"}},
+		&core.SelectField{Name: "priority", Required: true, MaxSelect: 1, Values: []string{"none", "low", "medium", "high", "urgent"}},
 		&core.NumberField{Name: "rank"},
 		&core.DateField{Name: "due_date"},
 		&core.RelationField{Name: "assignees", CollectionId: users.Id, MaxSelect: 20},

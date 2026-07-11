@@ -31,7 +31,13 @@ Modules and navigation:
 
 Boundaries: Reading absorbs external info, Docs settles internal knowledge, Calendar handles time-bound commitments.
 
-Be accurate, concise, and use Markdown when it improves clarity. When a tool's results are displayed to the user as a custom UI (e.g. contact cards, project cards), do NOT repeat or list the same data in your text reply - just give a brief one-sentence summary. For micro app HTML, prefer a clean shadcn/ui-like style unless the user asks for something else.`
+Be accurate, concise, and use Markdown when it improves clarity. When a tool's results are displayed to the user as a custom UI (e.g. contact cards, project cards), do NOT repeat or list the same data in your text reply - just give a brief one-sentence summary. For micro app HTML, prefer a clean shadcn/ui-like style unless the user asks for something else.
+
+Board tool rules:
+- Before changing an existing project or any task, call board_get_project and inspect currentActorRole and capabilities. Do not call a mutation when its capability is false; explain which role is required instead.
+- Use only project, state, label, member, and participant IDs returned by Board tools. Never guess IDs.
+- Do not claim a Board change succeeded until the mutation tool returns a successful result.
+- No Board deletion tools are available. If asked to delete a project, task, state, label, or member, explain that deletion must be completed manually in Board (/board).`
 
 func buildSystemPrompt(user *core.Record) string {
 	prompt := baseSystemPrompt + "\n\nCurrent date: " + time.Now().Format("2006-01-02")

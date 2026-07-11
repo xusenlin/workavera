@@ -27,12 +27,42 @@ type ProjectStateSummary struct {
 	TaskCount int    `json:"taskCount"`
 }
 
+type ProjectCapabilities struct {
+	CanEditProject    bool `json:"canEditProject"`
+	CanManageWorkflow bool `json:"canManageWorkflow"`
+	CanManageMembers  bool `json:"canManageMembers"`
+	CanEditTasks      bool `json:"canEditTasks"`
+	CanDeleteTasks    bool `json:"canDeleteTasks"`
+	CanDeleteProject  bool `json:"canDeleteProject"`
+}
+
+type ProjectParticipantSummary struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Avatar       string `json:"avatar,omitempty"`
+	CollectionID string `json:"collectionId,omitempty"`
+	Role         string `json:"role"`
+	MembershipID string `json:"membershipId,omitempty"`
+}
+
+type ProjectLabelSummary struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Color string `json:"color"`
+}
+
 type ProjectSummary struct {
-	ID          string                `json:"id"`
-	Name        string                `json:"name"`
-	Description string                `json:"description,omitempty"`
-	Archived    bool                  `json:"archived"`
-	States      []ProjectStateSummary `json:"states"`
+	ID               string                      `json:"id"`
+	Name             string                      `json:"name"`
+	Description      string                      `json:"description,omitempty"`
+	Archived         bool                        `json:"archived"`
+	Owner            ProjectParticipantSummary   `json:"owner"`
+	States           []ProjectStateSummary       `json:"states"`
+	Labels           []ProjectLabelSummary       `json:"labels,omitempty"`
+	Members          []ProjectParticipantSummary `json:"members,omitempty"`
+	Participants     []ProjectParticipantSummary `json:"participants,omitempty"`
+	CurrentActorRole string                      `json:"currentActorRole"`
+	Capabilities     ProjectCapabilities         `json:"capabilities"`
 }
 
 // SearchVisibleProjects centralizes the same owner-or-member visibility rule
@@ -112,11 +142,14 @@ func SearchVisibleProjects(ctx context.Context, app core.App, actorID string, op
 			return nil, err
 		}
 		result = append(result, ProjectSummary{
-			ID:          record.Id,
-			Name:        record.GetString("name"),
-			Description: record.GetString("description"),
-			Archived:    record.GetBool("archived"),
-			States:      states,
+			ID:               record.Id,
+			Name:             record.GetString("name"),
+			Description:      record.GetString("description"),
+			Archived:         record.GetBool("archived"),
+			Owner:            projectParticipantFromUser(app, record.GetString("owner"), "owner", ""),
+			States:           states,
+			CurrentActorRole: projectActorRole(app, record, actorID),
+			Capabilities:     projectCapabilities(projectActorRole(app, record, actorID)),
 		})
 	}
 	return result, nil
@@ -156,13 +189,111 @@ func GetVisibleProject(ctx context.Context, app core.App, actorID, projectID str
 	if err != nil {
 		return ProjectSummary{}, err
 	}
+	role := projectActorRole(app, record, actorID)
+	owner := projectParticipantFromUser(app, record.GetString("owner"), "owner", "")
+	members, err := loadProjectMembers(app, record.Id)
+	if err != nil {
+		return ProjectSummary{}, err
+	}
+	labels, err := loadProjectLabels(app, record.Id)
+	if err != nil {
+		return ProjectSummary{}, err
+	}
+	participants := make([]ProjectParticipantSummary, 0, len(members)+1)
+	participants = append(participants, owner)
+	participants = append(participants, members...)
 	return ProjectSummary{
-		ID:          record.Id,
-		Name:        record.GetString("name"),
-		Description: record.GetString("description"),
-		Archived:    record.GetBool("archived"),
-		States:      states,
+		ID:               record.Id,
+		Name:             record.GetString("name"),
+		Description:      record.GetString("description"),
+		Archived:         record.GetBool("archived"),
+		Owner:            owner,
+		States:           states,
+		Labels:           labels,
+		Members:          members,
+		Participants:     participants,
+		CurrentActorRole: role,
+		Capabilities:     projectCapabilities(role),
 	}, nil
+}
+
+func projectActorRole(app core.App, project *core.Record, actorID string) string {
+	if project.GetString("owner") == actorID {
+		return "owner"
+	}
+	membership, err := app.FindFirstRecordByFilter(
+		boardProjectMembersCollection,
+		"project = {:project} && user = {:user}",
+		dbx.Params{"project": project.Id, "user": actorID},
+	)
+	if err != nil {
+		return ""
+	}
+	return membership.GetString("role")
+}
+
+func projectCapabilities(role string) ProjectCapabilities {
+	owner := role == "owner"
+	taskWriter := owner || role == "admin" || role == "member"
+	return ProjectCapabilities{
+		CanEditProject:    owner,
+		CanManageWorkflow: owner,
+		CanManageMembers:  owner,
+		CanEditTasks:      taskWriter,
+		// Destructive assistant tools are intentionally not available.
+		CanDeleteTasks:   false,
+		CanDeleteProject: false,
+	}
+}
+
+func projectParticipantFromUser(app core.App, userID, role, membershipID string) ProjectParticipantSummary {
+	user := boardAssigneeSummary(app, userID)
+	return ProjectParticipantSummary{
+		ID: user.ID, Name: user.Name, Avatar: user.Avatar,
+		CollectionID: user.CollectionID, Role: role, MembershipID: membershipID,
+	}
+}
+
+func loadProjectMembers(app core.App, projectID string) ([]ProjectParticipantSummary, error) {
+	records, err := app.FindRecordsByFilter(
+		boardProjectMembersCollection,
+		"project = {:project}",
+		"created",
+		0,
+		0,
+		dbx.Params{"project": projectID},
+	)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]ProjectParticipantSummary, 0, len(records))
+	for _, record := range records {
+		result = append(result, projectParticipantFromUser(
+			app, record.GetString("user"), record.GetString("role"), record.Id,
+		))
+	}
+	return result, nil
+}
+
+func loadProjectLabels(app core.App, projectID string) ([]ProjectLabelSummary, error) {
+	records, err := app.FindRecordsByFilter(
+		boardProjectLabelsCollection,
+		"project = {:project}",
+		"name",
+		0,
+		0,
+		dbx.Params{"project": projectID},
+	)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]ProjectLabelSummary, 0, len(records))
+	for _, record := range records {
+		result = append(result, ProjectLabelSummary{
+			ID: record.Id, Name: record.GetString("name"), Color: record.GetString("color"),
+		})
+	}
+	return result, nil
 }
 
 // loadProjectStatesWithCounts returns the states of a project sorted by

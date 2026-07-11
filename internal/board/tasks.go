@@ -21,38 +21,22 @@ func validateBoardTaskRequest(event *core.RecordRequestEvent) error {
 		return event.BadRequestError("Project not found.", err)
 	}
 
-	state, err := event.App.FindRecordById(boardProjectStatesCollection, stateID)
-	if err != nil || state.GetString("project") != projectID {
-		return event.BadRequestError("The selected state does not belong to this project.", err)
-	}
-
 	if event.Record.IsNew() && event.Auth != nil {
 		event.Record.Set("created_by", event.Auth.Id)
 	}
-
-	for _, labelID := range event.Record.GetStringSlice("labels") {
-		label, err := event.App.FindRecordById(boardProjectLabelsCollection, labelID)
-		if err != nil || label.GetString("project") != projectID {
-			return event.BadRequestError("A selected label does not belong to this project.", err)
-		}
-	}
-	for _, userID := range event.Record.GetStringSlice("assignees") {
-		eligible, err := projectVisibleTo(event.App, project, userID)
-		if err != nil || !eligible {
-			return event.BadRequestError("Every assignee must be a project member.", err)
-		}
+	if err := validateTaskRelations(
+		event.App,
+		project,
+		stateID,
+		event.Record.GetStringSlice("labels"),
+		event.Record.GetStringSlice("assignees"),
+	); err != nil {
+		return event.BadRequestError(err.Error(), err)
 	}
 
 	if event.Auth != nil {
-		if project.GetString("owner") != event.Auth.Id {
-			member, err := event.App.FindFirstRecordByFilter(
-				boardProjectMembersCollection,
-				"project = {:project} && user = {:user}",
-				dbx.Params{"project": projectID, "user": event.Auth.Id},
-			)
-			if err != nil || member.GetString("role") == "viewer" {
-				return event.ForbiddenError("You cannot edit tasks in this project.", err)
-			}
+		if _, err := requireTaskWriter(event.App, event.Auth.Id, projectID); err != nil {
+			return event.ForbiddenError("You cannot edit tasks in this project.", err)
 		}
 	}
 

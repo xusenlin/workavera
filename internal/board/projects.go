@@ -56,98 +56,34 @@ func createBoardProject(event *core.RequestEvent) error {
 		return event.BadRequestError("Project name is required.", nil)
 	}
 
-	var projectID string
-	err := event.App.RunInTransaction(func(txApp core.App) error {
-		projects, err := txApp.FindCollectionByNameOrId(boardProjectsCollection)
-		if err != nil {
-			return err
+	states := make([]TemplateState, 0, len(request.States))
+	for _, state := range request.States {
+		states = append(states, TemplateState(state))
+	}
+	labels := make([]TemplateLabel, 0, len(request.Labels))
+	for _, label := range request.Labels {
+		labels = append(labels, TemplateLabel(label))
+	}
+	members := make([]UpsertMemberCommand, 0, len(request.Members))
+	for _, member := range request.Members {
+		if member.UserID == "" || member.UserID == event.Auth.Id {
+			continue
 		}
-
-		project := core.NewRecord(projects)
-		project.Set("name", request.Name)
-		project.Set("description", request.Description)
-		project.Set("owner", event.Auth.Id)
-		project.Set("archived", false)
-		if err := txApp.Save(project); err != nil {
-			return err
+		role := member.Role
+		if role != "admin" && role != "viewer" {
+			role = "member"
 		}
-		projectID = project.Id
-
-		membersCollection, err := txApp.FindCollectionByNameOrId(boardProjectMembersCollection)
-		if err != nil {
-			return err
-		}
-
-		// Create collaborators only. Project ownership lives exclusively on the
-		// project record and is never duplicated in the members collection.
-		for _, m := range request.Members {
-			if m.UserID == "" || m.UserID == event.Auth.Id {
-				continue
-			}
-			role := m.Role
-			if role != "admin" && role != "viewer" {
-				role = "member"
-			}
-			record := core.NewRecord(membersCollection)
-			record.Set("project", project.Id)
-			record.Set("user", m.UserID)
-			record.Set("role", role)
-			if err := txApp.Save(record); err != nil {
-				return err
-			}
-		}
-
-		// Create states.
-		if len(request.States) > 0 {
-			statesCollection, err := txApp.FindCollectionByNameOrId(boardProjectStatesCollection)
-			if err != nil {
-				return err
-			}
-			for index, state := range request.States {
-				name := strings.TrimSpace(state.Name)
-				if name == "" {
-					continue
-				}
-				record := core.NewRecord(statesCollection)
-				record.Set("project", project.Id)
-				record.Set("name", name)
-				record.Set("color", state.Color)
-				record.Set("category", state.Category)
-				record.Set("sort_order", (index+1)*1024)
-				if err := txApp.Save(record); err != nil {
-					return err
-				}
-			}
-		}
-
-		// Create labels.
-		if len(request.Labels) > 0 {
-			labelsCollection, err := txApp.FindCollectionByNameOrId(boardProjectLabelsCollection)
-			if err != nil {
-				return err
-			}
-			for _, label := range request.Labels {
-				name := strings.TrimSpace(label.Name)
-				if name == "" {
-					continue
-				}
-				record := core.NewRecord(labelsCollection)
-				record.Set("project", project.Id)
-				record.Set("name", name)
-				record.Set("color", label.Color)
-				if err := txApp.Save(record); err != nil {
-					return err
-				}
-			}
-		}
-
-		return nil
+		members = append(members, UpsertMemberCommand{UserID: member.UserID, Role: role})
+	}
+	result, err := CreateProject(event.Request.Context(), event.App, event.Auth.Id, CreateProjectCommand{
+		Name: request.Name, Description: request.Description,
+		States: states, Labels: labels, Members: members,
 	})
 	if err != nil {
 		return event.BadRequestError("Could not create project.", err)
 	}
 
-	project, err := event.App.FindRecordById(boardProjectsCollection, projectID)
+	project, err := event.App.FindRecordById(boardProjectsCollection, result.ID)
 	if err != nil {
 		return event.InternalServerError("Project was created but could not be loaded.", err)
 	}

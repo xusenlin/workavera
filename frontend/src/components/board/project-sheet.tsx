@@ -39,6 +39,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { ProjectActivity } from "./project-activity"
@@ -417,26 +418,6 @@ export function ProjectSheet({
             </div>
           )}
 
-          {/* States */}
-          <StatesSection
-            isEdit={isEdit}
-            project={project}
-            drafts={stateDrafts}
-            setDrafts={setStateDrafts}
-            newState={newState}
-            setNewState={setNewState}
-          />
-
-          {/* Labels */}
-          <LabelsSection
-            isEdit={isEdit}
-            project={project}
-            drafts={labelDrafts}
-            setDrafts={setLabelDrafts}
-            newLabel={newLabel}
-            setNewLabel={setNewLabel}
-          />
-
           {/* Owner */}
           <OwnerSection
             project={project}
@@ -444,16 +425,47 @@ export function ProjectSheet({
             onTransferred={() => onOpenChange(false)}
           />
 
-          {/* Members */}
-          {isEdit && project ? (
-            <MembersSection project={project} />
-          ) : (
-            <MembersAddSection
-              drafts={memberDrafts}
-              setDrafts={setMemberDrafts}
-              ownerId={currentUser?.id}
-            />
-          )}
+          <Tabs defaultValue="states" className="gap-3">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="states">States</TabsTrigger>
+              <TabsTrigger value="labels">Labels</TabsTrigger>
+              <TabsTrigger value="members">Members</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="states">
+              <StatesSection
+                isEdit={isEdit}
+                project={project}
+                drafts={stateDrafts}
+                setDrafts={setStateDrafts}
+                newState={newState}
+                setNewState={setNewState}
+              />
+            </TabsContent>
+
+            <TabsContent value="labels">
+              <LabelsSection
+                isEdit={isEdit}
+                project={project}
+                drafts={labelDrafts}
+                setDrafts={setLabelDrafts}
+                newLabel={newLabel}
+                setNewLabel={setNewLabel}
+              />
+            </TabsContent>
+
+            <TabsContent value="members">
+              {isEdit && project ? (
+                <MembersSection project={project} />
+              ) : (
+                <MembersAddSection
+                  drafts={memberDrafts}
+                  setDrafts={setMemberDrafts}
+                  ownerId={currentUser?.id}
+                />
+              )}
+            </TabsContent>
+          </Tabs>
 
           {isEdit && project && <ProjectActivity projectId={project.id} />}
         </div>

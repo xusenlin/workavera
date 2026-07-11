@@ -4,7 +4,7 @@ import { toast } from "sonner"
 
 import { pb } from "@/lib/pocketbase"
 
-export type Priority = "low" | "medium" | "high" | "urgent"
+export type Priority = "none" | "low" | "medium" | "high" | "urgent"
 export type StateCategory = "pending" | "active" | "completed"
 export type MemberRole = "admin" | "member" | "viewer"
 
@@ -904,6 +904,7 @@ export const PRIORITY_META: {
   label: string
   color: string
 }[] = [
+  { value: "none", label: "None", color: "#94a3b8" },
   { value: "low", label: "Low", color: "#64748b" },
   { value: "medium", label: "Medium", color: "#3b82f6" },
   { value: "high", label: "High", color: "#f59e0b" },

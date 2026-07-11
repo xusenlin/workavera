@@ -108,7 +108,7 @@
 | `state` | relation → board_project_states | 是 | 当前状态 |
 | `title` | text | 是 | 任务标题 |
 | `description` | text | 否 | 任务描述 |
-| `priority` | select | 是 | `low / medium / high / urgent` |
+| `priority` | select | 是 | `none / low / medium / high / urgent` |
 | `rank` | number | 否 | 当前列中的排序值 |
 | `due_date` | date | 否 | 截止日期 |
 | `assignees` | multi relation → users | 否 | 负责人 |
@@ -130,7 +130,7 @@
 | `changes` | json | 否 | 字段变更前后值 |
 | `created` | autodate | 是 | 操作时间 |
 
-日志只允许项目参与者（Owner 或成员）读取，由服务端任务 Hook 创建，Records API 禁止客户端新增、修改和删除。
+日志只允许项目参与者（Owner 或成员）读取，由服务端任务 Hook 或共享命令层创建，Records API 禁止客户端新增、修改和删除。
 
 ### 5.8 `board_project_operation_logs`
 
@@ -151,7 +151,7 @@
 - `create_label / update_label / delete_label`
 - `add_member / update_member / remove_member`
 
-Owner 转移日志在转移事务中创建；其他项目活动由服务端 Record Request Hook 创建。项目 owner 和成员可读，Records API 禁止客户端新增、修改和删除。
+Owner 转移日志在转移事务中创建；其他项目活动由服务端 Record Request Hook 或共享命令层创建。项目 owner 和成员可读，Records API 禁止客户端新增、修改和删除。
 
 ## 6. 内置模板
 
@@ -259,7 +259,7 @@ Edit Project 打开时按 `project` 加载并订阅 `board_project_operation_log
 
 ## 10. 验收标准
 
-- 可使用四套内置模板或空白方式创建项目。
+- 可使用五类中英文内置模板（共十套）或空白方式创建项目。
 - 不同项目拥有完全独立的状态和标签。
 - 项目状态可以新增、编辑、排序和删除。
 - 项目标签可以新增、编辑和删除。
@@ -273,3 +273,32 @@ Edit Project 打开时按 `project` 加载并订阅 `board_project_operation_log
 - 任务不能关联其他项目的状态或标签。
 - 两个登录会话可实时看到项目、状态和任务变化。
 - 刷新页面后数据由 PocketBase 恢复，业务数据不再依赖 localStorage。
+
+## 11. Board AI 工具
+
+### 查询和能力判断
+
+- `board_search_projects`：查询当前用户可见项目及各状态任务数。
+- `board_get_project`：返回项目 Owner、成员、参与者、状态、标签，以及当前用户的角色和 capability。
+- `board_search_tasks`：按项目、状态和负责人查询任务。
+- `board_list_templates`：列出当前用户可见的公共或个人模板。
+
+项目 capability 包含 `canEditProject`、`canManageWorkflow`、`canManageMembers` 和 `canEditTasks`。删除 capability 固定为 false。capability 用于帮助 AI 选择工具，服务端仍在每次写操作时重新鉴权。
+
+### 新建和修改
+
+- `board_create_project`：登录用户创建空白项目或从模板创建项目，调用者成为 Owner。
+- `board_update_project`：Owner 修改项目名称或描述。
+- `board_upsert_state`：Owner 新建或修改状态，不支持删除。
+- `board_upsert_label`：Owner 新建或修改标签，不支持删除。
+- `board_upsert_member`：Owner 添加成员或调整 `admin / member / viewer` 角色，不支持移除成员，也不能将 Owner 加入成员表。
+- `board_create_task`：Owner、admin、member 创建任务。
+- `board_update_task`：Owner、admin、member 修改任务；viewer 只读。
+
+AI 修改已有数据前必须先调用 `board_get_project`，检查 capability，并使用详情返回的真实状态、标签和参与者 ID。任务更新采用 patch 语义：省略字段表示保持不变，空数组清空标签或负责人，`dueDate: null` 清除截止日期。
+
+所有 AI 写操作进入与 Board HTTP 接口一致的共享命令层，服务端负责权限、跨项目关联、Owner/成员关系和操作日志校验。只有持久化成功后工具才返回成功结果。
+
+### 暂不支持的操作
+
+本期不注册任何 Board AI 删除工具，包括项目、任务、状态、标签和成员删除；也不实现 pending 命令、二次确认或审批卡。用户通过 Chat 请求删除时，Assistant 应说明需要前往 Board 页面手动完成。Owner 转移继续使用现有 Board UI 和专用接口。
