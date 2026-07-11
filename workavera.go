@@ -13,6 +13,7 @@ import (
 	"github.com/xusenlin/workavera/internal/board"
 	"github.com/xusenlin/workavera/internal/chat"
 	"github.com/xusenlin/workavera/internal/contacts"
+	"github.com/xusenlin/workavera/internal/docs"
 	"github.com/xusenlin/workavera/internal/llm"
 	"github.com/xusenlin/workavera/internal/microapps"
 	"github.com/xusenlin/workavera/internal/reading"
@@ -27,6 +28,7 @@ func main() {
 	app.RootCmd.Version = version
 	board.Register(app)
 	contacts.Register(app)
+	docs.Register(app)
 	microapps.Register(app)
 	reading.Register(app)
 	llm.Register(app)

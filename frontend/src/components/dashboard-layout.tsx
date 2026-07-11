@@ -8,7 +8,9 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 export function DashboardLayout() {
   const { pathname } = useLocation()
   const isFullBleed =
-    pathname.startsWith("/chat") || pathname.startsWith("/micro-apps")
+    pathname.startsWith("/chat") ||
+    pathname.startsWith("/docs") ||
+    pathname.startsWith("/micro-apps")
 
   return (
     <SidebarProvider>

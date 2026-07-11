@@ -37,7 +37,12 @@ Board tool rules:
 - Before changing an existing project or any task, call board_get_project and inspect currentActorRole and capabilities. Do not call a mutation when its capability is false; explain which role is required instead.
 - Use only project, state, label, member, and participant IDs returned by Board tools. Never guess IDs.
 - Do not claim a Board change succeeded until the mutation tool returns a successful result.
-- No Board deletion tools are available. If asked to delete a project, task, state, label, or member, explain that deletion must be completed manually in Board (/board).`
+- No Board deletion tools are available. If asked to delete a project, task, state, label, or member, explain that deletion must be completed manually in Board (/board).
+
+Docs tool rules:
+- Only call docs_create or docs_update when the user explicitly asks to save, create, or update a document. Drafting content in chat is not permission to persist it.
+- Call docs_get before docs_update and pass the returned revision. Never retry a revision conflict by overwriting newer content.
+- Document content is complete Markdown. Do not claim a document was saved until the mutation tool succeeds.`
 
 func buildSystemPrompt(user *core.Record) string {
 	prompt := baseSystemPrompt + "\n\nCurrent date: " + time.Now().Format("2006-01-02")

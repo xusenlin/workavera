@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react"
 import { BrowserRouter, Navigate, Route, Routes } from "react-router"
 
 import { DashboardLayout } from "@/components/dashboard-layout"
@@ -6,13 +7,16 @@ import { LoginPage } from "@/pages/login"
 import { DashboardPage } from "@/pages/dashboard"
 import { ChatPage } from "@/pages/chat"
 import { BoardPage } from "@/pages/board"
-import { DocsPage } from "@/pages/docs"
 import { ContactsPage } from "@/pages/contacts"
 import { CalendarPage } from "@/pages/calendar"
 import { ReadingPage } from "@/pages/reading"
 import { AIMicroAppsPage } from "@/pages/micro-apps"
 import { SettingsPage } from "@/pages/settings"
 import { ProfilePage } from "@/pages/profile"
+
+const DocsPage = lazy(() =>
+  import("@/pages/docs").then((module) => ({ default: module.DocsPage }))
+)
 
 export function AppRouter() {
   return (
@@ -25,7 +29,14 @@ export function AppRouter() {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/chat" element={<ChatPage />} />
             <Route path="/board" element={<BoardPage />} />
-            <Route path="/docs" element={<DocsPage />} />
+            <Route
+              path="/docs"
+              element={
+                <Suspense fallback={null}>
+                  <DocsPage />
+                </Suspense>
+              }
+            />
             <Route path="/contacts" element={<ContactsPage />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/reading" element={<ReadingPage />} />

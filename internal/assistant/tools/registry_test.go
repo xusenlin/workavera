@@ -8,8 +8,8 @@ import (
 func TestFactoryRegistersOnlyProductionTools(t *testing.T) {
 	factory := NewFactory(nil)
 	registered := factory.ForActor("actor-1")
-	if len(registered) != 23 {
-		t.Fatalf("expected twenty-three production tools, got %d", len(registered))
+	if len(registered) != 27 {
+		t.Fatalf("expected twenty-seven production tools, got %d", len(registered))
 	}
 	names := map[string]bool{}
 	for _, tool := range registered {
@@ -32,6 +32,10 @@ func TestFactoryRegistersOnlyProductionTools(t *testing.T) {
 		"reading_upsert",
 		"reading_get",
 		"reading_summarize",
+		"docs_search",
+		"docs_get",
+		"docs_create",
+		"docs_update",
 		"microapps_create",
 		"microapps_update",
 		"microapps_get",

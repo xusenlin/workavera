@@ -80,6 +80,9 @@ func TestBoardCollectionsMigration(t *testing.T) {
 	if err := dropReadingItemsCollection(app); err != nil {
 		t.Fatalf("drop reading items: %v", err)
 	}
+	if err := dropDocsCollections(app); err != nil {
+		t.Fatalf("drop docs collections: %v", err)
+	}
 	if err := dropBoardProjectOperationLogs(app); err != nil {
 		t.Fatalf("drop project operation logs: %v", err)
 	}
