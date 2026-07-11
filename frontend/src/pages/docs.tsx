@@ -1405,15 +1405,15 @@ function HistoryDialog({
   }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-4xl max-h-[85vh] flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>Version history</DialogTitle>
           <DialogDescription>
             Every explicit user or AI save creates a version.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid min-h-96 grid-cols-[15rem_1fr] overflow-hidden rounded-xl border">
-          <div className="border-r p-2">
+        <div className="grid min-h-0 flex-1 grid-cols-[15rem_1fr] overflow-hidden rounded-xl border">
+          <div className="overflow-y-auto border-r p-2">
             {versions.map((version) => (
               <button
                 key={version.id}
@@ -1435,7 +1435,7 @@ function HistoryDialog({
             {selected?.content ?? "Select a version to preview its Markdown."}
           </pre>
         </div>
-        <DialogFooter>
+        <DialogFooter className="flex-shrink-0">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Close
           </Button>

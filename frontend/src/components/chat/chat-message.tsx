@@ -22,6 +22,8 @@ import type { ChatUIMessage } from "@/types/chat"
 
 import { ContactsToolCard } from "./contacts-tool-output"
 import { BoardProjectsToolCard } from "./board-projects-tool-output"
+import { BoardProjectDetailToolCard } from "./board-project-detail-tool-output"
+import { BoardTemplatesToolCard } from "./board-templates-tool-output"
 import { BoardMutationToolCard } from "./board-mutation-tool-output"
 import { TasksToolCard } from "./tasks-tool-output"
 import { AIMicroAppsToolCard } from "./ai-micro-apps-tool-output"
@@ -75,8 +77,14 @@ function MessageParts({ message }: { message: ChatUIMessage }) {
         if (part.toolName === "board_search_projects") {
           return <BoardProjectsToolCard key={part.toolCallId} part={part} />
         }
+        if (part.toolName === "board_get_project") {
+          return <BoardProjectDetailToolCard key={part.toolCallId} part={part} />
+        }
         if (part.toolName === "board_search_tasks") {
           return <TasksToolCard key={part.toolCallId} part={part} />
+        }
+        if (part.toolName === "board_list_templates") {
+          return <BoardTemplatesToolCard key={part.toolCallId} part={part} />
         }
         if (boardMutationToolNames.has(part.toolName)) {
           return <BoardMutationToolCard key={part.toolCallId} part={part} />
