@@ -67,6 +67,15 @@ type SearchOptions struct {
 	Limit int
 }
 
+type ReplaceInput struct {
+	ID           string `json:"id"`
+	Find         string `json:"find"`
+	Replace      string `json:"replace"`
+	ReplaceAll   bool   `json:"replaceAll"`
+	BaseRevision int    `json:"baseRevision"`
+	Source       string `json:"-"`
+}
+
 func Create(ctx context.Context, app core.App, actorID string, input CreateInput) (Document, error) {
 	if err := requireActor(ctx, app, actorID); err != nil {
 		return Document{}, err
@@ -161,6 +170,58 @@ func Update(ctx context.Context, app core.App, actorID, id string, input UpdateI
 	}
 	doc, err := Get(ctx, app, actorID, id)
 	return doc, changed, err
+}
+
+func Replace(ctx context.Context, app core.App, actorID, id string, input ReplaceInput) (Document, int, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return Document{}, 0, false, err
+	}
+	input.Find = strings.TrimSpace(input.Find)
+	if id == "" || input.Find == "" || input.BaseRevision < 1 {
+		return Document{}, 0, false, ErrInvalidInput
+	}
+	if input.Source != "ai" {
+		input.Source = "user"
+	}
+
+	matches := 0
+	changed := false
+	err := app.RunInTransaction(func(tx core.App) error {
+		record, err := editableRecord(tx, actorID, id)
+		if err != nil {
+			return err
+		}
+		if record.GetInt("revision") != input.BaseRevision {
+			return ErrConflict
+		}
+		content := record.GetString("content")
+		var newContent string
+		if input.ReplaceAll {
+			newContent = strings.ReplaceAll(content, input.Find, input.Replace)
+			matches = strings.Count(content, input.Find)
+		} else {
+			newContent = strings.Replace(content, input.Find, input.Replace, 1)
+			if strings.Contains(content, input.Find) {
+				matches = 1
+			}
+		}
+		if matches == 0 {
+			return nil
+		}
+		record.Set("content", newContent)
+		record.Set("revision", input.BaseRevision+1)
+		record.Set("last_edited_by", actorID)
+		if err := tx.Save(record); err != nil {
+			return err
+		}
+		changed = true
+		return saveVersion(tx, record, actorID, input.Source)
+	})
+	if err != nil {
+		return Document{}, 0, false, err
+	}
+	doc, err := Get(ctx, app, actorID, id)
+	return doc, matches, changed, err
 }
 
 func Search(ctx context.Context, app core.App, actorID string, options SearchOptions) ([]Document, error) {

@@ -27,6 +27,14 @@ import { BoardTemplatesToolCard } from "./board-templates-tool-output"
 import { BoardMutationToolCard } from "./board-mutation-tool-output"
 import { TasksToolCard } from "./tasks-tool-output"
 import { AIMicroAppsToolCard } from "./ai-micro-apps-tool-output"
+import {
+  ReadingSearchToolCard,
+  ReadingItemToolCard,
+} from "./reading-tool-output"
+import {
+  DocsSearchToolCard,
+  DocsItemToolCard,
+} from "./docs-tool-output"
 
 const aiMicroAppToolNames = new Set([
   "microapps_create",
@@ -46,6 +54,18 @@ const boardMutationToolNames = new Set([
   "board_upsert_member",
   "board_create_task",
   "board_update_task",
+])
+
+const readingItemToolNames = new Set([
+  "reading_upsert",
+  "reading_get",
+  "reading_summarize",
+])
+
+const docItemToolNames = new Set([
+  "docs_get",
+  "docs_upsert",
+  "docs_replace",
 ])
 
 function MessageParts({ message }: { message: ChatUIMessage }) {
@@ -91,6 +111,18 @@ function MessageParts({ message }: { message: ChatUIMessage }) {
         }
         if (aiMicroAppToolNames.has(part.toolName)) {
           return <AIMicroAppsToolCard key={part.toolCallId} part={part} />
+        }
+        if (part.toolName === "reading_search") {
+          return <ReadingSearchToolCard key={part.toolCallId} part={part} />
+        }
+        if (readingItemToolNames.has(part.toolName)) {
+          return <ReadingItemToolCard key={part.toolCallId} part={part} />
+        }
+        if (part.toolName === "docs_search") {
+          return <DocsSearchToolCard key={part.toolCallId} part={part} />
+        }
+        if (docItemToolNames.has(part.toolName)) {
+          return <DocsItemToolCard key={part.toolCallId} part={part} />
         }
         return (
           <Tool

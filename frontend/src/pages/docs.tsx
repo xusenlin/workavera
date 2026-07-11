@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useLocation } from "react-router"
 
 import {
   BlockTypeSelect,
@@ -163,6 +164,8 @@ const DOCS_PAGE_SIZE = 15
 
 export function DocsPage() {
   const editorRef = useRef<MDXEditorMethods>(null)
+  const location = useLocation()
+  const initialDocId = (location.state as { docId?: string } | null)?.docId
   const [documents, setDocuments] = useState<DocRecord[]>([])
   const [pinnedDocuments, setPinnedDocuments] = useState<DocumentResult[]>([])
   const [projects, setProjects] = useState<Project[]>([])
@@ -247,14 +250,18 @@ export function DocsPage() {
           )
           .map(({ id, name }) => ({ id, name }))
       )
-      setSelectedId((current) =>
-        current &&
-        [...pinned, ...docResult.items].some((doc) => doc.id === current)
-          ? current
-          : (pinned[0]?.id ?? docResult.items[0]?.id ?? null)
-      )
+      setSelectedId((current) => {
+        if (current && [...pinned, ...docResult.items].some((doc) => doc.id === current)) {
+          return current
+        }
+        const allDocs = [...pinned, ...docResult.items]
+        if (initialDocId && allDocs.some((doc) => doc.id === initialDocId)) {
+          return initialDocId
+        }
+        return pinned[0]?.id ?? docResult.items[0]?.id ?? null
+      })
     },
-    [page, query]
+    [page, query, initialDocId]
   )
 
   const loadDocument = useCallback(async (id: string) => {

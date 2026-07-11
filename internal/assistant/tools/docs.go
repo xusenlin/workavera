@@ -15,19 +15,22 @@ type docsSearchInput struct {
 }
 
 type docsGetInput struct {
-	ID string `json:"id" description:"Document ID returned by docs_search or docs_create"`
+	ID string `json:"id" description:"Document ID returned by docs_search or docs_upsert"`
 }
 
-type docsCreateInput struct {
-	Title     string `json:"title" description:"Document title"`
-	Content   string `json:"content,omitempty" description:"Complete Markdown document content"`
-	ProjectID string `json:"projectId,omitempty" description:"Optional Board project ID; omit for a private document"`
+type docsUpsertInput struct {
+	ID           string `json:"id,omitempty" description:"Existing document ID. Omit to create a new document; provide to update an existing one."`
+	Title        string `json:"title" description:"Complete document title"`
+	Content      string `json:"content,omitempty" description:"Complete Markdown document content"`
+	ProjectID    string `json:"projectId,omitempty" description:"Optional Board project ID; omit for a private document. Only used when creating."`
+	BaseRevision int    `json:"baseRevision,omitempty" description:"Revision returned by docs_get; required when updating. The save fails if it is stale."`
 }
 
-type docsUpdateInput struct {
-	ID           string `json:"id" description:"Document ID"`
-	Title        string `json:"title" description:"Complete replacement title"`
-	Content      string `json:"content" description:"Complete replacement Markdown content"`
+type docsReplaceInput struct {
+	ID           string `json:"id" description:"Existing document ID"`
+	Find         string `json:"find" description:"Exact text to find in the document Markdown"`
+	Replace      string `json:"replace" description:"Replacement text; can be empty to delete the matched text"`
+	ReplaceAll   bool   `json:"replaceAll,omitempty" description:"Replace all matches instead of only the first one"`
 	BaseRevision int    `json:"baseRevision" description:"Revision returned by docs_get; the save fails if it is stale"`
 }
 
@@ -45,20 +48,27 @@ func newDocsGetTool(app core.App, actorID string) fantasy.AgentTool {
 	})
 }
 
-func newDocsCreateTool(app core.App, actorID string) fantasy.AgentTool {
-	return fantasy.NewAgentTool("docs_create", "Create and explicitly save a private or project Markdown document. This creates revision 1. Only call when the user clearly asks to save or create a document.", func(ctx context.Context, input docsCreateInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
-		result, err := workdocs.Create(ctx, app, actorID, workdocs.CreateInput{Title: input.Title, Content: input.Content, ProjectID: input.ProjectID, Source: "ai"})
-		return docsToolResponse(result, err)
-	})
-}
-
-func newDocsUpdateTool(app core.App, actorID string) fantasy.AgentTool {
-	return fantasy.NewAgentTool("docs_update", "Explicitly save a complete replacement title and Markdown body for an existing document. Call docs_get first and pass its revision. A concurrent save causes a conflict and must never be overwritten automatically.", func(ctx context.Context, input docsUpdateInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
+func newDocsUpsertTool(app core.App, actorID string) fantasy.AgentTool {
+	return fantasy.NewAgentTool("docs_upsert", "Create or update a Markdown document. Omit id to create a new document (creates revision 1). Provide id to update an existing document; call docs_get first and pass its revision as baseRevision - a concurrent save causes a conflict and must never be overwritten automatically.", func(ctx context.Context, input docsUpsertInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
+		if input.ID == "" {
+			result, err := workdocs.Create(ctx, app, actorID, workdocs.CreateInput{Title: input.Title, Content: input.Content, ProjectID: input.ProjectID, Source: "ai"})
+			return docsToolResponse(result, err)
+		}
 		result, changed, err := workdocs.Update(ctx, app, actorID, input.ID, workdocs.UpdateInput{Title: input.Title, Content: input.Content, BaseRevision: input.BaseRevision, Source: "ai"})
 		if err != nil {
 			return fantasy.NewTextErrorResponse("Document save failed: " + err.Error()), nil
 		}
 		return docsToolResponse(map[string]any{"document": result, "changed": changed}, nil)
+	})
+}
+
+func newDocsReplaceTool(app core.App, actorID string) fantasy.AgentTool {
+	return fantasy.NewAgentTool("docs_replace", "Find and replace exact text in a document's Markdown. Call docs_get first and pass its revision as baseRevision. Use for small edits instead of re-sending the full content via docs_upsert.", func(ctx context.Context, input docsReplaceInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
+		result, matches, changed, err := workdocs.Replace(ctx, app, actorID, input.ID, workdocs.ReplaceInput{Find: input.Find, Replace: input.Replace, ReplaceAll: input.ReplaceAll, BaseRevision: input.BaseRevision, Source: "ai"})
+		if err != nil {
+			return fantasy.NewTextErrorResponse("Document replace failed: " + err.Error()), nil
+		}
+		return docsToolResponse(map[string]any{"document": result, "matches": matches, "changed": changed}, nil)
 	})
 }
 
