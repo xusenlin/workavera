@@ -28,7 +28,7 @@ import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { MiniCalendar } from "@/components/calendar/mini-calendar"
 import { EventList } from "@/components/calendar/event-list"
-import { EventDialog } from "@/components/calendar/event-dialog"
+import { EventSheet } from "@/components/calendar/event-sheet"
 import { buildCalendarItems, type CalendarEvent } from "@/lib/calendar-types"
 import { cn } from "@/lib/utils"
 import {
@@ -236,7 +236,7 @@ export function CalendarPage() {
         </div>
       </div>
 
-      <EventDialog
+      <EventSheet
         key={`${dialogOpen}:${editingEvent?.id ?? "new"}:${selectedDateStr}`}
         open={dialogOpen}
         onOpenChange={setDialogOpen}

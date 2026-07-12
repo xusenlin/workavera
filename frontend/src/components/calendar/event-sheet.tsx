@@ -1,13 +1,14 @@
 import { useState } from "react"
 
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -35,7 +36,7 @@ import {
   zonedDateTimeToDate,
 } from "@/lib/timezone"
 
-type EventDialogProps = {
+type EventSheetProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   event: CalendarEvent | null
@@ -90,14 +91,14 @@ function formFromEvent(event: CalendarEvent, timezone: string): EventForm {
   }
 }
 
-export function EventDialog({
+export function EventSheet({
   open,
   onOpenChange,
   event,
   defaultDate,
   timezone,
   onSave,
-}: EventDialogProps) {
+}: EventSheetProps) {
   const [form, setForm] = useState<EventForm>(() =>
     event ? formFromEvent(event, timezone) : emptyForm(defaultDate)
   )
@@ -152,20 +153,20 @@ export function EventDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{isEditing ? "Edit event" : "New event"}</DialogTitle>
-          <DialogDescription>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-full sm:max-w-lg!">
+        <SheetHeader>
+          <SheetTitle>{isEditing ? "Edit event" : "New event"}</SheetTitle>
+          <SheetDescription>
             {isEditing
               ? event?.recurrenceFrequency === "none"
                 ? "Update the event details below."
                 : "Changes apply to the entire repeating series."
               : "Create a new event on your personal calendar."}
-          </DialogDescription>
-        </DialogHeader>
+          </SheetDescription>
+        </SheetHeader>
 
-        <div className="space-y-4">
+        <div className="flex flex-col gap-5 overflow-y-auto px-6">
           <div className="space-y-1.5">
             <Label htmlFor="event-title">Title</Label>
             <Input
@@ -349,18 +350,21 @@ export function EventDialog({
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
-            onClick={() => void handleSave()}
-            disabled={!form.title.trim() || saving}
-          >
-            {saving ? "Saving..." : isEditing ? "Save changes" : "Create event"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        <SheetFooter className="flex-row items-center justify-between gap-2">
+          <div />
+          <div className="flex gap-2">
+            <SheetClose asChild>
+              <Button variant="ghost">Cancel</Button>
+            </SheetClose>
+            <Button
+              onClick={() => void handleSave()}
+              disabled={!form.title.trim() || saving}
+            >
+              {saving ? "Saving..." : isEditing ? "Save changes" : "Create event"}
+            </Button>
+          </div>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   )
 }
