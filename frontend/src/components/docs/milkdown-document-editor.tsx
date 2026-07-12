@@ -223,7 +223,10 @@ function MilkdownToolbar({
         onClick={() => run(redoCommand)}
         icon={RedoIcon}
       />
-      <Separator orientation="vertical" className="mx-1 h-5 self-center" />
+      <Separator
+        orientation="vertical"
+        className="mx-1 h-5 data-vertical:self-center"
+      />
       <Select
         disabled={disabled}
         onValueChange={(value) => {
@@ -244,7 +247,10 @@ function MilkdownToolbar({
           <SelectItem value="h3">Heading 3</SelectItem>
         </SelectContent>
       </Select>
-      <Separator orientation="vertical" className="mx-1 h-5 self-center" />
+      <Separator
+        orientation="vertical"
+        className="mx-1 h-5 data-vertical:self-center"
+      />
       <ToolbarButton
         label="Bold"
         disabled={disabled}
@@ -327,7 +333,10 @@ function MilkdownToolbar({
           onClick={() => onModeChange("diff")}
           icon={FileDiffIcon}
         />
-        <Separator orientation="vertical" className="mx-1 h-5 self-center" />
+        <Separator
+          orientation="vertical"
+          className="mx-1 h-5 data-vertical:self-center"
+        />
         <ToolbarButton
           label={fullscreen ? "Exit fullscreen" : "Fullscreen"}
           onClick={onToggleFullscreen}
