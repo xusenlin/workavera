@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { useEffect, useRef, useState } from "react"
 
 import { Crepe } from "@milkdown/crepe"
 import "@milkdown/crepe/theme/common/reset.css"
@@ -39,7 +39,9 @@ import {
   LeftToRightListBulletIcon,
   LeftToRightListNumberIcon,
   Link01Icon,
+  Maximize01Icon,
   MinusSignIcon,
+  Minimize01Icon,
   QuoteDownIcon,
   RedoIcon,
   SourceCodeIcon,
@@ -103,6 +105,26 @@ function MilkdownEditorBody({
   onModeChange: (mode: DocumentEditorMode) => void
   onChange: (markdown: string) => void
 }) {
+  const editorRootRef = useRef<HTMLDivElement>(null)
+  const [fullscreen, setFullscreen] = useState(false)
+
+  useEffect(() => {
+    const updateFullscreen = () => {
+      setFullscreen(document.fullscreenElement === editorRootRef.current)
+    }
+    document.addEventListener("fullscreenchange", updateFullscreen)
+    return () =>
+      document.removeEventListener("fullscreenchange", updateFullscreen)
+  }, [])
+
+  const toggleFullscreen = async () => {
+    if (document.fullscreenElement === editorRootRef.current) {
+      await document.exitFullscreen()
+      return
+    }
+    await editorRootRef.current?.requestFullscreen()
+  }
+
   useEditor((root) => {
     const crepe = new Crepe({
       root,
@@ -130,8 +152,13 @@ function MilkdownEditorBody({
   }, [])
 
   return (
-    <div className="workavera-milkdown-editor">
-      <MilkdownToolbar mode={mode} onModeChange={onModeChange} />
+    <div ref={editorRootRef} className="workavera-milkdown-editor">
+      <MilkdownToolbar
+        mode={mode}
+        fullscreen={fullscreen}
+        onModeChange={onModeChange}
+        onToggleFullscreen={() => void toggleFullscreen()}
+      />
       <MilkdownValueSync value={value} />
       <div
         className={cn("milkdown-rich-area", mode !== "rich-text" && "hidden")}
@@ -166,10 +193,14 @@ function MilkdownValueSync({ value }: { value: string }) {
 
 function MilkdownToolbar({
   mode,
+  fullscreen,
   onModeChange,
+  onToggleFullscreen,
 }: {
   mode: DocumentEditorMode
+  fullscreen: boolean
   onModeChange: (mode: DocumentEditorMode) => void
+  onToggleFullscreen: () => void
 }) {
   const [loading, getEditor] = useInstance()
   const run = (command: { key: unknown }, payload?: unknown) => {
@@ -296,6 +327,12 @@ function MilkdownToolbar({
           onClick={() => onModeChange("diff")}
           icon={FileDiffIcon}
         />
+        <Separator orientation="vertical" className="mx-1 h-5" />
+        <ToolbarButton
+          label={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+          onClick={onToggleFullscreen}
+          icon={fullscreen ? Minimize01Icon : Maximize01Icon}
+        />
       </div>
     </div>
   )
@@ -337,13 +374,12 @@ function ModeButton({
     <Button
       type="button"
       variant={active ? "secondary" : "ghost"}
-      size="sm"
-      className="h-8 gap-1.5 px-2"
+      size="icon-sm"
       title={label}
+      aria-label={label}
       onClick={onClick}
     >
       <HugeiconsIcon icon={icon} strokeWidth={2} className="size-4" />
-      <span className="hidden xl:inline">{label}</span>
     </Button>
   )
 }

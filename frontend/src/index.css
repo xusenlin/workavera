@@ -198,6 +198,12 @@
   font-family: var(--font-sans);
 }
 
+.workavera-milkdown-editor:fullscreen {
+  width: 100vw;
+  height: 100vh;
+  background: var(--background);
+}
+
 .milkdown-system-toolbar {
   z-index: 10;
   min-height: 2.75rem;
