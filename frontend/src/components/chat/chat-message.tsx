@@ -35,6 +35,10 @@ import {
   DocsSearchToolCard,
   DocsItemToolCard,
 } from "./docs-tool-output"
+import {
+  CalendarScheduleToolCard,
+  CalendarMutationToolCard,
+} from "./calendar-tool-output"
 
 const aiMicroAppToolNames = new Set([
   "microapps_create",
@@ -66,6 +70,11 @@ const docItemToolNames = new Set([
   "docs_get",
   "docs_upsert",
   "docs_replace",
+])
+
+const calendarMutationToolNames = new Set([
+  "calendar_create_event",
+  "calendar_update_event",
 ])
 
 function MessageParts({ message }: { message: ChatUIMessage }) {
@@ -123,6 +132,12 @@ function MessageParts({ message }: { message: ChatUIMessage }) {
         }
         if (docItemToolNames.has(part.toolName)) {
           return <DocsItemToolCard key={part.toolCallId} part={part} />
+        }
+        if (part.toolName === "calendar_get_schedule") {
+          return <CalendarScheduleToolCard key={part.toolCallId} part={part} />
+        }
+        if (calendarMutationToolNames.has(part.toolName)) {
+          return <CalendarMutationToolCard key={part.toolCallId} part={part} />
         }
         return (
           <Tool

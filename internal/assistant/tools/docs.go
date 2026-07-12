@@ -49,7 +49,7 @@ func newDocsGetTool(app core.App, actorID string) fantasy.AgentTool {
 }
 
 func newDocsUpsertTool(app core.App, actorID string) fantasy.AgentTool {
-	return fantasy.NewAgentTool("docs_upsert", "Create or update a Markdown document. Omit id to create a new document (creates revision 1). Provide id to update an existing document; call docs_get first and pass its revision as baseRevision - a concurrent save causes a conflict and must never be overwritten automatically.", func(ctx context.Context, input docsUpsertInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
+	return fantasy.NewAgentTool("docs_upsert", "Create or update a Markdown document only when explicitly requested. Omit id to create; provide id to update. Before updating, call docs_get and pass its revision as baseRevision. Prefer one call for multiple edits. Never mutate the same document in parallel or overwrite a revision conflict.", func(ctx context.Context, input docsUpsertInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
 		if input.ID == "" {
 			result, err := workdocs.Create(ctx, app, actorID, workdocs.CreateInput{Title: input.Title, Content: input.Content, ProjectID: input.ProjectID, Source: "ai"})
 			return docsToolResponse(result, err)
@@ -63,7 +63,7 @@ func newDocsUpsertTool(app core.App, actorID string) fantasy.AgentTool {
 }
 
 func newDocsReplaceTool(app core.App, actorID string) fantasy.AgentTool {
-	return fantasy.NewAgentTool("docs_replace", "Find and replace exact text in a document's Markdown. Call docs_get first and pass its revision as baseRevision. Use for small edits instead of re-sending the full content via docs_upsert.", func(ctx context.Context, input docsReplaceInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
+	return fantasy.NewAgentTool("docs_replace", "Replace exact Markdown text only when explicitly requested. First call docs_get and pass its revision as baseRevision. Use for one small edit; prefer one docs_upsert for multiple edits. Never mutate the same document in parallel. A later mutation must use the revision returned by this call; never overwrite a conflict.", func(ctx context.Context, input docsReplaceInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
 		result, matches, changed, err := workdocs.Replace(ctx, app, actorID, input.ID, workdocs.ReplaceInput{Find: input.Find, Replace: input.Replace, ReplaceAll: input.ReplaceAll, BaseRevision: input.BaseRevision, Source: "ai"})
 		if err != nil {
 			return fantasy.NewTextErrorResponse("Document replace failed: " + err.Error()), nil

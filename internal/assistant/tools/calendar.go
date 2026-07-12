@@ -56,7 +56,7 @@ func newCalendarGetScheduleTool(app core.App, actorID string) fantasy.AgentTool 
 func newCalendarCreateEventTool(app core.App, actorID string) fantasy.AgentTool {
 	return fantasy.NewAgentTool(
 		"calendar_create_event",
-		"Create a personal Calendar event owned by the current user. This creates only calendar_events, never Board tasks. Obtain explicit date, time, and timezone details from the user before calling it.",
+		"Create a personal Calendar event owned by the current user only when explicitly requested. This creates only calendar_events, never Board tasks. Obtain explicit date, time, and timezone details from the user before calling it.",
 		func(ctx context.Context, input calendarCreateEventInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
 			result, err := workcalendar.CreateEvent(ctx, app, actorID, workcalendar.CreateEventCommand{
 				Title: input.Title, Description: input.Description, StartAt: input.StartAt, EndAt: input.EndAt,
@@ -72,7 +72,7 @@ func newCalendarCreateEventTool(app core.App, actorID string) fantasy.AgentTool 
 func newCalendarUpdateEventTool(app core.App, actorID string) fantasy.AgentTool {
 	return fantasy.NewAgentTool(
 		"calendar_update_event",
-		"Patch an existing personal Calendar event. Call calendar_get_schedule first and use an event ID it returned. Omitted fields remain unchanged; editing a repeating event updates the entire series. This tool cannot edit Board tasks.",
+		"Patch an existing personal Calendar event only when explicitly requested. Call calendar_get_schedule first and use an event ID it returned. Omitted fields remain unchanged; editing a repeating event updates the entire series. This tool cannot edit Board tasks.",
 		func(ctx context.Context, input calendarUpdateEventInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
 			result, err := workcalendar.UpdateEvent(ctx, app, actorID, workcalendar.UpdateEventCommand{
 				EventID: input.EventID, Title: input.Title, Description: input.Description, StartAt: input.StartAt,
