@@ -86,7 +86,11 @@ function parseDoc(output: unknown): Doc | null {
   if (typeof output === "string") {
     try {
       const parsed = JSON.parse(output)
-      if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+      if (
+        typeof parsed === "object" &&
+        parsed !== null &&
+        !Array.isArray(parsed)
+      ) {
         return parsed as Doc
       }
     } catch {
@@ -235,14 +239,12 @@ export function DocsSearchToolCard({ part }: { part: DynamicToolUIPart }) {
 
 // ── Single-doc card (get / upsert / replace) ─────────────────
 
-const docToolMeta: Record<
-  string,
-  { label: string; icon: typeof File02Icon }
-> = {
-  docs_get: { label: "Document", icon: File02Icon },
-  docs_upsert: { label: "Upsert Document", icon: FileEditIcon },
-  docs_replace: { label: "Replace Text", icon: ReplaceIcon },
-}
+const docToolMeta: Record<string, { label: string; icon: typeof File02Icon }> =
+  {
+    docs_get: { label: "Document", icon: File02Icon },
+    docs_upsert: { label: "Upsert Document", icon: FileEditIcon },
+    docs_replace: { label: "Replace Text", icon: ReplaceIcon },
+  }
 
 export function DocsItemToolCard({ part }: { part: DynamicToolUIPart }) {
   const navigate = useNavigate()
@@ -256,7 +258,8 @@ export function DocsItemToolCard({ part }: { part: DynamicToolUIPart }) {
   const isUpsert = part.toolName === "docs_upsert"
   const isReplace = part.toolName === "docs_replace"
 
-  // docs_upsert (update path) and docs_replace wrap the doc
+  // docs_upsert updates and docs_replace wrap the document, while
+  // docs_upsert creates return a bare document.
   const raw = part.output
   let doc: Doc | null = null
   let changed: boolean | undefined
@@ -266,9 +269,13 @@ export function DocsItemToolCard({ part }: { part: DynamicToolUIPart }) {
     const parsed = typeof raw === "string" ? safeParse(raw) : raw
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
       const obj = parsed as Record<string, unknown>
-      doc = (obj.document as Doc) ?? null
-      changed = obj.changed as boolean | undefined
-      matches = obj.matches as number | undefined
+      if (obj.document && typeof obj.document === "object") {
+        doc = obj.document as Doc
+        changed = obj.changed as boolean | undefined
+        matches = obj.matches as number | undefined
+      } else if (isUpsert) {
+        doc = parsed as Doc
+      }
     }
   } else {
     doc = parseDoc(raw)
@@ -348,9 +355,7 @@ export function DocsItemToolCard({ part }: { part: DynamicToolUIPart }) {
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
                   {isReplace && matches !== undefined && (
-                    <Badge
-                      className="bg-green-500/10 text-[10px] text-green-700 dark:text-green-400"
-                    >
+                    <Badge className="bg-green-500/10 text-[10px] text-green-700 dark:text-green-400">
                       {matches} {matches === 1 ? "match" : "matches"}
                     </Badge>
                   )}
@@ -390,11 +395,15 @@ export function DocsItemToolCard({ part }: { part: DynamicToolUIPart }) {
             {doc.content && (
               <Collapsible>
                 <CollapsibleTrigger className="group/content text-xs font-medium text-muted-foreground underline-offset-2 hover:underline">
-                  <span className="group-data-[state=open]/content:hidden">Show Markdown content</span>
-                  <span className="hidden group-data-[state=open]/content:inline">Hide Markdown content</span>
+                  <span className="group-data-[state=open]/content:hidden">
+                    Show Markdown content
+                  </span>
+                  <span className="hidden group-data-[state=open]/content:inline">
+                    Hide Markdown content
+                  </span>
                 </CollapsibleTrigger>
                 <CollapsibleContent className="mt-1 max-h-72 overflow-y-auto rounded-md border bg-muted/20 p-2.5">
-                  <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-muted-foreground">
+                  <pre className="font-mono text-xs leading-relaxed break-words whitespace-pre-wrap text-muted-foreground">
                     {doc.content}
                   </pre>
                 </CollapsibleContent>
