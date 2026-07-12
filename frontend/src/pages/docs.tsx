@@ -1,81 +1,24 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useLocation } from "react-router"
 
-import {
-  BlockTypeSelect,
-  BoldItalicUnderlineToggles,
-  CreateLink,
-  DiffSourceToggleWrapper,
-  InsertTable,
-  ListsToggle,
-  MDXEditor,
-  type IconKey,
-  type MDXEditorMethods,
-  UndoRedo,
-  codeBlockPlugin,
-  diffSourcePlugin,
-  headingsPlugin,
-  linkDialogPlugin,
-  linkPlugin,
-  listsPlugin,
-  markdownShortcutPlugin,
-  quotePlugin,
-  tablePlugin,
-  thematicBreakPlugin,
-  toolbarPlugin,
-} from "@mdxeditor/editor"
-import "@mdxeditor/editor/style.css"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   Add01Icon,
-  ArrowDown01Icon,
-  ArrowDownDoubleIcon,
-  ArrowLeftDoubleIcon,
-  ArrowRightDoubleIcon,
-  ArrowUpDoubleIcon,
   Archive02Icon,
   ArchiveRestoreIcon,
   Delete02Icon,
   DocumentAttachmentIcon,
-  Edit01Icon,
-  File01Icon,
-  FileDiffIcon,
-  ImageAdd01Icon,
-  LeftToRightListBulletIcon,
-  LeftToRightListNumberIcon,
-  Link01Icon,
-  LinkBackwardIcon,
-  LinkSquare01Icon,
-  MinusSignIcon,
   MoreHorizontalIcon,
-  MoreVerticalIcon,
   Pin02Icon,
-  RedoIcon,
   Search02Icon,
-  Settings02Icon,
-  SourceCodeIcon,
-  TableIcon,
-  TextAlignCenterIcon,
-  TextAlignLeftIcon,
-  TextAlignRightIcon,
-  TextBoldIcon,
-  TextColorIcon,
-  TextIcon,
-  TextItalicIcon,
-  TextStrikethroughIcon,
-  TextSubscriptIcon,
-  TextSuperscriptIcon,
-  TextUnderlineIcon,
-  Tick01Icon,
-  UndoIcon,
-  CheckListIcon,
-  CodeIcon,
-  Copy01Icon,
-  Cancel01Icon,
 } from "@hugeicons/core-free-icons"
 import { ClientResponseError, type RecordModel } from "pocketbase"
 import { toast } from "sonner"
 
+import {
+  MilkdownDocumentEditor,
+  type DocumentEditorMode,
+} from "@/components/docs/milkdown-document-editor"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -163,7 +106,6 @@ type Project = { id: string; name: string }
 const DOCS_PAGE_SIZE = 15
 
 export function DocsPage() {
-  const editorRef = useRef<MDXEditorMethods>(null)
   const location = useLocation()
   const initialDocId = (location.state as { docId?: string } | null)?.docId
   const [documents, setDocuments] = useState<DocRecord[]>([])
@@ -184,16 +126,12 @@ export function DocsPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [archivedOpen, setArchivedOpen] = useState(false)
+  const [editorMode, setEditorMode] = useState<DocumentEditorMode>("rich-text")
 
   const dirty = Boolean(
     persisted &&
     (draftTitle !== persisted.title || draftContent !== persisted.content)
   )
-  const activeEditorPlugins = useMemo(
-    () => createEditorPlugins(persisted?.content ?? ""),
-    [persisted?.content]
-  )
-
   const loadList = useCallback(
     async (targetPage = page) => {
       const actorId = pb.authStore.record?.id ?? ""
@@ -251,7 +189,10 @@ export function DocsPage() {
           .map(({ id, name }) => ({ id, name }))
       )
       setSelectedId((current) => {
-        if (current && [...pinned, ...docResult.items].some((doc) => doc.id === current)) {
+        if (
+          current &&
+          [...pinned, ...docResult.items].some((doc) => doc.id === current)
+        ) {
           return current
         }
         const allDocs = [...pinned, ...docResult.items]
@@ -289,7 +230,7 @@ export function DocsPage() {
     setDraftTitle(doc.title)
     setDraftContent(doc.content)
     setServerHasNewVersion(false)
-    editorRef.current?.setMarkdown(doc.content)
+    setEditorMode("rich-text")
   }, [])
 
   useEffect(() => {
@@ -607,15 +548,13 @@ export function DocsPage() {
                 </Button>
               </div>
             </div>
-            <MDXEditor
+            <MilkdownDocumentEditor
               key={persisted.id}
-              ref={editorRef}
-              markdown={persisted.content}
+              value={draftContent}
+              savedValue={persisted.content}
+              mode={editorMode}
+              onModeChange={setEditorMode}
               onChange={setDraftContent}
-              iconComponentFor={documentEditorIcon}
-              className="workavera-mdxeditor"
-              contentEditableClassName="workavera-doc-content"
-              plugins={activeEditorPlugins}
             />
           </>
         ) : (
@@ -654,7 +593,7 @@ export function DocsPage() {
             setPersisted(doc)
             setDraftTitle(doc.title)
             setDraftContent(doc.content)
-            editorRef.current?.setMarkdown(doc.content)
+            setEditorMode("rich-text")
             await loadList()
           }}
         />
@@ -1009,165 +948,6 @@ function ArchivedDocumentsDialog({
   )
 }
 
-function createEditorPlugins(diffMarkdown: string) {
-  return [
-    headingsPlugin({ allowedHeadingLevels: [1, 2, 3] }),
-    listsPlugin(),
-    quotePlugin(),
-    linkPlugin(),
-    linkDialogPlugin(),
-    tablePlugin(),
-    thematicBreakPlugin(),
-    codeBlockPlugin(),
-    markdownShortcutPlugin(),
-    diffSourcePlugin({ viewMode: "rich-text", diffMarkdown }),
-    toolbarPlugin({
-      toolbarContents: () => (
-        <DiffSourceToggleWrapper options={["rich-text", "source", "diff"]}>
-          <UndoRedo />
-          <BlockTypeSelect />
-          <BoldItalicUnderlineToggles options={["Bold", "Italic"]} />
-          <CreateLink />
-          <ListsToggle />
-          <InsertTable />
-        </DiffSourceToggleWrapper>
-      ),
-    }),
-  ]
-}
-
-function documentEditorIcon(name: IconKey) {
-  let icon = MoreHorizontalIcon
-  switch (name) {
-    case "undo":
-      icon = UndoIcon
-      break
-    case "redo":
-      icon = RedoIcon
-      break
-    case "format_bold":
-      icon = TextBoldIcon
-      break
-    case "format_italic":
-      icon = TextItalicIcon
-      break
-    case "format_underlined":
-      icon = TextUnderlineIcon
-      break
-    case "code":
-      icon = CodeIcon
-      break
-    case "strikeThrough":
-      icon = TextStrikethroughIcon
-      break
-    case "superscript":
-      icon = TextSuperscriptIcon
-      break
-    case "subscript":
-      icon = TextSubscriptIcon
-      break
-    case "format_list_bulleted":
-      icon = LeftToRightListBulletIcon
-      break
-    case "format_list_numbered":
-      icon = LeftToRightListNumberIcon
-      break
-    case "format_list_checked":
-      icon = CheckListIcon
-      break
-    case "format_highlight":
-      icon = TextColorIcon
-      break
-    case "link":
-      icon = Link01Icon
-      break
-    case "add_photo":
-      icon = ImageAdd01Icon
-      break
-    case "table":
-      icon = TableIcon
-      break
-    case "horizontal_rule":
-      icon = MinusSignIcon
-      break
-    case "frontmatter":
-      icon = File01Icon
-      break
-    case "frame_source":
-      icon = SourceCodeIcon
-      break
-    case "arrow_drop_down":
-      icon = ArrowDown01Icon
-      break
-    case "rich_text":
-      icon = TextIcon
-      break
-    case "difference":
-      icon = FileDiffIcon
-      break
-    case "markdown":
-      icon = SourceCodeIcon
-      break
-    case "open_in_new":
-      icon = LinkSquare01Icon
-      break
-    case "link_off":
-      icon = LinkBackwardIcon
-      break
-    case "edit":
-      icon = Edit01Icon
-      break
-    case "content_copy":
-      icon = Copy01Icon
-      break
-    case "more_horiz":
-      icon = MoreHorizontalIcon
-      break
-    case "more_vert":
-      icon = MoreVerticalIcon
-      break
-    case "close":
-      icon = Cancel01Icon
-      break
-    case "settings":
-      icon = Settings02Icon
-      break
-    case "delete_big":
-    case "delete_small":
-      icon = Delete02Icon
-      break
-    case "format_align_center":
-      icon = TextAlignCenterIcon
-      break
-    case "format_align_left":
-      icon = TextAlignLeftIcon
-      break
-    case "format_align_right":
-      icon = TextAlignRightIcon
-      break
-    case "add_row":
-    case "add_column":
-      icon = Add01Icon
-      break
-    case "insert_col_left":
-      icon = ArrowLeftDoubleIcon
-      break
-    case "insert_row_above":
-      icon = ArrowUpDoubleIcon
-      break
-    case "insert_row_below":
-      icon = ArrowDownDoubleIcon
-      break
-    case "insert_col_right":
-      icon = ArrowRightDoubleIcon
-      break
-    case "check":
-      icon = Tick01Icon
-      break
-  }
-  return <HugeiconsIcon icon={icon} strokeWidth={2} className="size-4" />
-}
-
 function CreateDocumentDialog({
   open,
   onOpenChange,
@@ -1412,7 +1192,7 @@ function HistoryDialog({
   }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl max-h-[85vh] flex flex-col">
+      <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-4xl">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle>Version history</DialogTitle>
           <DialogDescription>
