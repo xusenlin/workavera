@@ -26,14 +26,16 @@ func createAIMicroAppsCollection(app core.App) error {
 		&core.FileField{Name: "html_file", Required: true, MaxSelect: 1, MaxSize: 2 * 1024 * 1024, MimeTypes: []string{"text/html"}, Protected: true},
 		&core.FileField{Name: "thumbnail", MaxSelect: 1, MaxSize: 2 * 1024 * 1024, MimeTypes: []string{"image/png", "image/jpeg", "image/webp"}, Thumbs: []string{"320x180", "640x360"}},
 		&core.SelectField{Name: "status", Required: true, MaxSelect: 1, Values: []string{"draft", "published", "archived"}},
+		&core.BoolField{Name: "pinned"},
 		&core.AutodateField{Name: "created", OnCreate: true},
 		&core.AutodateField{Name: "updated", OnCreate: true, OnUpdate: true},
 	)
 	apps.AddIndex("idx_ai_micro_apps_owner_updated", false, "owner, updated", "")
+	apps.AddIndex("idx_ai_micro_apps_owner_pinned_updated", false, "owner, pinned, updated", "")
 	apps.ListRule = types.Pointer(`@request.auth.id != "" && owner = @request.auth.id`)
 	apps.ViewRule = apps.ListRule
-	apps.CreateRule = types.Pointer(`@request.auth.id != ""`)
-	apps.UpdateRule = types.Pointer(`owner = @request.auth.id && @request.body.owner:changed = false`)
+	apps.CreateRule = types.Pointer(`@request.auth.id != "" && @request.body.pinned != true`)
+	apps.UpdateRule = types.Pointer(`owner = @request.auth.id && @request.body.owner:changed = false && (@request.body.pinned:changed = false || @request.body.pinned = false)`)
 	apps.DeleteRule = types.Pointer(`owner = @request.auth.id`)
 
 	return app.Save(apps)

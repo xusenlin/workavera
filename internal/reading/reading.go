@@ -23,7 +23,10 @@ const (
 	itemsCollection  = "reading_items"
 	modelsCollection = "llm_models"
 	maxFetchBytes    = 1024 * 1024
+	maxPinnedItems   = 6
 )
+
+var ErrPinLimit = errors.New("you can pin at most 6 reading items")
 
 type summarizeResponse struct {
 	ContentText string   `json:"contentText"`
@@ -83,6 +86,7 @@ type SummarizeResult struct {
 func Register(app core.App) {
 	app.OnServe().BindFunc(func(event *core.ServeEvent) error {
 		event.Router.POST("/api/reading/items/{id}/summarize", summarizeItem).Bind(apis.RequireAuth("users"))
+		event.Router.POST("/api/reading/items/{id}/pin", pinItem).Bind(apis.RequireAuth("users"))
 		return event.Next()
 	})
 }
@@ -100,6 +104,49 @@ func summarizeItem(event *core.RequestEvent) error {
 		Summary:     result.Summary,
 		KeyPoints:   result.KeyPoints,
 	})
+}
+
+func pinItem(event *core.RequestEvent) error {
+	var input struct {
+		Pinned bool `json:"pinned"`
+	}
+	if err := event.BindBody(&input); err != nil {
+		return event.BadRequestError("Invalid request body.", err)
+	}
+	if err := SetPinned(event.Request.Context(), event.App, event.Auth.Id, event.Request.PathValue("id"), input.Pinned); err != nil {
+		if errors.Is(err, ErrPinLimit) {
+			return event.JSON(http.StatusBadRequest, map[string]string{"message": err.Error()})
+		}
+		return event.BadRequestError("Could not update pin status.", err)
+	}
+	return event.JSON(http.StatusOK, map[string]bool{"ok": true})
+}
+
+func SetPinned(ctx context.Context, app core.App, actorID, itemID string, pinned bool) error {
+	_ = ctx
+	record, err := app.FindRecordById(itemsCollection, itemID)
+	if err != nil {
+		return errors.New("reading item not found")
+	}
+	if record.GetString("owner") != actorID {
+		return errors.New("you do not have access to this reading item")
+	}
+	if !pinned {
+		record.Set("pinned", false)
+		return app.Save(record)
+	}
+	if record.GetBool("pinned") {
+		return nil
+	}
+	count, err := app.CountRecords(itemsCollection, dbx.HashExp{"owner": actorID, "pinned": true, "status !=": "archived"})
+	if err != nil {
+		return err
+	}
+	if int(count) >= maxPinnedItems {
+		return ErrPinLimit
+	}
+	record.Set("pinned", true)
+	return app.Save(record)
 }
 
 // Create creates a new reading item owned by the actor.

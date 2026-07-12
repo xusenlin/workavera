@@ -25,8 +25,8 @@ func createReadingItemsCollection(app core.App) error {
 	items := core.NewBaseCollection(readingItemsCollection)
 	items.ListRule = types.Pointer(`owner = @request.auth.id`)
 	items.ViewRule = items.ListRule
-	items.CreateRule = types.Pointer(`@request.auth.id != "" && @request.body.owner = @request.auth.id`)
-	items.UpdateRule = types.Pointer(`owner = @request.auth.id && @request.body.owner:changed = false`)
+	items.CreateRule = types.Pointer(`@request.auth.id != "" && @request.body.owner = @request.auth.id && @request.body.pinned != true`)
+	items.UpdateRule = types.Pointer(`owner = @request.auth.id && @request.body.owner:changed = false && (@request.body.pinned:changed = false || @request.body.pinned = false)`)
 	items.DeleteRule = types.Pointer(`owner = @request.auth.id`)
 	items.Fields.Add(
 		&core.RelationField{Name: "owner", CollectionId: users.Id, MaxSelect: 1, Required: true, CascadeDelete: true},
@@ -40,11 +40,13 @@ func createReadingItemsCollection(app core.App) error {
 		&core.TextField{Name: "summary", Max: 64 * 1024},
 		&core.JSONField{Name: "key_points", MaxSize: 64 * 1024},
 		&core.TextField{Name: "summary_language", Max: 100},
+		&core.BoolField{Name: "pinned"},
 		&core.AutodateField{Name: "created", OnCreate: true},
 		&core.AutodateField{Name: "updated", OnCreate: true, OnUpdate: true},
 	)
 	items.AddIndex("idx_reading_items_owner_updated", false, "owner, updated", "")
 	items.AddIndex("idx_reading_items_owner_status", false, "owner, status", "")
+	items.AddIndex("idx_reading_items_owner_pinned_updated", false, "owner, pinned, updated", "")
 
 	return app.Save(items)
 }

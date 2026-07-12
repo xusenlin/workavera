@@ -2,12 +2,14 @@ package microapps
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 
 	"github.com/pocketbase/dbx"
+	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
 )
@@ -16,7 +18,10 @@ const (
 	CollectionName = "ai_micro_apps"
 	previewPrefix  = "/api/ai-micro-apps/"
 	previewSuffix  = "/preview"
+	maxPinnedApps  = 6
 )
+
+var ErrPinLimit = errors.New("you can pin at most 6 micro apps")
 
 type CreateInput struct {
 	Name        string `json:"name"`
@@ -100,7 +105,9 @@ type SearchMatch struct {
 
 func Register(app core.App) {
 	app.OnServe().BindFunc(func(event *core.ServeEvent) error {
-		event.Router.GET("/api/ai-micro-apps/{id}/preview", preview)
+		router := event.Router
+		router.GET("/api/ai-micro-apps/{id}/preview", preview)
+		router.POST("/api/ai-micro-apps/{id}/pin", pinRequest).Bind(apis.RequireAuth("users"))
 		return event.Next()
 	})
 
@@ -224,13 +231,13 @@ func List(ctx context.Context, app core.App, actorID string, input ListInput) Re
 		perPage = 20
 	}
 	query := strings.TrimSpace(input.Query)
-	filter := "owner = {:owner}"
+	filter := "owner = {:owner} && status != 'archived'"
 	params := dbx.Params{"owner": actorID}
 	if query != "" {
 		filter += " && (name ~ {:query} || description ~ {:query})"
 		params["query"] = query
 	}
-	records, err := app.FindRecordsByFilter(CollectionName, filter, "-updated", perPage+1, (page-1)*perPage, params)
+	records, err := app.FindRecordsByFilter(CollectionName, filter, "-pinned,-updated", perPage+1, (page-1)*perPage, params)
 	if err != nil {
 		return errorResult("", "error", "Could not list AI micro apps.")
 	}
@@ -354,6 +361,48 @@ func WriteChunk(ctx context.Context, app core.App, actorID string, input WriteCh
 	res = resultForRecord(record, "updated")
 	res.SourceLength = len(html)
 	return res
+}
+
+func SetPinned(ctx context.Context, app core.App, actorID, appID string, pinned bool) error {
+	_ = ctx
+	record, res := findOwned(app, actorID, appID)
+	if !res.OK {
+		return errors.New(res.Error)
+	}
+	if !pinned {
+		record.Set("pinned", false)
+		return app.Save(record)
+	}
+	if record.GetBool("pinned") {
+		return nil
+	}
+	count, err := app.CountRecords(CollectionName, dbx.HashExp{"owner": actorID, "pinned": true})
+	if err != nil {
+		return err
+	}
+	if int(count) >= maxPinnedApps {
+		return ErrPinLimit
+	}
+	record.Set("pinned", true)
+	return app.Save(record)
+}
+
+// ── REST handlers ────────────────────────────────────────────
+
+func pinRequest(event *core.RequestEvent) error {
+	var input struct {
+		Pinned bool `json:"pinned"`
+	}
+	if err := event.BindBody(&input); err != nil {
+		return event.BadRequestError("Invalid request body.", err)
+	}
+	if err := SetPinned(event.Request.Context(), event.App, event.Auth.Id, event.Request.PathValue("id"), input.Pinned); err != nil {
+		if errors.Is(err, ErrPinLimit) {
+			return event.JSON(http.StatusBadRequest, map[string]string{"message": err.Error()})
+		}
+		return event.BadRequestError("Could not update pin status.", err)
+	}
+	return event.JSON(http.StatusOK, map[string]bool{"ok": true})
 }
 
 func preview(event *core.RequestEvent) error {

@@ -14,6 +14,7 @@ type ReadingItemRecord = RecordModel & {
   description?: string
   tags?: unknown
   status: ReadingStatus
+  pinned: boolean
   content_text?: string
   summary?: string
   key_points?: unknown
@@ -34,6 +35,7 @@ export type ReadingItem = {
   description?: string
   tags: string[]
   status: ReadingStatus
+  pinned: boolean
   contentText?: string
   summary?: string
   keyPoints: string[]
@@ -54,6 +56,7 @@ export type ReadingItemInput = {
   description?: string
   tags?: string[]
   status?: ReadingStatus
+  pinned?: boolean
   contentText?: string
   summary?: string
   keyPoints?: string[]
@@ -71,6 +74,7 @@ type ReadingState = {
   fetchProjects: () => Promise<void>
   addItem: (input: ReadingItemInput) => Promise<ReadingItem>
   updateItem: (id: string, patch: Partial<ReadingItemInput>) => Promise<void>
+  togglePin: (id: string, pinned: boolean) => Promise<void>
   deleteItem: (id: string) => Promise<void>
   summarizeItem: (id: string) => Promise<void>
 }
@@ -108,6 +112,7 @@ function toReadingItem(record: ReadingItemRecord): ReadingItem {
     description: record.description || undefined,
     tags: stringArray(record.tags),
     status: record.status,
+    pinned: record.pinned ?? false,
     contentText: record.content_text || undefined,
     summary: record.summary || undefined,
     keyPoints: stringArray(record.key_points),
@@ -126,6 +131,7 @@ function toRecord(input: Partial<ReadingItemInput>) {
     record.description = input.description || ""
   if (input.tags !== undefined) record.tags = input.tags
   if (input.status !== undefined) record.status = input.status
+  if (input.pinned !== undefined) record.pinned = input.pinned
   if (input.contentText !== undefined)
     record.content_text = input.contentText || ""
   if (input.summary !== undefined) record.summary = input.summary || ""
@@ -241,6 +247,22 @@ export const useReadingStore = create<ReadingState>((set) => ({
       set({ saving: false, error: message })
       toast.error(message)
       throw new Error(message, { cause: error })
+    }
+  },
+
+  togglePin: async (id, pinned) => {
+    try {
+      await pb.send(`/api/reading/items/${id}/pin`, {
+        method: "POST",
+        body: { pinned },
+      })
+      set((state) => ({
+        items: state.items.map((item) =>
+          item.id === id ? { ...item, pinned } : item
+        ),
+      }))
+    } catch (error) {
+      toast.error(errorMessage(error, "Could not update pin"))
     }
   },
 

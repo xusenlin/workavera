@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useState } from "react"
+import { toast } from "sonner"
 
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   Add01Icon,
   Archive02Icon,
+  ArchiveRestoreIcon,
   ArrowDown01Icon,
   ArrowUpRightIcon,
   BookOpen01Icon,
   Delete02Icon,
+  MoreHorizontalIcon,
+  Pin02Icon,
   Search02Icon,
   Tick02Icon,
 } from "@hugeicons/core-free-icons"
@@ -25,14 +29,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command"
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -40,6 +36,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -55,29 +58,20 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+  Command,
+  CommandGroup,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
 import { Textarea } from "@/components/ui/textarea"
-import { toast } from "sonner"
 import {
   READING_STATUS_META,
   useReadingStore,
   type ReadingItem,
   type ReadingStatus,
 } from "@/store/reading"
+import { cn } from "@/lib/utils"
+import { formatRelativeTime } from "@/lib/chat-utils"
 
 const NO_PROJECT = "__none__"
 const ALL = "all"
@@ -115,15 +109,16 @@ const SUMMARY_LANGUAGES = [
 ]
 
 export function ReadingPage() {
-  const [addOpen, setAddOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [query, setQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>(ALL)
   const [projectFilter, setProjectFilter] = useState<string>(ALL)
+  const [addOpen, setAddOpen] = useState(false)
   const [addForm, setAddForm] = useState<ItemForm>(emptyForm)
   const [detailForm, setDetailForm] = useState<ItemForm>(emptyForm)
   const [summarizeError, setSummarizeError] = useState<string | null>(null)
   const [summarizeConfirmOpen, setSummarizeConfirmOpen] = useState(false)
+  const [archivedOpen, setArchivedOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<ReadingItem | null>(null)
 
   const items = useReadingStore((s) => s.items)
@@ -137,6 +132,7 @@ export function ReadingPage() {
   const updateItem = useReadingStore((s) => s.updateItem)
   const deleteItem = useReadingStore((s) => s.deleteItem)
   const summarizeItem = useReadingStore((s) => s.summarizeItem)
+  const togglePin = useReadingStore((s) => s.togglePin)
 
   useEffect(() => {
     void fetchItems()
@@ -144,14 +140,14 @@ export function ReadingPage() {
   }, [fetchItems, fetchProjects])
 
   const projectNames = useMemo(
-    () =>
-      Object.fromEntries(projects.map((project) => [project.id, project.name])),
+    () => Object.fromEntries(projects.map((p) => [p.id, p.name])),
     [projects]
   )
 
   const filteredItems = useMemo(() => {
     const normalized = query.trim().toLowerCase()
     return items.filter((item) => {
+      if (item.status === "archived") return false
       if (statusFilter !== ALL && item.status !== statusFilter) return false
       if (projectFilter !== ALL && item.projectId !== projectFilter)
         return false
@@ -164,12 +160,15 @@ export function ReadingPage() {
         ...item.tags,
         ...item.keyPoints,
       ]
-        .filter((value): value is string => Boolean(value))
-        .some((value) => value.toLowerCase().includes(normalized))
+        .filter((v): v is string => Boolean(v))
+        .some((v) => v.toLowerCase().includes(normalized))
     })
   }, [items, projectFilter, query, statusFilter])
 
-  const selectedItem = items.find((item) => item.id === selectedId) ?? null
+  const pinnedItems = filteredItems.filter((i) => i.pinned)
+  const recentItems = filteredItems.filter((i) => !i.pinned)
+
+  const selectedItem = items.find((i) => i.id === selectedId) ?? null
 
   const selectItem = (item: ReadingItem | null) => {
     setSelectedId(item?.id ?? null)
@@ -199,18 +198,20 @@ export function ReadingPage() {
       await summarizeItem(selectedItem.id)
       const next = useReadingStore
         .getState()
-        .items.find((item) => item.id === selectedItem.id)
+        .items.find((i) => i.id === selectedItem.id)
       if (next) setDetailForm(toForm(next))
       toast.success("Article fetched and summarized", { id: toastId })
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to fetch or summarize"
+      const message =
+        error instanceof Error ? error.message : "Failed to fetch or summarize"
       setSummarizeError(message)
       toast.error(message, { id: toastId })
     }
   }
 
   const handleArchive = async (item: ReadingItem) => {
-    await updateItem(item.id, { status: "archived" })
+    await updateItem(item.id, { status: "archived", pinned: false })
+    if (selectedId === item.id) selectItem(null)
   }
 
   const handleDelete = async (item: ReadingItem) => {
@@ -219,235 +220,226 @@ export function ReadingPage() {
     setDeleteTarget(null)
   }
 
+  const handleTogglePin = async (item: ReadingItem) => {
+    await togglePin(item.id, !item.pinned)
+  }
+
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2.5">
-            <div className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+    <div className="-m-4 flex h-[calc(100vh-4rem)] overflow-hidden md:-m-6">
+      {/* Left sidebar */}
+      <aside className="flex h-full w-80 shrink-0 flex-col border-r bg-sidebar">
+        <div className="flex flex-col gap-2 border-b p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold">Reading</span>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setArchivedOpen(true)}
+                aria-label="Archived"
+              >
+                <HugeiconsIcon
+                  icon={Archive02Icon}
+                  strokeWidth={2}
+                  className="size-4"
+                />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setAddOpen(true)}
+                aria-label="Add link"
+              >
+                <HugeiconsIcon
+                  icon={Add01Icon}
+                  strokeWidth={2}
+                  className="size-4"
+                />
+              </Button>
+            </div>
+          </div>
+          <div className="relative">
+            <HugeiconsIcon
+              icon={Search02Icon}
+              strokeWidth={2}
+              className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+            />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search reading items..."
+              className="h-8 pl-8 text-sm"
+            />
+          </div>
+          <div className="flex gap-2">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-8 flex-1 text-xs">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>All statuses</SelectItem>
+                <SelectItem value="unread">Unread</SelectItem>
+                <SelectItem value="read">Read</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={projectFilter} onValueChange={setProjectFilter}>
+              <SelectTrigger className="h-8 flex-1 text-xs">
+                <SelectValue placeholder="Project" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>All projects</SelectItem>
+                {projects.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-2">
+          {loading ? (
+            <div className="space-y-2 p-2">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="flex flex-col gap-2 rounded-lg px-3 py-2.5"
+                >
+                  <div className="h-3.5 w-2/3 animate-pulse rounded bg-muted" />
+                  <div className="h-2.5 w-full animate-pulse rounded bg-muted" />
+                </div>
+              ))}
+            </div>
+          ) : pinnedItems.length === 0 && recentItems.length === 0 ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center text-sm text-muted-foreground">
               <HugeiconsIcon
                 icon={BookOpen01Icon}
                 strokeWidth={2}
-                className="size-4"
+                className="size-8 opacity-40"
               />
-            </div>
-            <h1 className="text-2xl font-semibold tracking-tight">Reading</h1>
-            <span className="text-sm text-muted-foreground">
-              {items.length}
-            </span>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Collect external references, summarize them, and reuse them as chat
-            context.
-          </p>
-        </div>
-        <Button size="sm" onClick={() => setAddOpen(true)}>
-          <HugeiconsIcon icon={Add01Icon} strokeWidth={2} className="size-4" />
-          Add link
-        </Button>
-      </div>
-
-      <div className="grid gap-6">
-        <Card className="min-w-0">
-          <CardHeader>
-            <CardTitle>Library</CardTitle>
-            <CardDescription>
-              Filter by status, project, tags, title, or summary.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_160px_200px]">
-              <div className="relative">
-                <HugeiconsIcon
-                  icon={Search02Icon}
-                  strokeWidth={2}
-                  className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-                />
-                <Input
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search reading items..."
-                  className="pl-9"
-                />
+              <div>
+                <p className="font-medium text-foreground">
+                  No reading items yet
+                </p>
+                <p className="mt-1 text-xs">
+                  Add a link to start collecting references.
+                </p>
               </div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>All statuses</SelectItem>
-                  <SelectItem value="unread">Unread</SelectItem>
-                  <SelectItem value="read">Read</SelectItem>
-                  <SelectItem value="archived">Archived</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={projectFilter} onValueChange={setProjectFilter}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Project" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>All projects</SelectItem>
-                  {projects.map((project) => (
-                    <SelectItem key={project.id} value={project.id}>
-                      {project.name}
-                    </SelectItem>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {pinnedItems.length > 0 && (
+                <div className="flex flex-col gap-1">
+                  <span className="px-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                    Pinned
+                  </span>
+                  {pinnedItems.map((item) => (
+                    <ReadingListItem
+                      key={item.id}
+                      item={item}
+                      selected={selectedId === item.id}
+                      onSelect={selectItem}
+                      onTogglePin={handleTogglePin}
+                      onArchive={handleArchive}
+                      onDelete={setDeleteTarget}
+                    />
                   ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="overflow-hidden rounded-2xl border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Title</TableHead>
-                    <TableHead className="hidden xl:table-cell">
-                      Summary
-                    </TableHead>
-                    <TableHead className="hidden lg:table-cell">
-                      Project
-                    </TableHead>
-                    <TableHead className="hidden md:table-cell">Tags</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="w-28 text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={6}
-                        className="h-32 text-center text-muted-foreground"
-                      >
-                        Loading reading items...
-                      </TableCell>
-                    </TableRow>
-                  ) : filteredItems.length === 0 ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={6}
-                        className="h-32 text-center text-muted-foreground"
-                      >
-                        No reading items yet. Add a link to start collecting
-                        references.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredItems.map((item) => (
-                      <TableRow
-                        key={item.id}
-                        data-state={
-                          selectedItem?.id === item.id ? "selected" : undefined
-                        }
-                        className="cursor-pointer"
-                        onClick={() => selectItem(item)}
-                      >
-                        <TableCell className="min-w-72 whitespace-normal">
-                          <span className="font-medium">{item.title}</span>
-                        </TableCell>
-                        <TableCell className="hidden max-w-md whitespace-normal xl:table-cell">
-                          <span
-                            title={item.summary || "No summary yet"}
-                            className="line-clamp-2 text-xs text-muted-foreground"
-                          >
-                            {item.summary || "No summary yet"}
-                          </span>
-                        </TableCell>
-                        <TableCell className="hidden lg:table-cell">
-                          {item.projectId
-                            ? projectNames[item.projectId] || "Unknown project"
-                            : "-"}
-                        </TableCell>
-                        <TableCell className="hidden max-w-52 whitespace-normal md:table-cell">
-                          <TagList tags={item.tags} />
-                        </TableCell>
-                        <TableCell>
-                          <StatusBadge status={item.status} />
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
-                            <Button variant="ghost" size="icon-xs" asChild>
-                              <a
-                                href={item.url}
-                                target="_blank"
-                                rel="noreferrer"
-                                onClick={(event) => event.stopPropagation()}
-                                aria-label="Open link"
-                              >
-                                <HugeiconsIcon
-                                  icon={ArrowUpRightIcon}
-                                  strokeWidth={2}
-                                />
-                              </a>
-                            </Button>
-                            {item.status !== "archived" ? (
-                              <Button
-                                variant="ghost"
-                                size="icon-xs"
-                                onClick={(event) => {
-                                  event.stopPropagation()
-                                  void handleArchive(item)
-                                }}
-                                aria-label="Archive item"
-                              >
-                                <HugeiconsIcon
-                                  icon={Archive02Icon}
-                                  strokeWidth={2}
-                                />
-                              </Button>
-                            ) : null}
-                            <Button
-                              variant="ghost"
-                              size="icon-xs"
-                              onClick={(event) => {
-                                event.stopPropagation()
-                                setDeleteTarget(item)
-                              }}
-                              aria-label="Delete item"
-                            >
-                              <HugeiconsIcon
-                                icon={Delete02Icon}
-                                strokeWidth={2}
-                              />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
+                </div>
+              )}
+              {recentItems.length > 0 && (
+                <div className="flex flex-col gap-1">
+                  {pinnedItems.length > 0 && (
+                    <span className="px-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                      Recent
+                    </span>
                   )}
-                </TableBody>
-              </Table>
+                  {recentItems.map((item) => (
+                    <ReadingListItem
+                      key={item.id}
+                      item={item}
+                      selected={selectedId === item.id}
+                      onSelect={selectItem}
+                      onTogglePin={handleTogglePin}
+                      onArchive={handleArchive}
+                      onDelete={setDeleteTarget}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          )}
+        </div>
+      </aside>
 
-      <Sheet
-        open={selectedItem != null}
-        onOpenChange={(open) => !open && selectItem(null)}
-      >
-        <SheetContent
-          className="w-full overflow-hidden sm:!w-[48rem] sm:!max-w-3xl"
-        >
-          <SheetHeader className="shrink-0 border-b pr-14">
-            <SheetTitle>Details</SheetTitle>
-            <SheetDescription>
-              Edit metadata, pasted content, and AI digest fields for the
-              selected item.
-            </SheetDescription>
-          </SheetHeader>
-          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
-            {selectedItem ? (
+      {/* Right panel */}
+      <main className="flex min-w-0 flex-1 flex-col bg-background">
+        {selectedItem ? (
+          <>
+            <div className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-4">
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                <span className="truncate text-sm font-semibold">
+                  {selectedItem.title}
+                </span>
+                <Badge
+                  variant="secondary"
+                  className="hidden cursor-default gap-1 sm:flex"
+                >
+                  <span className="text-muted-foreground">ID</span>
+                  <code className="text-[11px] text-foreground">
+                    {selectedItem.id.slice(-8)}
+                  </code>
+                </Badge>
+                <Badge variant="secondary" className="cursor-default">
+                  {READING_STATUS_META[selectedItem.status].label}
+                </Badge>
+                <span className="hidden text-xs text-muted-foreground sm:inline">
+                  {formatRelativeTime(selectedItem.updatedAt)}
+                </span>
+              </div>
+              <div className="flex shrink-0 items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => handleTogglePin(selectedItem)}
+                  aria-label={selectedItem.pinned ? "Unpin" : "Pin"}
+                >
+                  <HugeiconsIcon
+                    icon={Pin02Icon}
+                    strokeWidth={2}
+                    className={cn(
+                      "size-4",
+                      selectedItem.pinned && "text-primary"
+                    )}
+                  />
+                </Button>
+                <Button variant="ghost" size="icon-sm" asChild>
+                  <a
+                    href={selectedItem.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label="Open link"
+                  >
+                    <HugeiconsIcon
+                      icon={ArrowUpRightIcon}
+                      strokeWidth={2}
+                      className="size-4"
+                    />
+                  </a>
+                </Button>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto p-6">
               <ItemFormFields
                 form={detailForm}
                 setForm={setDetailForm}
                 projects={projects}
                 summarizeError={summarizeError}
               />
-            ) : null}
-          </div>
-          {selectedItem ? (
-            <SheetFooter className="flex-row items-center justify-between gap-2 border-t bg-popover">
+            </div>
+
+            <div className="flex shrink-0 items-center justify-between gap-2 border-t bg-popover px-4 py-3">
               <Button
                 variant="ghost"
                 className="text-destructive hover:text-destructive"
@@ -463,9 +455,7 @@ export function ReadingPage() {
                   onClick={() => setSummarizeConfirmOpen(true)}
                   disabled={summarizing || saving || !detailForm.url.trim()}
                 >
-                  {summarizing
-                    ? "Fetching and summarizing..."
-                    : "Fetch and summarize"}
+                  {summarizing ? "Fetching..." : "Fetch & summarize"}
                 </Button>
                 <Button
                   onClick={() => void handleSave()}
@@ -473,14 +463,24 @@ export function ReadingPage() {
                     saving || !detailForm.title.trim() || !detailForm.url.trim()
                   }
                 >
-                  {saving ? "Saving..." : "Save changes"}
+                  {saving ? "Saving..." : "Save"}
                 </Button>
               </div>
-            </SheetFooter>
-          ) : null}
-        </SheetContent>
-      </Sheet>
+            </div>
+          </>
+        ) : (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center text-sm text-muted-foreground">
+            <HugeiconsIcon
+              icon={BookOpen01Icon}
+              strokeWidth={2}
+              className="size-8 opacity-40"
+            />
+            <p className="text-xs">Select an item to view details</p>
+          </div>
+        )}
+      </main>
 
+      {/* Add dialog */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
@@ -515,6 +515,14 @@ export function ReadingPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Archived dialog */}
+      <ArchivedItemsDialog
+        open={archivedOpen}
+        onOpenChange={setArchivedOpen}
+        projectNames={projectNames}
+      />
+
+      {/* Summarize confirm */}
       <AlertDialog
         open={summarizeConfirmOpen}
         onOpenChange={setSummarizeConfirmOpen}
@@ -537,6 +545,7 @@ export function ReadingPage() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Delete confirm */}
       <AlertDialog
         open={deleteTarget != null}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
@@ -564,6 +573,190 @@ export function ReadingPage() {
   )
 }
 
+function ReadingListItem({
+  item,
+  selected,
+  onSelect,
+  onTogglePin,
+  onArchive,
+  onDelete,
+}: {
+  item: ReadingItem
+  selected: boolean
+  onSelect: (item: ReadingItem) => void
+  onTogglePin: (item: ReadingItem) => void
+  onArchive: (item: ReadingItem) => void
+  onDelete: (item: ReadingItem) => void
+}) {
+  return (
+    <div className="group relative">
+      <button
+        type="button"
+        onClick={() => onSelect(item)}
+        className={cn(
+          "flex w-full cursor-pointer flex-col gap-1 rounded-lg px-3 py-2.5 text-left transition-colors",
+          selected ? "bg-muted" : "hover:bg-muted/60"
+        )}
+      >
+        <div className="flex items-center gap-1.5">
+          {item.pinned && (
+            <HugeiconsIcon
+              icon={Pin02Icon}
+              strokeWidth={2}
+              className="size-3 shrink-0 text-primary"
+            />
+          )}
+          {item.status === "unread" && (
+            <span className="size-2 shrink-0 animate-pulse rounded-full bg-blue-500" />
+          )}
+          <span className="line-clamp-1 text-sm font-medium text-foreground/90">
+            {item.title}
+          </span>
+        </div>
+        {item.description && (
+          <span className="line-clamp-1 text-xs text-muted-foreground">
+            {item.description}
+          </span>
+        )}
+      </button>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className="absolute top-2 right-2 flex size-6 cursor-pointer items-center justify-center rounded-md opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted data-[state=open]:opacity-100"
+          >
+            <HugeiconsIcon
+              icon={MoreHorizontalIcon}
+              strokeWidth={2}
+              className="size-4"
+            />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => onTogglePin(item)}>
+            <HugeiconsIcon
+              icon={Pin02Icon}
+              strokeWidth={2}
+              className="size-4"
+            />
+            {item.pinned ? "Unpin" : "Pin"}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onArchive(item)}>
+            <HugeiconsIcon
+              icon={Archive02Icon}
+              strokeWidth={2}
+              className="size-4"
+            />
+            Archive
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            variant="destructive"
+            onClick={() => onDelete(item)}
+          >
+            <HugeiconsIcon
+              icon={Delete02Icon}
+              strokeWidth={2}
+              className="size-4"
+            />
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  )
+}
+
+function ArchivedItemsDialog({
+  open,
+  onOpenChange,
+  projectNames,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  projectNames: Record<string, string>
+}) {
+  const items = useReadingStore((s) => s.items)
+  const updateItem = useReadingStore((s) => s.updateItem)
+  const deleteItem = useReadingStore((s) => s.deleteItem)
+  const archived = items.filter((i) => i.status === "archived")
+
+  const unarchive = async (item: ReadingItem) => {
+    await updateItem(item.id, { status: "unread" })
+    toast.success("Restored.")
+  }
+
+  const remove = async (item: ReadingItem) => {
+    await deleteItem(item.id)
+    toast.success("Deleted.")
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Archived reading items</DialogTitle>
+        </DialogHeader>
+        <div className="max-h-96 space-y-1 overflow-y-auto">
+          {archived.length === 0 ? (
+            <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+              No archived items.
+            </div>
+          ) : (
+            archived.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{item.title}</p>
+                  <div className="flex items-center gap-1">
+                    {item.projectId && projectNames[item.projectId] && (
+                      <Badge variant="outline" className="px-1.5 text-[10px]">
+                        {projectNames[item.projectId]}
+                      </Badge>
+                    )}
+                    <span className="text-xs text-muted-foreground">
+                      {formatRelativeTime(item.updatedAt)}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => unarchive(item)}
+                    aria-label="Restore"
+                  >
+                    <HugeiconsIcon
+                      icon={ArchiveRestoreIcon}
+                      strokeWidth={2}
+                      className="size-4"
+                    />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => remove(item)}
+                    aria-label="Delete"
+                  >
+                    <HugeiconsIcon
+                      icon={Delete02Icon}
+                      strokeWidth={2}
+                      className="size-4 text-destructive"
+                    />
+                  </Button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function ItemFormFields({
   form,
   setForm,
@@ -584,7 +777,7 @@ function ItemFormFields({
         <Input
           id={compact ? "add-title" : "detail-title"}
           value={form.title}
-          onChange={(event) => setForm({ ...form, title: event.target.value })}
+          onChange={(e) => setForm({ ...form, title: e.target.value })}
           placeholder="Article, repo, product page..."
         />
       </div>
@@ -593,7 +786,7 @@ function ItemFormFields({
         <Input
           id={compact ? "add-url" : "detail-url"}
           value={form.url}
-          onChange={(event) => setForm({ ...form, url: event.target.value })}
+          onChange={(e) => setForm({ ...form, url: e.target.value })}
           placeholder="https://example.com"
         />
       </div>
@@ -609,9 +802,9 @@ function ItemFormFields({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={NO_PROJECT}>No project</SelectItem>
-              {projects.map((project) => (
-                <SelectItem key={project.id} value={project.id}>
-                  {project.name}
+              {projects.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -641,7 +834,7 @@ function ItemFormFields({
         <Input
           id={compact ? "add-tags" : "detail-tags"}
           value={form.tags}
-          onChange={(event) => setForm({ ...form, tags: event.target.value })}
+          onChange={(e) => setForm({ ...form, tags: e.target.value })}
           placeholder="PocketBase, AI Agent, research"
         />
       </div>
@@ -649,9 +842,7 @@ function ItemFormFields({
         <Label>AI summary language</Label>
         <LanguageCombobox
           value={form.summaryLanguage}
-          onChange={(summaryLanguage) =>
-            setForm({ ...form, summaryLanguage })
-          }
+          onChange={(summaryLanguage) => setForm({ ...form, summaryLanguage })}
         />
       </div>
       <div className="grid gap-2">
@@ -661,26 +852,24 @@ function ItemFormFields({
         <Textarea
           id={compact ? "add-description" : "detail-description"}
           value={form.description}
-          onChange={(event) =>
-            setForm({ ...form, description: event.target.value })
-          }
+          onChange={(e) => setForm({ ...form, description: e.target.value })}
           placeholder="Why this reference matters..."
         />
       </div>
-      {!compact ? (
+      {!compact && (
         <>
-          {summarizeError ? (
+          {summarizeError && (
             <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
               {summarizeError}
             </div>
-          ) : null}
+          )}
           <div className="grid gap-2">
             <Label htmlFor="detail-content">Content</Label>
             <Textarea
               id="detail-content"
               value={form.contentText}
-              onChange={(event) =>
-                setForm({ ...form, contentText: event.target.value })
+              onChange={(e) =>
+                setForm({ ...form, contentText: e.target.value })
               }
               placeholder="Paste fetched or copied article content here."
               className="min-h-32"
@@ -691,9 +880,7 @@ function ItemFormFields({
             <Textarea
               id="detail-summary"
               value={form.summary}
-              onChange={(event) =>
-                setForm({ ...form, summary: event.target.value })
-              }
+              onChange={(e) => setForm({ ...form, summary: e.target.value })}
               placeholder="AI or manual summary."
               className="min-h-28"
             />
@@ -703,22 +890,15 @@ function ItemFormFields({
             <Textarea
               id="detail-key-points"
               value={form.keyPoints}
-              onChange={(event) =>
-                setForm({ ...form, keyPoints: event.target.value })
-              }
+              onChange={(e) => setForm({ ...form, keyPoints: e.target.value })}
               placeholder="One key point per line."
               className="min-h-28"
             />
           </div>
         </>
-      ) : null}
+      )}
     </div>
   )
-}
-
-function StatusBadge({ status }: { status: ReadingStatus }) {
-  const meta = READING_STATUS_META[status]
-  return <Badge variant={meta.variant}>{meta.label}</Badge>
 }
 
 function LanguageCombobox({
@@ -729,14 +909,13 @@ function LanguageCombobox({
   onChange: (value: string) => void
 }) {
   const [open, setOpen] = useState(false)
-
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <div className="relative">
           <Input
             value={value}
-            onChange={(event) => onChange(event.target.value)}
+            onChange={(e) => onChange(e.target.value)}
             placeholder="English, 中文, 日本語, ..."
             className="pr-8"
           />
@@ -747,7 +926,10 @@ function LanguageCombobox({
           />
         </div>
       </PopoverTrigger>
-      <PopoverContent className="w-(--radix-popover-trigger-width) p-0" align="start">
+      <PopoverContent
+        className="w-(--radix-popover-trigger-width) p-0"
+        align="start"
+      >
         <Command>
           <CommandList>
             <CommandGroup>
@@ -761,13 +943,13 @@ function LanguageCombobox({
                   }}
                 >
                   {lang.label}
-                  {value === lang.value ? (
+                  {value === lang.value && (
                     <HugeiconsIcon
                       icon={Tick02Icon}
                       strokeWidth={2}
                       className="ml-auto size-4"
                     />
-                  ) : null}
+                  )}
                 </CommandItem>
               ))}
             </CommandGroup>
@@ -775,22 +957,6 @@ function LanguageCombobox({
         </Command>
       </PopoverContent>
     </Popover>
-  )
-}
-
-function TagList({ tags }: { tags: string[] }) {
-  if (tags.length === 0) return <span className="text-muted-foreground">-</span>
-  return (
-    <div className="flex flex-wrap gap-1">
-      {tags.slice(0, 3).map((tag) => (
-        <Badge key={tag} variant="outline" className="max-w-28 truncate">
-          {tag}
-        </Badge>
-      ))}
-      {tags.length > 3 ? (
-        <Badge variant="ghost">+{tags.length - 3}</Badge>
-      ) : null}
-    </div>
   )
 }
 
@@ -827,13 +993,13 @@ function fromForm(form: ItemForm) {
 function splitList(value: string) {
   return value
     .split(",")
-    .map((item) => item.trim())
+    .map((s) => s.trim())
     .filter(Boolean)
 }
 
 function splitLines(value: string) {
   return value
     .split("\n")
-    .map((item) => item.trim())
+    .map((s) => s.trim())
     .filter(Boolean)
 }

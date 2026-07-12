@@ -41,6 +41,9 @@ func TestReadingItemsMigration(t *testing.T) {
 	if _, ok := items.Fields.GetByName("summary_language").(*core.TextField); !ok {
 		t.Fatal("reading items must expose summary_language as a text field")
 	}
+	if _, ok := items.Fields.GetByName("pinned").(*core.BoolField); !ok {
+		t.Fatal("reading items must expose pinned as a boolean field")
+	}
 	if items.Fields.GetByName("created") == nil || items.Fields.GetByName("updated") == nil {
 		t.Fatal("reading items must expose created and updated timestamps")
 	}
@@ -51,10 +54,10 @@ func TestReadingItemsMigration(t *testing.T) {
 	if items.ViewRule == nil || *items.ViewRule != *items.ListRule {
 		t.Fatalf("unexpected view rule: %v", items.ViewRule)
 	}
-	if items.CreateRule == nil || *items.CreateRule != `@request.auth.id != "" && @request.body.owner = @request.auth.id` {
+	if items.CreateRule == nil || *items.CreateRule != `@request.auth.id != "" && @request.body.owner = @request.auth.id && @request.body.pinned != true` {
 		t.Fatalf("unexpected create rule: %v", items.CreateRule)
 	}
-	if items.UpdateRule == nil || *items.UpdateRule != `owner = @request.auth.id && @request.body.owner:changed = false` {
+	if items.UpdateRule == nil || *items.UpdateRule != `owner = @request.auth.id && @request.body.owner:changed = false && (@request.body.pinned:changed = false || @request.body.pinned = false)` {
 		t.Fatalf("unexpected update rule: %v", items.UpdateRule)
 	}
 	if items.DeleteRule == nil || *items.DeleteRule != `owner = @request.auth.id` {
