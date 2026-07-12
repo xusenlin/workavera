@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { toast } from "sonner"
 
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
@@ -10,10 +11,15 @@ import {
   Pin02Icon,
   Share08Icon,
   Tick02Icon,
+  TimeZoneIcon,
+  Sun03Icon,
+  Moon02Icon,
+  ComputerIcon,
 } from "@hugeicons/core-free-icons"
 
 import { ModelCopyDialog } from "@/components/model-copy-dialog"
 import { ModelSheet } from "@/components/model-sheet"
+import { useTheme } from "@/components/theme-provider"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,6 +39,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table,
@@ -47,6 +61,8 @@ import {
   DEFAULT_MAX_OUTPUT_TOKENS,
   type LlmModelConfig,
 } from "@/store/llm-settings"
+import { cn } from "@/lib/utils"
+import { pb } from "@/lib/pocketbase"
 
 export function SettingsPage() {
   const models = useLlmSettingsStore((state) => state.models)
@@ -229,7 +245,9 @@ export function SettingsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="pl-6">Model</TableHead>
-                  <TableHead className="hidden md:table-cell">Protocol</TableHead>
+                  <TableHead className="hidden md:table-cell">
+                    Protocol
+                  </TableHead>
                   <TableHead className="hidden sm:table-cell">
                     Max tokens
                   </TableHead>
@@ -264,7 +282,8 @@ export function SettingsPage() {
                           variant="ghost"
                           size="icon-sm"
                           onClick={() => {
-                            if (!model.isDefault) void handleSetDefault(model.id)
+                            if (!model.isDefault)
+                              void handleSetDefault(model.id)
                           }}
                           className={
                             model.isDefault
@@ -282,7 +301,7 @@ export function SettingsPage() {
                           variant="ghost"
                           size="icon-sm"
                           onClick={() => openCopyDialog(model)}
-                          aria-label="Copy to users"
+                          aria-label="Share with users"
                         >
                           <HugeiconsIcon icon={Share08Icon} strokeWidth={2} />
                         </Button>
@@ -313,6 +332,8 @@ export function SettingsPage() {
         </CardContent>
       </Card>
 
+      <SystemSettingsCard />
+
       <ModelSheet
         key={sheetModel?.id ?? "new-model"}
         open={sheetOpen}
@@ -331,9 +352,9 @@ export function SettingsPage() {
           if (!open) setCopySource(null)
         }}
         model={copySource}
-        onCopied={(count) =>
+        onShared={(count) =>
           setNotice(
-            `Configuration copied to ${count} user${count === 1 ? "" : "s"}.`
+            `Share invitation sent to ${count} user${count === 1 ? "" : "s"}.`
           )
         }
       />
@@ -368,5 +389,176 @@ export function SettingsPage() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  )
+}
+
+const COMMON_TIMEZONES = [
+  { value: "UTC", label: "UTC (Coordinated Universal Time)" },
+  { value: "Asia/Shanghai", label: "Asia/Shanghai (UTC+8)" },
+  { value: "Asia/Tokyo", label: "Asia/Tokyo (UTC+9)" },
+  { value: "Asia/Singapore", label: "Asia/Singapore (UTC+8)" },
+  { value: "Asia/Kolkata", label: "Asia/Kolkata (UTC+5:30)" },
+  { value: "Asia/Dubai", label: "Asia/Dubai (UTC+4)" },
+  { value: "Europe/London", label: "Europe/London (UTC+0/+1)" },
+  { value: "Europe/Paris", label: "Europe/Paris (UTC+1/+2)" },
+  { value: "Europe/Berlin", label: "Europe/Berlin (UTC+1/+2)" },
+  { value: "Europe/Moscow", label: "Europe/Moscow (UTC+3)" },
+  { value: "America/New_York", label: "America/New_York (UTC-5/-4)" },
+  { value: "America/Chicago", label: "America/Chicago (UTC-6/-5)" },
+  { value: "America/Denver", label: "America/Denver (UTC-7/-6)" },
+  { value: "America/Los_Angeles", label: "America/Los_Angeles (UTC-8/-7)" },
+  { value: "America/Sao_Paulo", label: "America/Sao_Paulo (UTC-3)" },
+  { value: "Australia/Sydney", label: "Australia/Sydney (UTC+10/+11)" },
+  { value: "Pacific/Auckland", label: "Pacific/Auckland (UTC+12/+13)" },
+]
+
+const THEME_OPTIONS = [
+  { value: "light" as const, label: "Light", icon: Sun03Icon },
+  { value: "dark" as const, label: "Dark", icon: Moon02Icon },
+  { value: "system" as const, label: "System", icon: ComputerIcon },
+]
+
+function SystemSettingsCard() {
+  const { theme, setTheme } = useTheme()
+  const [timezone, setTimezone] = useState("Asia/Shanghai")
+  const [timezoneLoading, setTimezoneLoading] = useState(true)
+  const [timezoneSaving, setTimezoneSaving] = useState(false)
+
+  useEffect(() => {
+    void pb
+      .send<{
+        timezone: string
+        theme: "light" | "dark" | "system"
+      }>("/api/configs/system", {
+        method: "GET",
+        requestKey: null,
+      })
+      .then((config) => {
+        setTimezone(config.timezone)
+        setTheme(config.theme)
+      })
+      .catch(() => toast.error("Could not load the system timezone"))
+      .finally(() => setTimezoneLoading(false))
+  }, [setTheme])
+
+  const updateTimezone = async (value: string) => {
+    const previous = timezone
+    setTimezone(value)
+    setTimezoneSaving(true)
+    try {
+      const config = await pb.send<{
+        timezone: string
+        theme: "light" | "dark" | "system"
+      }>("/api/configs/system", {
+        method: "PATCH",
+        body: { timezone: value },
+      })
+      setTimezone(config.timezone)
+      toast.success("System timezone updated")
+    } catch {
+      setTimezone(previous)
+      toast.error("Could not update the system timezone")
+    } finally {
+      setTimezoneSaving(false)
+    }
+  }
+
+  const updateTheme = async (value: "light" | "dark" | "system") => {
+    const previous = theme
+    setTheme(value)
+    try {
+      const config = await pb.send<{
+        timezone: string
+        theme: "light" | "dark" | "system"
+      }>("/api/configs/system", {
+        method: "PATCH",
+        body: { theme: value },
+      })
+      setTheme(config.theme)
+    } catch {
+      setTheme(previous)
+      toast.error("Could not update the system theme")
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-3">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <HugeiconsIcon
+              icon={TimeZoneIcon}
+              strokeWidth={2}
+              className="size-4"
+            />
+          </div>
+          <div>
+            <CardTitle>System</CardTitle>
+            <CardDescription>
+              Configure your timezone and appearance preferences.
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-6">
+        {/* Timezone */}
+        <div className="flex flex-col gap-2">
+          <Label>Timezone</Label>
+          <Select
+            value={timezone}
+            onValueChange={(value) => void updateTimezone(value)}
+            disabled={timezoneLoading || timezoneSaving}
+          >
+            <SelectTrigger className="w-full max-w-md">
+              <SelectValue placeholder="Select timezone" />
+            </SelectTrigger>
+            <SelectContent>
+              {COMMON_TIMEZONES.map((tz) => (
+                <SelectItem key={tz.value} value={tz.value}>
+                  {tz.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Used for calendar events, reminders, and AI scheduling.
+          </p>
+        </div>
+
+        {/* Theme */}
+        <div className="flex flex-col gap-2">
+          <Label>Appearance</Label>
+          <div className="flex gap-2">
+            {THEME_OPTIONS.map((option) => {
+              const active = theme === option.value
+              const Icon = option.icon
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => void updateTheme(option.value)}
+                  className={cn(
+                    "flex cursor-pointer items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors",
+                    active
+                      ? "border-primary bg-primary/5 text-primary"
+                      : "text-muted-foreground hover:bg-muted/50"
+                  )}
+                >
+                  <HugeiconsIcon
+                    icon={Icon}
+                    strokeWidth={2}
+                    className="size-4"
+                  />
+                  {option.label}
+                </button>
+              )
+            })}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Choose how the interface looks. System follows your OS preference.
+          </p>
+        </div>
+      </CardContent>
+    </Card>
   )
 }

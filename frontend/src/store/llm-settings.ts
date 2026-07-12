@@ -52,7 +52,7 @@ type LlmSettingsState = {
   removeModel: (id: string) => Promise<void>
   setDefaultModel: (id: string) => Promise<void>
   loadShareTargets: () => Promise<LlmShareTarget[]>
-  copyModel: (id: string, userIds: string[]) => Promise<number>
+  shareModel: (id: string, userIds: string[]) => Promise<number>
 }
 
 let initializationPromise: Promise<void> | null = null
@@ -210,18 +210,18 @@ export const useLlmSettingsStore = create<LlmSettingsState>((set, get) => ({
     }
   },
 
-  copyModel: async (id, userIds) => {
+  shareModel: async (id, userIds) => {
     set({ error: null })
     try {
-      const response = await pb.send<{ copied: number }>(
-        `/api/llm/models/${id}/copy`,
+      const response = await pb.send<{ shared: number }>(
+        `/api/llm/models/${id}/share`,
         { method: "POST", body: { userIds } }
       )
-      return response.copied
+      return response.shared
     } catch (error) {
       const message = messageFromError(
         error,
-        "Could not copy model configuration"
+        "Could not share model configuration"
       )
       set({ error: message })
       toast.error(message)

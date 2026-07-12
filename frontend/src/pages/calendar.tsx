@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
   addDays,
   addMonths,
@@ -8,7 +8,7 @@ import {
   startOfMonth,
   subMonths,
 } from "date-fns"
-import { useNavigate } from "react-router"
+import { useNavigate, useSearchParams } from "react-router"
 
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Add01Icon, Calendar03Icon } from "@hugeicons/core-free-icons"
@@ -28,20 +28,16 @@ import { Spinner } from "@/components/ui/spinner"
 import { MiniCalendar } from "@/components/calendar/mini-calendar"
 import { EventList } from "@/components/calendar/event-list"
 import { EventDialog } from "@/components/calendar/event-dialog"
-import {
-  buildCalendarItems,
-  type CalendarEvent,
-} from "@/lib/calendar-types"
+import { buildCalendarItems, type CalendarEvent } from "@/lib/calendar-types"
 import { cn } from "@/lib/utils"
-import {
-  useCalendarStore,
-  type CalendarEventInput,
-} from "@/store/calendar"
+import { useCalendarStore, type CalendarEventInput } from "@/store/calendar"
 
 export function CalendarPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const events = useCalendarStore((state) => state.events)
   const tasks = useCalendarStore((state) => state.tasks)
+  const timezone = useCalendarStore((state) => state.timezone)
   const loading = useCalendarStore((state) => state.loading)
   const initialized = useCalendarStore((state) => state.initialized)
   const error = useCalendarStore((state) => state.error)
@@ -57,11 +53,32 @@ export function CalendarPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null)
   const [deletingEvent, setDeletingEvent] = useState<CalendarEvent | null>(null)
+  const openedRequestedEvent = useRef<string | null>(null)
 
   useEffect(() => {
     void initialize()
     return dispose
   }, [dispose, initialize])
+
+  useEffect(() => {
+    const requestedEventId = searchParams.get("event")
+    if (
+      !initialized ||
+      !requestedEventId ||
+      openedRequestedEvent.current === requestedEventId
+    )
+      return
+    const requestedEvent = events.find((event) => event.id === requestedEventId)
+    if (!requestedEvent) return
+    openedRequestedEvent.current = requestedEventId
+    const occurrence = searchParams.get("occurrence")
+    const frame = requestAnimationFrame(() => {
+      if (occurrence) setSelectedDate(new Date(`${occurrence}T00:00:00`))
+      setEditingEvent(requestedEvent)
+      setDialogOpen(true)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [events, initialized, searchParams])
 
   const items = useMemo(() => {
     const rangeStart = startOfMonth(subMonths(selectedDate, 1))
@@ -119,11 +136,7 @@ export function CalendarPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => moveSelection(-1)}
-          >
+          <Button variant="outline" size="sm" onClick={() => moveSelection(-1)}>
             Previous
           </Button>
           <Button
@@ -133,11 +146,7 @@ export function CalendarPage() {
           >
             Today
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => moveSelection(1)}
-          >
+          <Button variant="outline" size="sm" onClick={() => moveSelection(1)}>
             Next
           </Button>
           <Button
@@ -219,6 +228,7 @@ export function CalendarPage() {
         onOpenChange={setDialogOpen}
         event={editingEvent}
         defaultDate={selectedDateStr}
+        timezone={timezone}
         onSave={handleSaveEvent}
       />
 

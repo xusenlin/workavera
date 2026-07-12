@@ -13,6 +13,7 @@ import { ReadingPage } from "@/pages/reading"
 import { AIMicroAppsPage } from "@/pages/micro-apps"
 import { SettingsPage } from "@/pages/settings"
 import { ProfilePage } from "@/pages/profile"
+import { NotificationsPage } from "@/pages/notifications"
 
 const DocsPage = lazy(() =>
   import("@/pages/docs").then((module) => ({ default: module.DocsPage }))
@@ -43,6 +44,7 @@ export function AppRouter() {
             <Route path="/micro-apps" element={<AIMicroAppsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/notifications" element={<NotificationsPage />} />
           </Route>
         </Route>
 

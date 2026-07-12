@@ -29,7 +29,9 @@ type EventRecord = RecordModel & {
 }
 
 type ProjectRecord = RecordModel & { name: string }
-type StateRecord = RecordModel & { category: "pending" | "active" | "completed" }
+type StateRecord = RecordModel & {
+  category: "pending" | "active" | "completed"
+}
 
 type TaskRecord = RecordModel & {
   project: string
@@ -43,6 +45,7 @@ type TaskRecord = RecordModel & {
 type CalendarState = {
   events: CalendarEvent[]
   tasks: CalendarTask[]
+  timezone: string
   loading: boolean
   initialized: boolean
   error: string | null
@@ -126,7 +129,7 @@ function errorMessage(error: unknown, fallback: string) {
 }
 
 async function loadCalendar() {
-  const [events, tasks] = await Promise.all([
+  const [events, tasks, config] = await Promise.all([
     pb.collection("calendar_events").getFullList<EventRecord>({
       sort: "start_at",
       requestKey: null,
@@ -137,8 +140,19 @@ async function loadCalendar() {
       expand: "project,state",
       requestKey: null,
     }),
+    pb.send<{ timezone: string }>("/api/configs/system", {
+      method: "GET",
+      requestKey: null,
+    }),
   ])
-  return { events: events.map(toEvent), tasks: tasks.map(toTask) }
+  return {
+    events: events.map((record) => ({
+      ...toEvent(record),
+      timezone: config.timezone,
+    })),
+    tasks: tasks.map(toTask),
+    timezone: config.timezone,
+  }
 }
 
 async function connectRealtime(
@@ -158,7 +172,10 @@ async function connectRealtime(
         events:
           message.action === "delete"
             ? state.events.filter((event) => event.id !== message.record.id)
-            : upsert(state.events, toEvent(message.record)),
+            : upsert(state.events, {
+                ...toEvent(message.record),
+                timezone: state.timezone,
+              }),
       }))
     })
   unsubscribers.push(eventUnsubscribe)
@@ -187,6 +204,7 @@ async function connectRealtime(
 export const useCalendarStore = create<CalendarState>((set, get) => ({
   events: [],
   tasks: [],
+  timezone: "Asia/Shanghai",
   loading: false,
   initialized: false,
   error: null,

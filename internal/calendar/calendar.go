@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/pocketbase/pocketbase/core"
+
+	"github.com/xusenlin/workavera/internal/configs"
 )
 
 const eventsCollection = "calendar_events"
@@ -36,13 +38,15 @@ func Register(app core.App) {
 }
 
 func validateEventRequest(event *core.RecordRequestEvent) error {
+	timezone := configs.SystemLocation(event.App).String()
+	event.Record.Set("timezone", timezone)
 	title := strings.TrimSpace(event.Record.GetString("title"))
 	start := event.Record.GetDateTime("start_at")
 	end := event.Record.GetDateTime("end_at")
 	interval := event.Record.GetFloat("recurrence_interval")
 	reminder := event.Record.GetFloat("reminder_minutes_before")
 
-	if err := validateEventValues(title, start.Time(), end.Time(), event.Record.GetString("timezone"), event.Record.GetString("color"), event.Record.GetString("recurrence_frequency"), interval, reminder); err != nil {
+	if err := validateEventValues(title, start.Time(), end.Time(), timezone, event.Record.GetString("color"), event.Record.GetString("recurrence_frequency"), interval, reminder); err != nil {
 		return event.BadRequestError(err.Error(), err)
 	}
 	if event.Record.IsNew() && event.Auth != nil && event.Record.GetString("owner") != event.Auth.Id {

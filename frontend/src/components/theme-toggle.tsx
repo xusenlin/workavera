@@ -8,6 +8,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { useTheme } from "@/components/theme-provider"
+import { pb } from "@/lib/pocketbase"
 
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme()
@@ -18,13 +19,24 @@ export function ThemeToggle() {
       typeof window !== "undefined" &&
       window.matchMedia("(prefers-color-scheme: dark)").matches)
 
+  const toggleTheme = () => {
+    const next = isDark ? "light" : "dark"
+    setTheme(next)
+    if (pb.authStore.isValid) {
+      void pb.send("/api/configs/system", {
+        method: "PATCH",
+        body: { theme: next },
+      })
+    }
+  }
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
           variant="ghost"
           size="icon-sm"
-          onClick={() => setTheme(isDark ? "light" : "dark")}
+          onClick={toggleTheme}
           aria-label="Toggle theme"
         >
           <HugeiconsIcon

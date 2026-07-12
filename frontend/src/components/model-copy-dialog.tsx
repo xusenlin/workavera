@@ -26,25 +26,25 @@ type ModelCopyDialogProps = {
   model: LlmModelConfig | null
   open: boolean
   onOpenChange: (open: boolean) => void
-  onCopied: (count: number) => void
+  onShared: (count: number) => void
 }
 
 export function ModelCopyDialog({
   model,
   open,
   onOpenChange,
-  onCopied,
+  onShared,
 }: ModelCopyDialogProps) {
   const shareTargets = useLlmSettingsStore((state) => state.shareTargets)
   const loadShareTargets = useLlmSettingsStore(
     (state) => state.loadShareTargets
   )
-  const copyModel = useLlmSettingsStore((state) => state.copyModel)
+  const shareModel = useLlmSettingsStore((state) => state.shareModel)
 
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [query, setQuery] = useState("")
   const [loading, setLoading] = useState(true)
-  const [copying, setCopying] = useState(false)
+  const [sharing, setSharing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -77,22 +77,22 @@ export function ModelCopyDialog({
     })
   }
 
-  const handleCopy = async () => {
+  const handleShare = async () => {
     if (!model || selected.size === 0) return
-    setCopying(true)
+    setSharing(true)
     setError(null)
     try {
-      const count = await copyModel(model.id, [...selected])
+      const count = await shareModel(model.id, [...selected])
       onOpenChange(false)
-      onCopied(count)
+      onShared(count)
     } catch (copyError) {
       setError(
         copyError instanceof Error
           ? copyError.message
-          : "Could not copy model configuration"
+          : "Could not share model configuration"
       )
     } finally {
-      setCopying(false)
+      setSharing(false)
     }
   }
 
@@ -100,10 +100,10 @@ export function ModelCopyDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Copy model configuration</DialogTitle>
+          <DialogTitle>Share model configuration</DialogTitle>
           <DialogDescription>
-            Select the users who should receive an independent copy of “
-            {model?.name}”.
+            Select the users who should receive an invitation for “{model?.name}
+            ”.
           </DialogDescription>
         </DialogHeader>
 
@@ -114,10 +114,9 @@ export function ModelCopyDialog({
             className="mt-0.5 size-4 shrink-0 text-primary"
           />
           <p className="text-xs leading-relaxed">
-            The configuration will be securely copied to the selected users. The
-            API key is never shown to recipients and is only used by the server
-            when calling the model. After copying, each configuration is
-            independent and later changes will not be synchronized.
+            Each user will receive a notification and can accept or reject it.
+            Accepting creates an independent copy of your current configuration
+            at that time; the API key is never displayed to recipients.
           </p>
         </div>
 
@@ -202,17 +201,17 @@ export function ModelCopyDialog({
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
-            disabled={copying}
+            disabled={sharing}
           >
             Cancel
           </Button>
           <Button
-            onClick={() => void handleCopy()}
-            disabled={copying || selected.size === 0}
+            onClick={() => void handleShare()}
+            disabled={sharing || selected.size === 0}
           >
-            {copying
-              ? "Copying..."
-              : `Copy to ${selected.size || 0} user${selected.size === 1 ? "" : "s"}`}
+            {sharing
+              ? "Sharing..."
+              : `Share with ${selected.size || 0} user${selected.size === 1 ? "" : "s"}`}
           </Button>
         </DialogFooter>
       </DialogContent>

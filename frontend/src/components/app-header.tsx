@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useLocation, useNavigate } from "react-router"
 
 import { HugeiconsIcon } from "@hugeicons/react"
@@ -41,11 +41,20 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Spinner } from "@/components/ui/spinner"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { NotificationItem } from "@/components/notifications/notification-item"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { useTheme } from "@/components/theme-provider"
 import { useAuthStore } from "@/store/auth"
 import { useChatRunsStore } from "@/store/chat-runs"
 import { useChatStore } from "@/store/chat"
+import { useNotificationsStore } from "@/store/notifications"
 import { flatNavItems } from "@/lib/navigation"
+import { pb } from "@/lib/pocketbase"
 
 function getInitials(name: string) {
   return name.charAt(0).toUpperCase()
@@ -55,12 +64,41 @@ export function AppHeader() {
   const navigate = useNavigate()
   const location = useLocation()
   const { user, logout } = useAuthStore()
+  const { setTheme } = useTheme()
   const activeRunCount = useChatRunsStore(
     (state) => Object.keys(state.runs).length
   )
   const [confirmLogout, setConfirmLogout] = useState(false)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const recentNotifications = useNotificationsStore((state) => state.recent)
+  const unreadCount = useNotificationsStore((state) => state.unreadCount)
+  const initializeNotifications = useNotificationsStore(
+    (state) => state.initialize
+  )
+  const disposeNotifications = useNotificationsStore((state) => state.dispose)
+  const markRead = useNotificationsStore((state) => state.markRead)
 
-  const currentNav = flatNavItems.find((item) => location.pathname === item.url)
+  useEffect(() => {
+    void initializeNotifications()
+    return disposeNotifications
+  }, [disposeNotifications, initializeNotifications])
+
+  useEffect(() => {
+    void pb
+      .send<{ theme: "light" | "dark" | "system" }>("/api/configs/system", {
+        method: "GET",
+        requestKey: null,
+      })
+      .then((config) => setTheme(config.theme))
+      .catch(() => {})
+  }, [setTheme])
+
+  const currentNav =
+    flatNavItems.find((item) => location.pathname === item.url) ??
+    (location.pathname === "/notifications"
+      ? { title: "Notifications" }
+      : undefined)
 
   const handleLogout = () => {
     logout()
@@ -74,6 +112,21 @@ export function AppHeader() {
     if (!run) return
     useChatStore.getState().setActiveConversation(run.conversationId)
     navigate("/chat")
+  }
+
+  const keepNotificationsOpen = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current)
+    setNotificationsOpen(true)
+  }
+
+  const scheduleNotificationsClose = () => {
+    closeTimer.current = setTimeout(() => setNotificationsOpen(false), 180)
+  }
+
+  const openNotification = (id: string) => {
+    void markRead(id)
+    setNotificationsOpen(false)
+    navigate(`/notifications?notification=${id}`)
   }
 
   return (
@@ -117,14 +170,74 @@ export function AppHeader() {
       )}
 
       <div className="ml-auto flex items-center gap-1">
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="hidden sm:flex"
-          aria-label="Notifications"
-        >
-          <HugeiconsIcon icon={BellIcon} strokeWidth={2} />
-        </Button>
+        <Popover open={notificationsOpen} onOpenChange={setNotificationsOpen}>
+          <div
+            onMouseEnter={keepNotificationsOpen}
+            onMouseLeave={scheduleNotificationsClose}
+          >
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="relative"
+                aria-label="Notifications"
+              >
+                <HugeiconsIcon
+                  icon={BellIcon}
+                  strokeWidth={2}
+                  className={
+                    unreadCount > 0 ? "motion-safe:animate-pulse" : undefined
+                  }
+                />
+                {unreadCount > 0 && (
+                  <span className="absolute top-0.5 right-0.5 flex size-2.5">
+                    <span className="absolute inline-flex size-full animate-ping rounded-full bg-red-500 opacity-70" />
+                    <span className="relative inline-flex size-2.5 rounded-full bg-red-500" />
+                  </span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="end"
+              className="w-96 overflow-hidden p-0"
+              onMouseEnter={keepNotificationsOpen}
+              onMouseLeave={scheduleNotificationsClose}
+            >
+              <div className="flex items-center justify-between border-b px-3 py-2.5">
+                <span className="text-sm font-semibold">Notifications</span>
+                {unreadCount > 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    {unreadCount} unread
+                  </span>
+                )}
+              </div>
+              {recentNotifications.length === 0 ? (
+                <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  No notifications yet.
+                </p>
+              ) : (
+                recentNotifications.map((notification) => (
+                  <NotificationItem
+                    key={notification.id}
+                    notification={notification}
+                    compact
+                    onClick={() => openNotification(notification.id)}
+                  />
+                ))
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setNotificationsOpen(false)
+                  navigate("/notifications")
+                }}
+                className="w-full cursor-pointer border-t px-3 py-2.5 text-center text-xs font-medium text-primary hover:bg-muted/50"
+              >
+                View all notifications
+              </button>
+            </PopoverContent>
+          </div>
+        </Popover>
         <ThemeToggle />
         <Separator
           orientation="vertical"

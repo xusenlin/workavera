@@ -1,5 +1,4 @@
 import { useState } from "react"
-import { addDays, format } from "date-fns"
 
 import {
   Dialog,
@@ -29,12 +28,19 @@ import {
 } from "@/lib/calendar-types"
 import type { CalendarEventInput } from "@/store/calendar"
 import { cn } from "@/lib/utils"
+import {
+  addDaysToDate,
+  formatZonedDate,
+  formatZonedTime,
+  zonedDateTimeToDate,
+} from "@/lib/timezone"
 
 type EventDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   event: CalendarEvent | null
   defaultDate: string
+  timezone: string
   onSave: (event: CalendarEventInput) => Promise<void>
 }
 
@@ -68,15 +74,13 @@ function emptyForm(defaultDate: string): EventForm {
   }
 }
 
-function formFromEvent(event: CalendarEvent): EventForm {
-  const start = new Date(event.startAt)
-  const end = new Date(event.endAt)
+function formFromEvent(event: CalendarEvent, timezone: string): EventForm {
   return {
     title: event.title,
     description: event.description ?? "",
-    date: format(start, "yyyy-MM-dd"),
-    startTime: format(start, "HH:mm"),
-    endTime: format(end, "HH:mm"),
+    date: formatZonedDate(event.startAt, timezone),
+    startTime: formatZonedTime(event.startAt, timezone),
+    endTime: formatZonedTime(event.endAt, timezone),
     allDay: event.allDay,
     color: event.color,
     location: event.location ?? "",
@@ -91,10 +95,11 @@ export function EventDialog({
   onOpenChange,
   event,
   defaultDate,
+  timezone,
   onSave,
 }: EventDialogProps) {
   const [form, setForm] = useState<EventForm>(() =>
-    event ? formFromEvent(event) : emptyForm(defaultDate)
+    event ? formFromEvent(event, timezone) : emptyForm(defaultDate)
   )
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
@@ -109,12 +114,14 @@ export function EventDialog({
       return
     }
 
-    const start = form.allDay
-      ? new Date(`${form.date}T00:00:00`)
-      : new Date(`${form.date}T${form.startTime}:00`)
+    const start = zonedDateTimeToDate(
+      form.date,
+      form.allDay ? "00:00:00" : `${form.startTime}:00`,
+      timezone
+    )
     const end = form.allDay
-      ? addDays(start, 1)
-      : new Date(`${form.date}T${form.endTime}:00`)
+      ? zonedDateTimeToDate(addDaysToDate(form.date, 1), "00:00:00", timezone)
+      : zonedDateTimeToDate(form.date, `${form.endTime}:00`, timezone)
     if (end <= start) {
       setError("End time must be after start time.")
       return
@@ -129,7 +136,7 @@ export function EventDialog({
         startAt: start.toISOString(),
         endAt: end.toISOString(),
         allDay: form.allDay,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+        timezone,
         location: form.location.trim() || undefined,
         color: form.color,
         recurrenceFrequency: form.recurrenceFrequency,
@@ -182,9 +189,7 @@ export function EventDialog({
             <input
               type="checkbox"
               checked={form.allDay}
-              onChange={(e) =>
-                setForm({ ...form, allDay: e.target.checked })
-              }
+              onChange={(e) => setForm({ ...form, allDay: e.target.checked })}
               className="size-4 accent-primary"
             />
             All day
@@ -290,7 +295,7 @@ export function EventDialog({
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Saved for future notifications; delivery is not enabled yet.
+              Notifications use the timezone configured in system settings.
             </p>
           </div>
 

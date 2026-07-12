@@ -207,7 +207,7 @@ func TestModelsCRUDAndDefaultLifecycle(t *testing.T) {
 	}
 }
 
-func TestCopyModelCreatesIndependentSecretCopy(t *testing.T) {
+func TestShareModelRequiresAcceptanceAndCopiesCurrentConfiguration(t *testing.T) {
 	server := newLLMTestServer(t)
 	created := server.request(t, http.MethodPost, "/api/llm/models", server.ownerToken, `{
 		"name":"Shared model",
@@ -221,30 +221,56 @@ func TestCopyModelCreatesIndependentSecretCopy(t *testing.T) {
 	}
 	source := decodeModelResponse(t, created)
 
-	copyResponse := server.request(
+	shareResponse := server.request(
 		t,
 		http.MethodPost,
-		"/api/llm/models/"+source.ID+"/copy",
+		"/api/llm/models/"+source.ID+"/share",
 		server.ownerToken,
 		`{"userIds":["`+server.targetID+`"]}`,
 	)
-	if copyResponse.Code != http.StatusCreated || !strings.Contains(copyResponse.Body.String(), `"copied":1`) {
-		t.Fatalf("copy: expected one copy, got %d: %s", copyResponse.Code, copyResponse.Body.String())
+	if shareResponse.Code != http.StatusCreated || !strings.Contains(shareResponse.Body.String(), `"shared":1`) {
+		t.Fatalf("share: expected one invitation, got %d: %s", shareResponse.Code, shareResponse.Body.String())
 	}
-	if strings.Contains(copyResponse.Body.String(), "shared-secret") {
-		t.Fatalf("copy response leaked API key: %s", copyResponse.Body.String())
+	if strings.Contains(shareResponse.Body.String(), "shared-secret") {
+		t.Fatalf("share response leaked API key: %s", shareResponse.Body.String())
 	}
 
-	copy, err := server.app.FindFirstRecordByFilter(
+	if _, err := server.app.FindFirstRecordByFilter(
 		modelsCollection,
 		"owner = {:owner}",
 		dbx.Params{"owner": server.targetID},
-	)
+	); err == nil {
+		t.Fatal("sharing must not create a model before acceptance")
+	}
+	notification, err := server.app.FindFirstRecordByFilter("notifications", "recipient = {:recipient} && type = 'model_share'", dbx.Params{"recipient": server.targetID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if copy.GetString("api_key") != "shared-secret" || !copy.GetBool("is_default") {
-		t.Fatal("recipient should receive the full configuration as its first default")
+
+	// Acceptance copies the inviter's current configuration.
+	storedSource, err := server.app.FindRecordById(modelsCollection, source.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	storedSource.Set("name", "Source changed later")
+	storedSource.Set("api_key", "new-secret")
+	if err := server.app.Save(storedSource); err != nil {
+		t.Fatal(err)
+	}
+
+	accepted := server.request(t, http.MethodPost, "/api/llm/shares/"+notification.Id+"/respond", server.targetToken, `{"decision":"accept"}`)
+	if accepted.Code != http.StatusOK {
+		t.Fatalf("accept: expected 200, got %d: %s", accepted.Code, accepted.Body.String())
+	}
+	copy, err := server.app.FindFirstRecordByFilter(modelsCollection, "owner = {:owner}", dbx.Params{"owner": server.targetID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if copy.GetString("api_key") != "new-secret" || !copy.GetBool("is_default") {
+		t.Fatal("recipient should receive the current configuration as its first default")
+	}
+	if copy.GetString("name") != "Source changed later" {
+		t.Fatal("accepted configuration should use the latest source values")
 	}
 
 	recipientEdit := server.request(
@@ -257,11 +283,11 @@ func TestCopyModelCreatesIndependentSecretCopy(t *testing.T) {
 	if recipientEdit.Code != http.StatusOK {
 		t.Fatalf("recipient edit: %d: %s", recipientEdit.Code, recipientEdit.Body.String())
 	}
-	storedSource, err := server.app.FindRecordById(modelsCollection, source.ID)
+	storedSource, err = server.app.FindRecordById(modelsCollection, source.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if storedSource.GetString("name") != "Shared model" {
+	if storedSource.GetString("name") != "Source changed later" {
 		t.Fatal("recipient changes must not affect the source model")
 	}
 
@@ -274,5 +300,42 @@ func TestCopyModelCreatesIndependentSecretCopy(t *testing.T) {
 	)
 	if forbidden.Code != http.StatusNotFound {
 		t.Fatalf("recipient must not edit source model, got %d", forbidden.Code)
+	}
+}
+
+func TestRejectModelShareDoesNotCreateConfiguration(t *testing.T) {
+	server := newLLMTestServer(t)
+	created := server.request(t, http.MethodPost, "/api/llm/models", server.ownerToken, `{
+		"name":"Declined model",
+		"modelId":"gpt-4o-mini",
+		"baseUrl":"https://api.openai.com/v1",
+		"protocol":"openai"
+	}`)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create: %d: %s", created.Code, created.Body.String())
+	}
+	source := decodeModelResponse(t, created)
+	shared := server.request(t, http.MethodPost, "/api/llm/models/"+source.ID+"/share", server.ownerToken, `{"userIds":["`+server.targetID+`"]}`)
+	if shared.Code != http.StatusCreated {
+		t.Fatalf("share: %d: %s", shared.Code, shared.Body.String())
+	}
+	notification, err := server.app.FindFirstRecordByFilter("notifications", "recipient = {:recipient} && type = 'model_share'", dbx.Params{"recipient": server.targetID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rejected := server.request(t, http.MethodPost, "/api/llm/shares/"+notification.Id+"/respond", server.targetToken, `{"decision":"reject"}`)
+	if rejected.Code != http.StatusOK {
+		t.Fatalf("reject: %d: %s", rejected.Code, rejected.Body.String())
+	}
+	if count, _ := server.app.CountRecords(modelsCollection, dbx.HashExp{"owner": server.targetID}); count != 0 {
+		t.Fatalf("rejection must not create a model, got %d", count)
+	}
+	repeated := server.request(t, http.MethodPost, "/api/llm/shares/"+notification.Id+"/respond", server.targetToken, `{"decision":"reject"}`)
+	if repeated.Code != http.StatusOK {
+		t.Fatalf("repeated rejection should be idempotent: %d", repeated.Code)
+	}
+	accepted := server.request(t, http.MethodPost, "/api/llm/shares/"+notification.Id+"/respond", server.targetToken, `{"decision":"accept"}`)
+	if accepted.Code != http.StatusConflict {
+		t.Fatalf("opposite response after rejection should conflict: %d", accepted.Code)
 	}
 }

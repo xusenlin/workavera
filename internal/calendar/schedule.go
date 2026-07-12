@@ -230,6 +230,30 @@ func occurrenceOnDate(record *core.Record, requested time.Time) (EventOccurrence
 	}, true
 }
 
+// OccurrenceOnDate returns the event occurrence on requested in the provided
+// system location. Notification scheduling uses this to keep all reminders on
+// the configured system timezone instead of the process or browser timezone.
+func OccurrenceOnDate(record *core.Record, requested time.Time, location *time.Location) (EventOccurrence, bool) {
+	if location == nil {
+		return EventOccurrence{}, false
+	}
+	start := record.GetDateTime("start_at").Time().In(location)
+	end := record.GetDateTime("end_at").Time().In(location)
+	target := time.Date(requested.In(location).Year(), requested.In(location).Month(), requested.In(location).Day(), start.Hour(), start.Minute(), start.Second(), start.Nanosecond(), location)
+	if !eventOccursOn(start, target, record.GetString("recurrence_frequency"), max(1, record.GetInt("recurrence_interval"))) {
+		return EventOccurrence{}, false
+	}
+	if record.GetString("recurrence_frequency") == "none" {
+		target = start
+	}
+	return EventOccurrence{
+		Event:          eventFromRecord(record),
+		OccurrenceDate: target.Format(time.DateOnly),
+		InstanceStart:  target.Format(time.RFC3339),
+		InstanceEnd:    target.Add(end.Sub(start)).Format(time.RFC3339),
+	}, true
+}
+
 func eventOccursOn(start, target time.Time, frequency string, interval int) bool {
 	startDate := time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, time.UTC)
 	targetDate := time.Date(target.Year(), target.Month(), target.Day(), 0, 0, 0, 0, time.UTC)

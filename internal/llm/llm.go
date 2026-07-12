@@ -17,7 +17,8 @@ func Register(app core.App) {
 		group.DELETE("/models/{id}", deleteModel)
 		group.POST("/models/{id}/default", setDefaultModel)
 		group.GET("/share-targets", listShareTargets)
-		group.POST("/models/{id}/copy", copyModel)
+		group.POST("/models/{id}/share", shareModel)
+		group.POST("/shares/{id}/respond", respondToShare)
 		return event.Next()
 	})
 }

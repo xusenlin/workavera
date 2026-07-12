@@ -1,20 +1,14 @@
+import { endOfDay, isAfter, isBefore, startOfDay } from "date-fns"
+
 import {
-  addDays,
-  addWeeks,
-  endOfDay,
-  format,
-  isAfter,
-  isBefore,
-  startOfDay,
-} from "date-fns"
+  formatZonedTime,
+  zonedDateTimeToDate,
+  zonedParts,
+} from "@/lib/timezone"
 
 export type EventColor = "blue" | "green" | "amber" | "red" | "purple"
 export type RecurrenceFrequency =
-  | "none"
-  | "daily"
-  | "weekly"
-  | "monthly"
-  | "yearly"
+  "none" | "daily" | "weekly" | "monthly" | "yearly"
 export type TaskPriority = "none" | "low" | "medium" | "high" | "urgent"
 
 export type CalendarEvent = {
@@ -123,29 +117,33 @@ const PRIORITY_COLORS: Record<TaskPriority, EventColor> = {
 
 function monthlyOccurrence(base: Date, offset: number) {
   const candidate = new Date(
-    base.getFullYear(),
-    base.getMonth() + offset,
-    base.getDate(),
-    base.getHours(),
-    base.getMinutes(),
-    base.getSeconds(),
-    base.getMilliseconds()
+    Date.UTC(
+      base.getUTCFullYear(),
+      base.getUTCMonth() + offset,
+      base.getUTCDate(),
+      base.getUTCHours(),
+      base.getUTCMinutes(),
+      base.getUTCSeconds(),
+      base.getUTCMilliseconds()
+    )
   )
-  return candidate.getDate() === base.getDate() ? candidate : null
+  return candidate.getUTCDate() === base.getUTCDate() ? candidate : null
 }
 
 function yearlyOccurrence(base: Date, offset: number) {
   const candidate = new Date(
-    base.getFullYear() + offset,
-    base.getMonth(),
-    base.getDate(),
-    base.getHours(),
-    base.getMinutes(),
-    base.getSeconds(),
-    base.getMilliseconds()
+    Date.UTC(
+      base.getUTCFullYear() + offset,
+      base.getUTCMonth(),
+      base.getUTCDate(),
+      base.getUTCHours(),
+      base.getUTCMinutes(),
+      base.getUTCSeconds(),
+      base.getUTCMilliseconds()
+    )
   )
-  return candidate.getMonth() === base.getMonth() &&
-    candidate.getDate() === base.getDate()
+  return candidate.getUTCMonth() === base.getUTCMonth() &&
+    candidate.getUTCDate() === base.getUTCDate()
     ? candidate
     : null
 }
@@ -157,8 +155,13 @@ function occurrenceAt(
   index: number
 ) {
   const offset = interval * index
-  if (frequency === "daily") return addDays(base, offset)
-  if (frequency === "weekly") return addWeeks(base, offset)
+  if (frequency === "daily" || frequency === "weekly") {
+    const candidate = new Date(base)
+    candidate.setUTCDate(
+      candidate.getUTCDate() + offset * (frequency === "weekly" ? 7 : 1)
+    )
+    return candidate
+  }
   if (frequency === "monthly") return monthlyOccurrence(base, offset)
   if (frequency === "yearly") return yearlyOccurrence(base, offset)
   return index === 0 ? base : null
@@ -169,11 +172,35 @@ function expandEvent(
   rangeStart: Date,
   rangeEnd: Date
 ): CalendarEventItem[] {
-  const baseStart = new Date(event.startAt)
+  const startParts = zonedParts(event.startAt, event.timezone)
+  const baseStart = new Date(
+    Date.UTC(
+      startParts.year,
+      startParts.month - 1,
+      startParts.day,
+      startParts.hour,
+      startParts.minute,
+      startParts.second
+    )
+  )
   const baseEnd = new Date(event.endAt)
-  const duration = baseEnd.getTime() - baseStart.getTime()
+  const duration = baseEnd.getTime() - new Date(event.startAt).getTime()
   const repeating = event.recurrenceFrequency !== "none"
   const items: CalendarEventItem[] = []
+  const wallRangeStart = Date.UTC(
+    rangeStart.getFullYear(),
+    rangeStart.getMonth(),
+    rangeStart.getDate()
+  )
+  const wallRangeEnd = Date.UTC(
+    rangeEnd.getFullYear(),
+    rangeEnd.getMonth(),
+    rangeEnd.getDate(),
+    23,
+    59,
+    59,
+    999
+  )
 
   // The range is UI-controlled and finite. This guard also protects malformed
   // legacy records from producing an unbounded expansion.
@@ -188,10 +215,16 @@ function expandEvent(
       if (!repeating) break
       continue
     }
-    if (isAfter(occurrence, rangeEnd)) break
-    if (!isBefore(new Date(occurrence.getTime() + duration), rangeStart)) {
-      const occurrenceEnd = new Date(occurrence.getTime() + duration)
-      const date = format(occurrence, "yyyy-MM-dd")
+    if (occurrence.getTime() > wallRangeEnd) break
+    if (occurrence.getTime() + duration >= wallRangeStart) {
+      const date = occurrence.toISOString().slice(0, 10)
+      const wallTime = occurrence.toISOString().slice(11, 19)
+      const occurrenceInstant = zonedDateTimeToDate(
+        date,
+        wallTime,
+        event.timezone
+      )
+      const occurrenceEnd = new Date(occurrenceInstant.getTime() + duration)
       items.push({
         key: `event:${event.id}:${date}`,
         id: event.id,
@@ -199,8 +232,8 @@ function expandEvent(
         title: event.title,
         description: event.description,
         date,
-        startTime: format(occurrence, "HH:mm"),
-        endTime: format(occurrenceEnd, "HH:mm"),
+        startTime: wallTime.slice(0, 5),
+        endTime: formatZonedTime(occurrenceEnd, event.timezone),
         allDay: event.allDay,
         color: event.color,
         location: event.location,
@@ -220,9 +253,7 @@ export function buildCalendarItems(
 ): CalendarItem[] {
   const start = startOfDay(rangeStart)
   const end = endOfDay(rangeEnd)
-  const eventItems = events.flatMap((event) =>
-    expandEvent(event, start, end)
-  )
+  const eventItems = events.flatMap((event) => expandEvent(event, start, end))
   const taskItems: CalendarTaskItem[] = tasks
     .filter((task) => {
       const due = new Date(`${task.dueDate}T00:00:00`)

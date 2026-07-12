@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useLocation } from "react-router"
+import { useLocation, useSearchParams } from "react-router"
 
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Add01Icon, KanbanIcon } from "@hugeicons/core-free-icons"
@@ -11,8 +11,11 @@ import type { Project } from "@/store/board"
 
 export function BoardPage() {
   const location = useLocation()
+  const [searchParams] = useSearchParams()
   const requestedTaskId =
-    (location.state as { taskId?: string } | null)?.taskId ?? undefined
+    searchParams.get("task") ??
+    (location.state as { taskId?: string } | null)?.taskId ??
+    undefined
   const [projectSheetOpen, setProjectSheetOpen] = useState(false)
   const [editingProject, setEditingProject] = useState<Project | null>(null)
 

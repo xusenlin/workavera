@@ -1,13 +1,18 @@
 package llm
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/pocketbase/dbx"
+	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tools/types"
+
+	"github.com/xusenlin/workavera/internal/notifications"
 )
 
 var supportedProtocols = map[string]struct{}{
@@ -53,12 +58,16 @@ type shareTargetResponse struct {
 	Name string `json:"name"`
 }
 
-type copyModelRequest struct {
+type shareModelRequest struct {
 	UserIDs []string `json:"userIds"`
 }
 
-type copyModelResponse struct {
-	Copied int `json:"copied"`
+type shareModelResponse struct {
+	Shared int `json:"shared"`
+}
+
+type respondToShareRequest struct {
+	Decision string `json:"decision"`
 }
 
 func listModels(event *core.RequestEvent) error {
@@ -308,13 +317,13 @@ func listShareTargets(event *core.RequestEvent) error {
 	return event.JSON(http.StatusOK, result)
 }
 
-func copyModel(event *core.RequestEvent) error {
+func shareModel(event *core.RequestEvent) error {
 	sourceID := event.Request.PathValue("id")
 	if _, err := findOwnedModel(event.App, sourceID, event.Auth.Id); err != nil {
 		return event.NotFoundError("Model configuration not found.", err)
 	}
 
-	var request copyModelRequest
+	var request shareModelRequest
 	if err := event.BindBody(&request); err != nil {
 		return event.BadRequestError("Invalid recipients.", err)
 	}
@@ -323,7 +332,7 @@ func copyModel(event *core.RequestEvent) error {
 		return event.BadRequestError("Select at least one user.", nil)
 	}
 	if len(userIDs) > 100 {
-		return event.BadRequestError("You can copy a configuration to at most 100 users at once.", nil)
+		return event.BadRequestError("You can share a configuration with at most 100 users at once.", nil)
 	}
 
 	err := event.App.RunInTransaction(func(txApp core.App) error {
@@ -331,49 +340,135 @@ func copyModel(event *core.RequestEvent) error {
 		if err != nil {
 			return err
 		}
-		collection, err := txApp.FindCollectionByNameOrId(modelsCollection)
-		if err != nil {
-			return err
+		senderName := strings.TrimSpace(event.Auth.GetString("name"))
+		if senderName == "" {
+			senderName = "A Workavera user"
 		}
 		for _, userID := range userIDs {
 			if userID == event.Auth.Id {
-				return errors.New("cannot copy a configuration to yourself")
+				return errors.New("cannot share a configuration with yourself")
 			}
 			user, err := txApp.FindRecordById("users", userID)
 			if err != nil || user.Collection().Name != "users" {
 				return errors.New("one or more selected users no longer exist")
 			}
-			existing, err := txApp.FindRecordsByFilter(
-				modelsCollection,
-				"owner = {:owner}",
-				"",
-				1,
-				0,
-				dbx.Params{"owner": userID},
-			)
-			if err != nil {
-				return err
+			dedupeKey := "model-share:" + event.Auth.Id + ":" + userID + ":" + sourceID
+			input := notifications.CreateInput{
+				RecipientID: userID,
+				Type:        "model_share",
+				Title:       senderName + " shared a model configuration",
+				Body:        "Review and choose whether to add “" + source.GetString("name") + "” to your account.",
+				Data: map[string]any{
+					"senderId": event.Auth.Id, "sourceModelId": sourceID, "senderName": senderName, "modelName": source.GetString("name"), "shareStatus": "pending",
+				},
+				DedupeKey: dedupeKey,
 			}
-
-			copy := core.NewRecord(collection)
-			copy.Set("owner", userID)
-			copy.Set("name", source.GetString("name"))
-			copy.Set("model_id", source.GetString("model_id"))
-			copy.Set("base_url", source.GetString("base_url"))
-			copy.Set("api_key", source.GetString("api_key"))
-			copy.Set("protocol", source.GetString("protocol"))
-			copy.Set("max_output_tokens", source.GetInt("max_output_tokens"))
-			copy.Set("is_default", len(existing) == 0)
-			if err := txApp.Save(copy); err != nil {
+			if _, created, err := notifications.Create(event.Request.Context(), txApp, input); err != nil {
 				return err
+			} else if !created {
+				if _, err := notifications.Update(event.Request.Context(), txApp, dedupeKey, input); err != nil {
+					return err
+				}
 			}
 		}
 		return nil
 	})
 	if err != nil {
-		return event.BadRequestError("Could not copy model configuration.", err)
+		return event.BadRequestError("Could not share model configuration.", err)
 	}
-	return event.JSON(http.StatusCreated, copyModelResponse{Copied: len(userIDs)})
+	return event.JSON(http.StatusCreated, shareModelResponse{Shared: len(userIDs)})
+}
+
+func respondToShare(event *core.RequestEvent) error {
+	var request respondToShareRequest
+	if err := event.BindBody(&request); err != nil {
+		return event.BadRequestError("Invalid response.", err)
+	}
+	request.Decision = strings.TrimSpace(request.Decision)
+	if request.Decision != "accept" && request.Decision != "reject" {
+		return event.BadRequestError("Decision must be accept or reject.", nil)
+	}
+	notificationID := event.Request.PathValue("id")
+	var model modelResponse
+	status := "rejected"
+	err := event.App.RunInTransaction(func(txApp core.App) error {
+		notification, err := txApp.FindFirstRecordByFilter(notifications.CollectionName, "id = {:id} && recipient = {:recipient} && type = 'model_share'", dbx.Params{"id": notificationID, "recipient": event.Auth.Id})
+		if err != nil {
+			return err
+		}
+		data := map[string]any{}
+		if err := json.Unmarshal([]byte(notification.GetString("data")), &data); err != nil {
+			return errors.New("invalid share invitation")
+		}
+		current, _ := data["shareStatus"].(string)
+		if current == "" {
+			current = "pending"
+		}
+		requested := request.Decision + "ed"
+		if request.Decision == "accept" {
+			requested = "accepted"
+		}
+		if current != "pending" {
+			if current == requested {
+				status = current
+				if id, _ := data["acceptedModelId"].(string); id != "" {
+					if record, findErr := txApp.FindRecordById(modelsCollection, id); findErr == nil {
+						model = toModelResponse(record)
+					}
+				}
+				return nil
+			}
+			return errors.New("share invitation has already been resolved")
+		}
+		if request.Decision == "accept" {
+			senderID, _ := data["senderId"].(string)
+			sourceModelID, _ := data["sourceModelId"].(string)
+			source, err := findOwnedModel(txApp, sourceModelID, senderID)
+			if err != nil {
+				return errors.New("the shared model configuration no longer exists")
+			}
+			collection, err := txApp.FindCollectionByNameOrId(modelsCollection)
+			if err != nil {
+				return err
+			}
+			existing, err := txApp.FindRecordsByFilter(modelsCollection, "owner = {:owner}", "", 1, 0, dbx.Params{"owner": event.Auth.Id})
+			if err != nil {
+				return err
+			}
+			record := core.NewRecord(collection)
+			record.Set("owner", event.Auth.Id)
+			record.Set("name", source.GetString("name"))
+			record.Set("model_id", source.GetString("model_id"))
+			record.Set("base_url", source.GetString("base_url"))
+			record.Set("api_key", source.GetString("api_key"))
+			record.Set("protocol", source.GetString("protocol"))
+			record.Set("max_output_tokens", source.GetInt("max_output_tokens"))
+			record.Set("is_default", len(existing) == 0)
+			if err := txApp.Save(record); err != nil {
+				return err
+			}
+			data["acceptedModelId"] = record.Id
+			model = toModelResponse(record)
+			status = "accepted"
+		}
+		data["shareStatus"] = status
+		notification.Set("data", data)
+		notification.Set("read_at", types.NowDateTime())
+		if err := txApp.Save(notification); err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		if strings.Contains(err.Error(), "already been resolved") {
+			return apis.NewApiError(http.StatusConflict, "Share invitation has already been resolved.", err)
+		}
+		if strings.Contains(err.Error(), "no longer exists") {
+			return event.BadRequestError("The shared model configuration no longer exists.", nil)
+		}
+		return event.BadRequestError("Could not respond to share invitation.", err)
+	}
+	return event.JSON(http.StatusOK, map[string]any{"status": status, "model": model})
 }
 
 func findOwnedModel(app core.App, id, ownerID string) (*core.Record, error) {

@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/pocketbase/pocketbase/core"
+
+	"github.com/xusenlin/workavera/internal/configs"
 )
 
 type Event struct {
@@ -76,9 +78,7 @@ func CreateEvent(ctx context.Context, app core.App, actorID string, command Crea
 	if command.RecurrenceInterval == 0 {
 		command.RecurrenceInterval = 1
 	}
-	if strings.TrimSpace(command.Timezone) == "" {
-		command.Timezone = "UTC"
-	}
+	command.Timezone = configs.SystemLocation(app).String()
 	reminder := -1
 	if command.ReminderMinutesBefore != nil {
 		reminder = *command.ReminderMinutesBefore
@@ -114,6 +114,7 @@ func UpdateEvent(ctx context.Context, app core.App, actorID string, command Upda
 	if err != nil || record.GetString("owner") != actorID {
 		return EventMutationResult{}, errors.New("calendar event not found")
 	}
+	record.Set("timezone", configs.SystemLocation(app).String())
 
 	if command.Title != nil {
 		record.Set("title", strings.TrimSpace(*command.Title))
@@ -129,9 +130,6 @@ func UpdateEvent(ctx context.Context, app core.App, actorID string, command Upda
 	}
 	if command.AllDay != nil {
 		record.Set("all_day", *command.AllDay)
-	}
-	if command.Timezone != nil {
-		record.Set("timezone", strings.TrimSpace(*command.Timezone))
 	}
 	if command.Location != nil {
 		record.Set("location", strings.TrimSpace(*command.Location))

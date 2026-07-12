@@ -11,7 +11,8 @@ export function DashboardLayout() {
     pathname.startsWith("/chat") ||
     pathname.startsWith("/docs") ||
     pathname.startsWith("/micro-apps") ||
-    pathname.startsWith("/reading")
+    pathname.startsWith("/reading") ||
+    pathname.startsWith("/notifications")
 
   return (
     <SidebarProvider>
