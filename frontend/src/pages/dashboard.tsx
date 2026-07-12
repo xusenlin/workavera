@@ -1,124 +1,409 @@
-import { NavLink } from "react-router"
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, XAxis } from "recharts"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { format, formatDistanceToNow } from "date-fns"
+import { Link } from "react-router"
 
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
-  Task01Icon,
-  ContactBookIcon,
+  Add01Icon,
+  ArrowRight01Icon,
+  BookOpen01Icon,
+  Calendar03Icon,
   Chat01Icon,
   DocumentAttachmentIcon,
-  ArrowUpRight01Icon,
   SparklesIcon,
-  AiBrain02Icon,
+  Task01Icon,
 } from "@hugeicons/core-free-icons"
+import type { IconSvgElement } from "@hugeicons/react"
+import type { RecordModel } from "pocketbase"
 
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from "@/components/ui/chart"
+import { Skeleton } from "@/components/ui/skeleton"
+import { pb } from "@/lib/pocketbase"
+import { cn } from "@/lib/utils"
+import { workspaceRecordUrl } from "@/lib/workspace-navigation"
 import { useAuthStore } from "@/store/auth"
 
-type Stat = {
-  label: string
-  value: string
-  change: string
-  icon: typeof Task01Icon
-  url: string
+type ProjectRecord = RecordModel & { archived: boolean }
+
+type ProjectStateRecord = RecordModel & {
+  category: "pending" | "active" | "completed"
 }
 
-const stats: Stat[] = [
-  { label: "Open Tasks", value: "12", change: "+3 this week", icon: Task01Icon, url: "/board" },
-  { label: "Contacts", value: "48", change: "+6 this week", icon: ContactBookIcon, url: "/contacts" },
-  { label: "Chats", value: "5", change: "2 active", icon: Chat01Icon, url: "/chat" },
-  { label: "Documents", value: "9", change: "+1 this week", icon: DocumentAttachmentIcon, url: "/docs" },
-]
+type ProjectNameRecord = RecordModel & { name: string }
 
-// Mock: per-day token usage split by model
-type ModelKey = "gpt4o" | "claude37" | "deepseek"
+type TaskRecord = RecordModel & {
+  project: string
+  title: string
+  priority: "none" | "low" | "medium" | "high" | "urgent"
+  due_date: string
+  expand?: {
+    project?: ProjectNameRecord
+    state?: ProjectStateRecord
+  }
+}
 
-const tokenData = [
-  { date: "Mon", gpt4o: 8200, claude37: 6400, deepseek: 6000 },
-  { date: "Tue", gpt4o: 12400, claude37: 9800, deepseek: 8200 },
-  { date: "Wed", gpt4o: 6100, claude37: 5200, deepseek: 4800 },
-  { date: "Thu", gpt4o: 16800, claude37: 14200, deepseek: 13500 },
-  { date: "Fri", gpt4o: 21400, claude37: 18600, deepseek: 13600 },
-  { date: "Sat", gpt4o: 5200, claude37: 4100, deepseek: 4500 },
-  { date: "Sun", gpt4o: 9800, claude37: 8400, deepseek: 7000 },
-]
+type EventRecord = RecordModel & {
+  title: string
+  start_at: string
+  all_day: boolean
+}
 
-const modelMeta: { key: ModelKey; label: string; color: string }[] = [
-  { key: "gpt4o", label: "GPT-4o", color: "var(--chart-1)" },
-  { key: "claude37", label: "Claude 3.7 Sonnet", color: "var(--chart-2)" },
-  { key: "deepseek", label: "DeepSeek V3", color: "var(--chart-3)" },
-]
+type DocRecord = RecordModel & {
+  title: string
+  status: "draft" | "archived"
+  updated: string
+}
 
-// Mock: daily tasks by status (pending/active/completed)
-const taskData = [
-  { date: "Mon", pending: 4, active: 3, completed: 2 },
-  { date: "Tue", pending: 6, active: 4, completed: 5 },
-  { date: "Wed", pending: 3, active: 2, completed: 4 },
-  { date: "Thu", pending: 8, active: 5, completed: 6 },
-  { date: "Fri", pending: 5, active: 6, completed: 7 },
-  { date: "Sat", pending: 2, active: 1, completed: 3 },
-  { date: "Sun", pending: 4, active: 2, completed: 2 },
-]
+type ConversationRecord = RecordModel & {
+  title: string
+  status: "active" | "archived"
+  updated: string
+}
 
-const taskChartConfig = {
-  pending: { label: "Pending", color: "var(--chart-1)" },
-  active: { label: "Active", color: "var(--chart-4)" },
-  completed: { label: "Completed", color: "var(--chart-5)" },
-} satisfies ChartConfig
+type ReadingRecord = RecordModel & {
+  title: string
+  status: "unread" | "read" | "archived"
+  updated: string
+}
 
-const chartConfig = {
-  gpt4o: { label: "GPT-4o", color: "var(--chart-1)" },
-  claude37: { label: "Claude 3.7 Sonnet", color: "var(--chart-2)" },
-  deepseek: { label: "DeepSeek V3", color: "var(--chart-3)" },
-} satisfies ChartConfig
+type DashboardData = {
+  loadedAt: number
+  activeProjects: number
+  openTasks: number
+  upcomingEvents: number
+  unreadItems: number
+  focusTasks: TaskRecord[]
+  upcomingItems: UpcomingItem[]
+  recentWork: RecentWorkItem[]
+}
 
-function formatTokens(n: number) {
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
-  return String(n)
+type UpcomingItem =
+  | {
+      id: string
+      type: "event"
+      title: string
+      date: string
+      allDay: boolean
+    }
+  | {
+      id: string
+      type: "task"
+      title: string
+      date: string
+      projectId: string
+      projectName: string
+      priority: TaskRecord["priority"]
+    }
+
+type RecentWorkItem = {
+  id: string
+  title: string
+  type: "Document" | "Chat" | "Reading"
+  url: string
+  updated: string
+  icon: IconSvgElement
+}
+
+const priorityMeta: Record<
+  TaskRecord["priority"],
+  { label: string; className: string }
+> = {
+  none: { label: "No priority", className: "text-muted-foreground" },
+  low: { label: "Low", className: "text-muted-foreground" },
+  medium: { label: "Medium", className: "text-amber-600 dark:text-amber-400" },
+  high: { label: "High", className: "text-orange-600 dark:text-orange-400" },
+  urgent: { label: "Urgent", className: "text-destructive" },
+}
+
+function dateFilterValue(date: Date) {
+  return date.toISOString().replaceAll('"', '\\"')
+}
+
+async function loadDashboard(): Promise<DashboardData> {
+  const now = new Date()
+  const nextWeek = new Date(now)
+  nextWeek.setDate(nextWeek.getDate() + 7)
+  const nowValue = dateFilterValue(now)
+  const nextWeekValue = dateFilterValue(nextWeek)
+  const openTaskFilter = 'state.category != "completed"'
+  const upcomingEventFilter = `start_at >= "${nowValue}" && start_at < "${nextWeekValue}"`
+
+  const [
+    projects,
+    tasks,
+    unread,
+    focusTasks,
+    nextEvents,
+    upcomingTasks,
+    docs,
+    conversations,
+    reading,
+  ] = await Promise.all([
+    pb.collection("board_projects").getList<ProjectRecord>(1, 1, {
+      filter: "archived = false",
+      fields: "id",
+      requestKey: null,
+    }),
+    pb.collection("board_tasks").getList<TaskRecord>(1, 1, {
+      filter: openTaskFilter,
+      fields: "id",
+      requestKey: null,
+    }),
+    pb.collection("reading_items").getList<ReadingRecord>(1, 1, {
+      filter: 'status = "unread"',
+      fields: "id",
+      requestKey: null,
+    }),
+    pb.collection("board_tasks").getList<TaskRecord>(1, 5, {
+      filter: `${openTaskFilter} && due_date != ""`,
+      sort: "due_date",
+      expand: "project,state",
+      fields: "id,project,title,priority,due_date,expand",
+      requestKey: null,
+    }),
+    pb.collection("calendar_events").getList<EventRecord>(1, 4, {
+      filter: upcomingEventFilter,
+      sort: "start_at",
+      fields: "id,title,start_at,all_day",
+      requestKey: null,
+    }),
+    pb.collection("board_tasks").getList<TaskRecord>(1, 4, {
+      filter: `${openTaskFilter} && due_date >= "${nowValue}" && due_date < "${nextWeekValue}"`,
+      sort: "due_date",
+      expand: "project,state",
+      fields: "id,project,title,priority,due_date,expand",
+      requestKey: null,
+    }),
+    pb.collection("docs").getList<DocRecord>(1, 3, {
+      filter: 'status = "draft"',
+      sort: "-updated",
+      fields: "id,title,status,updated",
+      requestKey: null,
+    }),
+    pb.collection("chat_conversations").getList<ConversationRecord>(1, 3, {
+      filter: 'status = "active"',
+      sort: "-updated",
+      fields: "id,title,status,updated",
+      requestKey: null,
+    }),
+    pb.collection("reading_items").getList<ReadingRecord>(1, 3, {
+      filter: 'status != "archived"',
+      sort: "-updated",
+      fields: "id,title,status,updated",
+      requestKey: null,
+    }),
+  ])
+
+  const recentWork = [
+    ...docs.items.map<RecentWorkItem>((item) => ({
+      id: item.id,
+      title: item.title,
+      type: "Document",
+      url: workspaceRecordUrl("docs", item.id),
+      updated: item.updated,
+      icon: DocumentAttachmentIcon,
+    })),
+    ...conversations.items.map<RecentWorkItem>((item) => ({
+      id: item.id,
+      title: item.title,
+      type: "Chat",
+      url: workspaceRecordUrl("chat", item.id),
+      updated: item.updated,
+      icon: Chat01Icon,
+    })),
+    ...reading.items.map<RecentWorkItem>((item) => ({
+      id: item.id,
+      title: item.title,
+      type: "Reading",
+      url: workspaceRecordUrl("reading", item.id),
+      updated: item.updated,
+      icon: BookOpen01Icon,
+    })),
+  ]
+    .sort((a, b) => Date.parse(b.updated) - Date.parse(a.updated))
+    .slice(0, 6)
+
+  const upcomingItems: UpcomingItem[] = [
+    ...nextEvents.items.map<UpcomingItem>((event) => ({
+      id: event.id,
+      type: "event",
+      title: event.title,
+      date: event.start_at,
+      allDay: event.all_day,
+    })),
+    ...upcomingTasks.items.map<UpcomingItem>((task) => ({
+      id: task.id,
+      type: "task",
+      title: task.title,
+      date: task.due_date,
+      projectId: task.project,
+      projectName: task.expand?.project?.name || "Board",
+      priority: task.priority,
+    })),
+  ]
+    .sort((a, b) => Date.parse(a.date) - Date.parse(b.date))
+    .slice(0, 4)
+
+  return {
+    loadedAt: now.getTime(),
+    activeProjects: projects.totalItems,
+    openTasks: tasks.totalItems,
+    upcomingEvents: nextEvents.totalItems + upcomingTasks.totalItems,
+    unreadItems: unread.totalItems,
+    focusTasks: focusTasks.items,
+    upcomingItems,
+    recentWork,
+  }
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="space-y-2">
+        <Skeleton className="h-8 w-64" />
+        <Skeleton className="h-4 w-96 max-w-full" />
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <Skeleton key={index} className="h-36 rounded-2xl" />
+        ))}
+      </div>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)]">
+        <Skeleton className="h-80 rounded-2xl" />
+        <Skeleton className="h-80 rounded-2xl" />
+      </div>
+    </div>
+  )
 }
 
 export function DashboardPage() {
-  const user = useAuthStore((s) => s.user)
+  const user = useAuthStore((state) => state.user)
+  const [data, setData] = useState<DashboardData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const modelTotals = modelMeta.map((m) => ({
-    ...m,
-    total: tokenData.reduce((sum, d) => sum + (d[m.key] as number), 0),
-  }))
-  const totalTokens = modelTotals.reduce((sum, m) => sum + m.total, 0)
+  const refresh = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      setData(await loadDashboard())
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Could not load your workspace overview."
+      )
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    void loadDashboard()
+      .then((result) => {
+        if (active) setData(result)
+      })
+      .catch((cause: unknown) => {
+        if (!active) return
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : "Could not load your workspace overview."
+        )
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const stats = useMemo(
+    () => [
+      {
+        label: "Active projects",
+        value: data?.activeProjects ?? 0,
+        detail: "Shared and owned",
+        icon: Task01Icon,
+        url: "/board",
+      },
+      {
+        label: "Open tasks",
+        value: data?.openTasks ?? 0,
+        detail: "Across your projects",
+        icon: Task01Icon,
+        url: "/board",
+      },
+      {
+        label: "Next 7 days",
+        value: data?.upcomingEvents ?? 0,
+        detail: "Events and task deadlines",
+        icon: Calendar03Icon,
+        url: "/calendar",
+      },
+      {
+        label: "Reading queue",
+        value: data?.unreadItems ?? 0,
+        detail: "Unread sources",
+        icon: BookOpen01Icon,
+        url: "/reading",
+      },
+    ],
+    [data]
+  )
+
+  if (loading && !data) return <DashboardSkeleton />
+
+  if (error && !data) {
+    return (
+      <Card className="mx-auto mt-20 max-w-lg text-center">
+        <CardHeader>
+          <CardTitle>Could not load the dashboard</CardTitle>
+          <CardDescription>{error}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button onClick={() => void refresh()}>Try again</Button>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Greeting */}
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Hello, {user?.name?.split(" ")[0] ?? "there"} 👋
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Here&apos;s what&apos;s happening in your workspace today.
-        </p>
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Hello, {user?.name?.split(" ")[0] || "there"}
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Here is what needs your attention across the workspace.
+          </p>
+        </div>
+        <Button asChild size="sm">
+          <Link to="/chat">
+            <HugeiconsIcon icon={SparklesIcon} strokeWidth={2} className="size-4" />
+            Ask Workavera
+          </Link>
+        </Button>
       </div>
 
-      {/* Stats grid */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
-          <NavLink key={stat.label} to={stat.url} className="group">
-            <Card className="transition-all group-hover:ring-foreground/20">
+          <Link key={stat.label} to={stat.url} className="group">
+            <Card className="h-full transition-shadow group-hover:ring-foreground/20">
               <CardHeader>
-                <div className="flex items-center justify-between">
+                <div className="flex items-start justify-between gap-4">
                   <CardDescription>{stat.label}</CardDescription>
-                  <div className="flex size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                  <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
                     <HugeiconsIcon icon={stat.icon} strokeWidth={2} className="size-4" />
                   </div>
                 </div>
@@ -126,154 +411,216 @@ export function DashboardPage() {
                   {stat.value}
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <HugeiconsIcon icon={ArrowUpRight01Icon} strokeWidth={2} className="size-3.5 text-emerald-500" />
-                  {stat.change}
-                </p>
+              <CardContent className="text-xs text-muted-foreground">
+                {stat.detail}
               </CardContent>
             </Card>
-          </NavLink>
+          </Link>
         ))}
       </div>
 
-      {/* Task completion chart */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <HugeiconsIcon icon={Task01Icon} strokeWidth={2} className="size-4" />
-            </div>
-            <div className="flex-1">
-              <CardTitle>Task Completion</CardTitle>
-              <CardDescription>Tasks completed vs created over the past 7 days</CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <ChartContainer config={taskChartConfig} className="h-[220px] w-full">
-            <BarChart data={taskData} margin={{ left: 12, right: 12, top: 8, bottom: 0 }}>
-              <CartesianGrid vertical={false} />
-              <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} />
-              <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot" />} />
-              <Bar dataKey="pending" fill="var(--chart-1)" radius={4} />
-              <Bar dataKey="active" fill="var(--chart-4)" radius={4} />
-              <Bar dataKey="completed" fill="var(--chart-5)" radius={4} />
-            </BarChart>
-          </ChartContainer>
-          <div className="mt-2 flex items-center justify-center gap-6">
-            <div className="flex items-center gap-1.5">
-              <span className="size-2 rounded-[2px]" style={{ backgroundColor: "var(--chart-1)" }} />
-              <span className="text-xs text-muted-foreground">Pending</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="size-2 rounded-[2px]" style={{ backgroundColor: "var(--chart-4)" }} />
-              <span className="text-xs text-muted-foreground">Active</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="size-2 rounded-[2px]" style={{ backgroundColor: "var(--chart-5)" }} />
-              <span className="text-xs text-muted-foreground">Completed</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Token usage chart */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <HugeiconsIcon icon={AiBrain02Icon} strokeWidth={2} className="size-4" />
-            </div>
-            <div className="flex-1">
-              <CardTitle>Token Usage by Model</CardTitle>
-              <CardDescription>LLM token consumption over the past 7 days</CardDescription>
-            </div>
-            <div className="text-right">
-              <p className="text-xs text-muted-foreground">Total this week</p>
-              <p className="text-lg font-semibold tabular-nums">{formatTokens(totalTokens)}</p>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <ChartContainer config={chartConfig} className="h-[280px] w-full">
-            <AreaChart data={tokenData} margin={{ left: 12, right: 12, top: 8, bottom: 0 }}>
-              <defs>
-                {modelMeta.map((m) => (
-                  <linearGradient key={m.key} id={`fill-${m.key}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={`var(--color-${m.key})`} stopOpacity={0.3} />
-                    <stop offset="100%" stopColor={`var(--color-${m.key})`} stopOpacity={0.05} />
-                  </linearGradient>
-                ))}
-              </defs>
-              <CartesianGrid vertical={false} />
-              <XAxis
-                dataKey="date"
-                tickLine={false}
-                axisLine={false}
-                tickMargin={8}
-              />
-              <ChartTooltip
-                cursor={false}
-                content={
-                  <ChartTooltipContent
-                    indicator="dot"
-                    formatter={(value) => formatTokens(Number(value))}
-                  />
-                }
-              />
-              {modelMeta.map((m) => (
-                <Area
-                  key={m.key}
-                  dataKey={m.key}
-                  type="natural"
-                  fill={`url(#fill-${m.key})`}
-                  stroke={`var(--color-${m.key})`}
-                  strokeWidth={2}
-                  stackId="a"
-                />
-              ))}
-            </AreaChart>
-          </ChartContainer>
-
-          {/* Model breakdown */}
-          <div className="mt-4 flex flex-wrap items-center justify-center gap-6">
-            {modelTotals.map((m) => (
-              <div key={m.key} className="flex items-center gap-2">
-                <span
-                  className="size-2.5 shrink-0 rounded-[2px]"
-                  style={{ backgroundColor: m.color }}
-                />
-                <span className="text-xs text-muted-foreground">{m.label}</span>
-                <span className="text-xs font-medium tabular-nums">
-                  {formatTokens(m.total)}
-                </span>
-                <span className="text-xs text-muted-foreground/60">
-                  ({Math.round((m.total / totalTokens) * 100)}%)
-                </span>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)]">
+        <Card>
+          <CardHeader>
+            <CardTitle>Needs attention</CardTitle>
+            <CardDescription>Open tasks with the nearest due dates.</CardDescription>
+            <CardAction>
+              <Button asChild variant="ghost" size="sm">
+                <Link to="/board">
+                  View board
+                  <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} className="size-4" />
+                </Link>
+              </Button>
+            </CardAction>
+          </CardHeader>
+          <CardContent>
+            {data?.focusTasks.length ? (
+              <div className="divide-y divide-border/70">
+                {data.focusTasks.map((task) => {
+                  const dueDate = new Date(task.due_date)
+                  const overdue = dueDate.getTime() < data.loadedAt
+                  const priority = priorityMeta[task.priority]
+                  return (
+                    <Link
+                      key={task.id}
+                      to={workspaceRecordUrl("board", task.id)}
+                      className="flex items-center gap-3 py-3.5 transition-colors first:pt-0 last:pb-0 hover:text-primary"
+                    >
+                      <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+                        <HugeiconsIcon icon={Task01Icon} strokeWidth={2} className="size-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{task.title}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {task.expand?.project?.name || "Board"}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <span
+                          className={cn(
+                            "text-xs tabular-nums",
+                            overdue ? "font-medium text-destructive" : "text-muted-foreground"
+                          )}
+                        >
+                          {overdue ? "Overdue · " : ""}
+                          {format(dueDate, "MMM d")}
+                        </span>
+                        {task.priority !== "none" && (
+                          <span className={cn("text-[11px]", priority.className)}>
+                            {priority.label}
+                          </span>
+                        )}
+                      </div>
+                    </Link>
+                  )
+                })}
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+            ) : (
+              <div className="flex min-h-48 flex-col items-center justify-center text-center">
+                <div className="mb-3 flex size-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+                  <HugeiconsIcon icon={Task01Icon} strokeWidth={2} className="size-5" />
+                </div>
+                <p className="text-sm font-medium">Nothing due soon</p>
+                <p className="mt-1 max-w-xs text-xs text-muted-foreground">
+                  Tasks with due dates will appear here.
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-      {/* Tip */}
-      <Card>
-        <CardContent className="flex items-center gap-3 py-4">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <HugeiconsIcon icon={SparklesIcon} strokeWidth={2} className="size-4" />
-          </div>
-          <div className="flex-1">
-            <p className="text-sm font-medium">
-              Tip: Press ⌘B to toggle the sidebar
-            </p>
-            <p className="text-xs text-muted-foreground">
-              You can also press <kbd className="text-foreground">d</kbd> to
-              switch between light and dark themes.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Coming up</CardTitle>
+            <CardDescription>Your next seven days.</CardDescription>
+            <CardAction>
+              <Button asChild variant="ghost" size="icon-sm">
+                <Link to="/calendar" aria-label="Open calendar">
+                  <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} className="size-4" />
+                </Link>
+              </Button>
+            </CardAction>
+          </CardHeader>
+          <CardContent>
+            {data?.upcomingItems.length ? (
+              <div className="space-y-4">
+                {data.upcomingItems.map((item) => {
+                  const start = new Date(item.date)
+                  const isEvent = item.type === "event"
+                  return (
+                    <Link
+                      key={`${item.type}-${item.id}`}
+                      to={workspaceRecordUrl(
+                        isEvent ? "calendar" : "board",
+                        item.id
+                      )}
+                      className="flex gap-3 rounded-xl transition-colors hover:text-primary"
+                    >
+                      <div className="flex w-10 shrink-0 flex-col items-center rounded-lg bg-muted py-1.5 text-center">
+                        <span className="text-[10px] font-medium uppercase text-muted-foreground">
+                          {format(start, "MMM")}
+                        </span>
+                        <span className="text-base font-semibold leading-4 tabular-nums">
+                          {format(start, "d")}
+                        </span>
+                      </div>
+                      <div className="min-w-0 pt-0.5">
+                        <p className="truncate text-sm font-medium">{item.title}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {isEvent
+                            ? item.allDay
+                              ? "Event · All day"
+                              : `Event · ${format(start, "EEE, h:mm a")}`
+                            : `Task · ${item.projectName}`}
+                        </p>
+                      </div>
+                    </Link>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="flex min-h-48 flex-col items-center justify-center text-center">
+                <div className="mb-3 flex size-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+                  <HugeiconsIcon icon={Calendar03Icon} strokeWidth={2} className="size-5" />
+                </div>
+                <p className="text-sm font-medium">Your week is open</p>
+                <Button asChild variant="link" size="sm" className="mt-1 h-auto px-0">
+                  <Link to="/calendar">Plan an event</Link>
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <Card>
+          <CardHeader>
+            <CardTitle>Continue working</CardTitle>
+            <CardDescription>Recently updated knowledge and conversations.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {data?.recentWork.length ? (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {data.recentWork.map((item) => (
+                  <Link
+                    key={`${item.type}-${item.id}`}
+                    to={item.url}
+                    className="flex items-center gap-3 rounded-xl p-3 ring-1 ring-foreground/10 transition-colors hover:bg-muted/60"
+                  >
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                      <HugeiconsIcon icon={item.icon} strokeWidth={2} className="size-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{item.title}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {item.type} · {formatDistanceToNow(new Date(item.updated), { addSuffix: true })}
+                      </p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                Your recent work will appear here.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Quick start</CardTitle>
+            <CardDescription>Jump into a common workflow.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-2">
+            {[
+              { label: "Start an AI chat", url: "/chat", icon: SparklesIcon },
+              { label: "Open the board", url: "/board", icon: Task01Icon },
+              { label: "Create a document", url: "/docs", icon: DocumentAttachmentIcon },
+              { label: "Save something to read", url: "/reading", icon: Add01Icon },
+            ].map((action) => (
+              <Button
+                key={action.label}
+                asChild
+                variant="outline"
+                className="h-10 justify-start"
+              >
+                <Link to={action.url}>
+                  <HugeiconsIcon icon={action.icon} strokeWidth={2} className="size-4" />
+                  {action.label}
+                </Link>
+              </Button>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+
+      {error && (
+        <Badge variant="destructive" className="self-start">
+          Some dashboard data may be out of date.
+        </Badge>
+      )}
     </div>
   )
 }

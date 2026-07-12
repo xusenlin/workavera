@@ -65,6 +65,7 @@ export type ReadingItemInput = {
 
 type ReadingState = {
   items: ReadingItem[]
+  openedItem: ReadingItem | null
   projects: ReadingProject[]
   loading: boolean
   saving: boolean
@@ -72,6 +73,8 @@ type ReadingState = {
   error: string | null
   fetchItems: () => Promise<void>
   fetchProjects: () => Promise<void>
+  openItem: (id: string) => Promise<ReadingItem | null>
+  clearOpenedItem: () => void
   addItem: (input: ReadingItemInput) => Promise<ReadingItem>
   updateItem: (id: string, patch: Partial<ReadingItemInput>) => Promise<void>
   togglePin: (id: string, pinned: boolean) => Promise<void>
@@ -147,8 +150,9 @@ function upsertById(items: ReadingItem[], next: ReadingItem) {
   return items.map((item) => (item.id === next.id ? next : item))
 }
 
-export const useReadingStore = create<ReadingState>((set) => ({
+export const useReadingStore = create<ReadingState>((set, get) => ({
   items: [],
+  openedItem: null,
   projects: [],
   loading: false,
   saving: false,
@@ -192,6 +196,30 @@ export const useReadingStore = create<ReadingState>((set) => ({
     }
   },
 
+  openItem: async (id) => {
+    const itemId = id.trim()
+    if (!itemId) return null
+    const existing = get().items.find((item) => item.id === itemId)
+    if (existing) {
+      set({ openedItem: null })
+      return existing
+    }
+    try {
+      const record = await pb
+        .collection("reading_items")
+        .getOne<ReadingItemRecord>(itemId, { requestKey: null })
+      const item = toReadingItem(record)
+      set({ openedItem: item })
+      return item
+    } catch (error) {
+      set({ openedItem: null })
+      toast.error(errorMessage(error, "Could not open reading item"))
+      return null
+    }
+  },
+
+  clearOpenedItem: () => set({ openedItem: null }),
+
   addItem: async (input) => {
     const ownerId = pb.authStore.record?.id
     if (!ownerId) throw new Error("You must be signed in to add reading items")
@@ -205,7 +233,10 @@ export const useReadingStore = create<ReadingState>((set) => ({
           ...toRecord(input),
         })
       const item = toReadingItem(record)
-      set((state) => ({ items: upsertById(state.items, item), saving: false }))
+      set((state) => ({
+        items: upsertById(state.items, item),
+        saving: false,
+      }))
       toast.success("Reading item added")
       return item
     } catch (error) {
@@ -223,7 +254,13 @@ export const useReadingStore = create<ReadingState>((set) => ({
         .collection("reading_items")
         .update<ReadingItemRecord>(id, toRecord(patch))
       const item = toReadingItem(record)
-      set((state) => ({ items: upsertById(state.items, item), saving: false }))
+      set((state) => ({
+        items: state.items.some((current) => current.id === id)
+          ? upsertById(state.items, item)
+          : state.items,
+        openedItem: state.openedItem?.id === id ? item : state.openedItem,
+        saving: false,
+      }))
       toast.success("Reading item updated")
     } catch (error) {
       const message = errorMessage(error, "Could not update reading item")
@@ -239,6 +276,7 @@ export const useReadingStore = create<ReadingState>((set) => ({
       await pb.collection("reading_items").delete(id)
       set((state) => ({
         items: state.items.filter((item) => item.id !== id),
+        openedItem: state.openedItem?.id === id ? null : state.openedItem,
         saving: false,
       }))
       toast.success("Reading item deleted")
@@ -260,6 +298,10 @@ export const useReadingStore = create<ReadingState>((set) => ({
         items: state.items.map((item) =>
           item.id === id ? { ...item, pinned } : item
         ),
+        openedItem:
+          state.openedItem?.id === id
+            ? { ...state.openedItem, pinned }
+            : state.openedItem,
       }))
     } catch (error) {
       toast.error(errorMessage(error, "Could not update pin"))
@@ -285,6 +327,15 @@ export const useReadingStore = create<ReadingState>((set) => ({
               }
             : item
         ),
+        openedItem:
+          state.openedItem?.id === id
+            ? {
+                ...state.openedItem,
+                contentText: response.contentText,
+                summary: response.summary,
+                keyPoints: response.keyPoints,
+              }
+            : state.openedItem,
         summarizing: false,
       }))
     } catch (error) {

@@ -25,6 +25,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { ToolInput } from "@/components/chat/tool-input"
 import { cn } from "@/lib/utils"
+import { workspaceRecordUrl } from "@/lib/workspace-navigation"
 
 type Doc = {
   id: string
@@ -186,7 +187,7 @@ export function DocsSearchToolCard({ part }: { part: DynamicToolUIPart }) {
               <div
                 key={doc.id}
                 className="cursor-pointer rounded-md border bg-card transition-colors hover:border-border/80 hover:bg-muted/50"
-                onClick={() => navigate(`/docs/${doc.id}`)}
+                onClick={() => navigate(workspaceRecordUrl("docs", doc.id))}
               >
                 <div className="px-3 py-2">
                   <div className="flex items-center justify-between gap-2">
@@ -414,7 +415,7 @@ export function DocsItemToolCard({ part }: { part: DynamicToolUIPart }) {
             <div className="flex justify-end">
               <button
                 type="button"
-                onClick={() => navigate("/docs", { state: { docId: doc.id } })}
+                onClick={() => navigate(workspaceRecordUrl("docs", doc.id))}
                 className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground transition-colors hover:bg-secondary/80"
               >
                 Open in editor

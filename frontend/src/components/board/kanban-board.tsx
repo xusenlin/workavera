@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react"
+import { useNavigate } from "react-router"
 
 import {
   DndContext,
@@ -12,6 +13,7 @@ import {
 
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
+import { workspaceRecordUrl } from "@/lib/workspace-navigation"
 import { useBoardStore, type Todo, type Project } from "@/store/board"
 import { ProjectColumn } from "./project-column"
 import { TodoCard } from "./todo-card"
@@ -26,18 +28,22 @@ export function KanbanBoard({
   onEditProject,
   requestedTaskId,
 }: KanbanBoardProps) {
+  const navigate = useNavigate()
   const projects = useBoardStore((store) => store.projects)
   const projectPage = useBoardStore((store) => store.projectPage)
   const projectTotalPages = useBoardStore((store) => store.projectTotalPages)
   const projectTotalItems = useBoardStore((store) => store.projectTotalItems)
   const states = useBoardStore((store) => store.states)
   const todos = useBoardStore((store) => store.todos)
+  const openedTask = useBoardStore((store) => store.openedTask)
+  const openedProject = useBoardStore((store) => store.openedProject)
   const loading = useBoardStore((store) => store.loading)
   const initialized = useBoardStore((store) => store.initialized)
   const error = useBoardStore((store) => store.error)
   const initialize = useBoardStore((store) => store.initialize)
   const dispose = useBoardStore((store) => store.dispose)
   const clearError = useBoardStore((store) => store.clearError)
+  const clearOpenedRecord = useBoardStore((store) => store.clearOpenedRecord)
   const loadProjectPage = useBoardStore((store) => store.loadProjectPage)
   const moveTodo = useBoardStore((store) => store.moveTodo)
 
@@ -61,7 +67,9 @@ export function KanbanBoard({
     ) {
       return
     }
-    const requestedTask = todos.find((todo) => todo.id === requestedTaskId)
+    const requestedTask =
+      todos.find((todo) => todo.id === requestedTaskId) ??
+      (openedTask?.id === requestedTaskId ? openedTask : null)
     if (!requestedTask) return
     openedRequestedTask.current = requestedTaskId
     const frame = requestAnimationFrame(() => {
@@ -71,7 +79,7 @@ export function KanbanBoard({
       setSheetOpen(true)
     })
     return () => cancelAnimationFrame(frame)
-  }, [initialized, requestedTaskId, todos])
+  }, [initialized, openedTask, requestedTaskId, todos])
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
@@ -120,6 +128,15 @@ export function KanbanBoard({
     setAddStateId(todo.stateId)
     setEditingTodo(todo)
     setSheetOpen(true)
+    navigate(workspaceRecordUrl("board", todo.id), { replace: true })
+  }
+
+  const handleTaskSheetOpenChange = (open: boolean) => {
+    setSheetOpen(open)
+    if (!open && editingTodo) {
+      clearOpenedRecord()
+      navigate("/board", { replace: true })
+    }
   }
 
   if (loading && !initialized) {
@@ -211,8 +228,11 @@ export function KanbanBoard({
       <TodoCardSheet
         key={`${sheetOpen ? "open" : "closed"}:${editingTodo?.id || "new"}:${addStateId}`}
         open={sheetOpen}
-        onOpenChange={setSheetOpen}
+        onOpenChange={handleTaskSheetOpenChange}
         todo={editingTodo}
+        project={
+          openedTask?.id === editingTodo?.id ? (openedProject ?? undefined) : undefined
+        }
         projectId={addProjectId}
         defaultStateId={addStateId}
       />

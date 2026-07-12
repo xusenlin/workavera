@@ -41,6 +41,7 @@ import {
   projectParticipants,
   useBoardStore,
   type Priority,
+  type Project,
   type Todo,
 } from "@/store/board"
 import { TaskActivity } from "./task-activity"
@@ -49,6 +50,7 @@ type TodoCardSheetProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   todo: Todo | null
+  project?: Project
   projectId: string
   defaultStateId?: string
 }
@@ -90,6 +92,7 @@ export function TodoCardSheet({
   open,
   onOpenChange,
   todo,
+  project,
   projectId,
   defaultStateId,
 }: TodoCardSheetProps) {
@@ -129,9 +132,8 @@ export function TodoCardSheet({
   const projectLabels = labels.filter(
     (label) => label.projectId === currentProjectId
   )
-  const currentProject = projects.find(
-    (project) => project.id === currentProjectId
-  )
+  const currentProject =
+    project ?? projects.find((item) => item.id === currentProjectId)
   const participants = currentProject
     ? projectParticipants(currentProject, members)
     : []

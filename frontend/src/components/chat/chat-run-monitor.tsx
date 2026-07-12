@@ -5,6 +5,7 @@ import { ClientResponseError, type RecordModel } from "pocketbase"
 import { toast } from "sonner"
 
 import { pb } from "@/lib/pocketbase"
+import { workspaceRecordUrl } from "@/lib/workspace-navigation"
 import { useChatRunsStore, type ChatRunSummary } from "@/store/chat-runs"
 import { useChatStore } from "@/store/chat"
 import type { ChatMessageMetadata } from "@/types/chat"
@@ -35,7 +36,7 @@ export function ChatRunMonitor() {
 
     const viewConversation = (conversationId: string) => {
       useChatStore.getState().setActiveConversation(conversationId)
-      navigate("/chat")
+      navigate(workspaceRecordUrl("chat", conversationId))
     }
 
     const notifyFinished = (record: ChatMessageRecord) => {

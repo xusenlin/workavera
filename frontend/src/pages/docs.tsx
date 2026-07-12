@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { useLocation } from "react-router"
+import { useNavigate, useSearchParams } from "react-router"
 
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
@@ -65,6 +65,10 @@ import { Spinner } from "@/components/ui/spinner"
 import { extractErrorMessage } from "@/lib/error"
 import { pb } from "@/lib/pocketbase"
 import { cn } from "@/lib/utils"
+import {
+  requestedRecordId,
+  workspaceRecordUrl,
+} from "@/lib/workspace-navigation"
 
 type DocRecord = RecordModel & {
   title: string
@@ -106,8 +110,9 @@ type Project = { id: string; name: string }
 const DOCS_PAGE_SIZE = 15
 
 export function DocsPage() {
-  const location = useLocation()
-  const initialDocId = (location.state as { docId?: string } | null)?.docId
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const requestedDocId = requestedRecordId(searchParams)
   const [documents, setDocuments] = useState<DocRecord[]>([])
   const [pinnedDocuments, setPinnedDocuments] = useState<DocumentResult[]>([])
   const [projects, setProjects] = useState<Project[]>([])
@@ -189,20 +194,11 @@ export function DocsPage() {
           .map(({ id, name }) => ({ id, name }))
       )
       setSelectedId((current) => {
-        if (
-          current &&
-          [...pinned, ...docResult.items].some((doc) => doc.id === current)
-        ) {
-          return current
-        }
-        const allDocs = [...pinned, ...docResult.items]
-        if (initialDocId && allDocs.some((doc) => doc.id === initialDocId)) {
-          return initialDocId
-        }
+        if (current) return current
         return pinned[0]?.id ?? docResult.items[0]?.id ?? null
       })
     },
-    [page, query, initialDocId]
+    [page, query]
   )
 
   const loadDocument = useCallback(async (id: string) => {
@@ -243,13 +239,35 @@ export function DocsPage() {
   }, [loadList])
 
   useEffect(() => {
+    if (!requestedDocId || requestedDocId === selectedId) return
+    if (dirty && !window.confirm("Discard your unsaved changes?")) {
+      if (selectedId) {
+        navigate(workspaceRecordUrl("docs", selectedId), { replace: true })
+      }
+      return
+    }
+    void Promise.resolve().then(() => setSelectedId(requestedDocId))
+  }, [dirty, navigate, requestedDocId, selectedId])
+
+  useEffect(() => {
+    if (!requestedDocId && selectedId) {
+      navigate(workspaceRecordUrl("docs", selectedId), { replace: true })
+    }
+  }, [navigate, requestedDocId, selectedId])
+
+  useEffect(() => {
     if (!selectedId) return
     void Promise.resolve()
       .then(() => loadDocument(selectedId))
-      .catch((error) =>
+      .catch((error) => {
         toast.error(extractErrorMessage(error, "Could not load the document."))
-      )
-  }, [loadDocument, selectedId])
+        if (requestedDocId === selectedId) {
+          setSelectedId(null)
+          setPersisted(null)
+          navigate("/docs", { replace: true })
+        }
+      })
+  }, [loadDocument, navigate, requestedDocId, selectedId])
 
   useEffect(() => {
     if (!selectedId) return
@@ -281,6 +299,7 @@ export function DocsPage() {
     if (id === selectedId) return
     if (dirty && !window.confirm("Discard your unsaved changes?")) return
     setSelectedId(id)
+    navigate(workspaceRecordUrl("docs", id), { replace: true })
   }
 
   const save = async () => {
@@ -335,7 +354,11 @@ export function DocsPage() {
   const archiveDocument = async (id: string) => {
     try {
       await pb.send(`/api/docs/${id}/archive`, { method: "POST" })
-      if (selectedId === id) setPersisted(null)
+      if (selectedId === id) {
+        setSelectedId(null)
+        setPersisted(null)
+        navigate("/docs", { replace: true })
+      }
       await loadList()
       toast.success("Document archived.")
     } catch (error) {
@@ -346,7 +369,11 @@ export function DocsPage() {
   const deleteDocument = async (id: string) => {
     try {
       await pb.send(`/api/docs/${id}`, { method: "DELETE" })
-      if (selectedId === id) setPersisted(null)
+      if (selectedId === id) {
+        setSelectedId(null)
+        setPersisted(null)
+        navigate("/docs", { replace: true })
+      }
       await loadList()
       toast.success("Document deleted.")
     } catch (error) {
@@ -577,6 +604,7 @@ export function DocsPage() {
           setPage(1)
           await loadList(1)
           setSelectedId(doc.id)
+          navigate(workspaceRecordUrl("docs", doc.id), { replace: true })
         }}
       />
       <ArchivedDocumentsDialog

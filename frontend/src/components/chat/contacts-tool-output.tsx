@@ -23,6 +23,7 @@ import {
 import { pb } from "@/lib/pocketbase"
 import { ToolInput } from "@/components/chat/tool-input"
 import { cn } from "@/lib/utils"
+import { workspaceRecordUrl } from "@/lib/workspace-navigation"
 import type { DynamicToolUIPart } from "ai"
 import type { ReactNode } from "react"
 import { useNavigate } from "react-router"
@@ -187,7 +188,9 @@ export function ContactsToolCard({ part }: { part: ContactsToolPart }) {
                     <TooltipTrigger asChild>
                       <div
                         className="flex cursor-pointer items-center gap-2 rounded-full border bg-card px-2 py-1 transition-colors hover:bg-muted/50"
-                        onClick={() => navigate("/contacts")}
+                        onClick={() =>
+                          navigate(workspaceRecordUrl("contacts", contact.id))
+                        }
                       >
                         <Avatar size="sm">
                           {src && <AvatarImage src={src} alt={contact.name} />}

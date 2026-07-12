@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { useSearchParams } from "react-router"
+import { useNavigate, useSearchParams } from "react-router"
 import { toast } from "sonner"
 
 import { HugeiconsIcon } from "@hugeicons/react"
@@ -53,6 +53,10 @@ import { cn } from "@/lib/utils"
 import { extractErrorMessage } from "@/lib/error"
 import { formatRelativeTime } from "@/lib/chat-utils"
 import { pb } from "@/lib/pocketbase"
+import {
+  requestedRecordId,
+  workspaceRecordUrl,
+} from "@/lib/workspace-navigation"
 
 const PAGE_SIZE = 8
 
@@ -67,9 +71,12 @@ type AIMicroAppRecord = RecordModel & {
 }
 
 export function AIMicroAppsPage() {
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+  const requestedAppId = requestedRecordId(searchParams)
   const [pinnedApps, setPinnedApps] = useState<AIMicroAppRecord[]>([])
   const [apps, setApps] = useState<AIMicroAppRecord[]>([])
+  const [openedApp, setOpenedApp] = useState<AIMicroAppRecord | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
@@ -106,12 +113,9 @@ export function AIMicroAppsPage() {
       setApps(appResult.items)
       setTotalPages(appResult.totalPages || 1)
       setSelectedId((current) => {
-        const requestedId = searchParams.get("app")
         const all = [...pinnedResult.items, ...appResult.items]
+        if (current) return current
         if (all.length === 0) return null
-        if (requestedId && all.some((a) => a.id === requestedId))
-          return requestedId
-        if (current && all.some((a) => a.id === current)) return current
         return all[0].id
       })
     } catch (err) {
@@ -119,14 +123,62 @@ export function AIMicroAppsPage() {
     } finally {
       setLoading(false)
     }
-  }, [page, query, searchParams])
+  }, [page, query])
 
   useEffect(() => {
     void Promise.resolve().then(() => loadList())
   }, [loadList])
 
-  const allApps = [...pinnedApps, ...apps]
+  useEffect(() => {
+    if (!requestedAppId || requestedAppId === selectedId) return
+    const listed = [...pinnedApps, ...apps].find(
+      (app) => app.id === requestedAppId
+    )
+    if (listed) {
+      void Promise.resolve().then(() => {
+        setOpenedApp(null)
+        setSelectedId(listed.id)
+      })
+      return
+    }
+    let active = true
+    void pb
+      .collection("ai_micro_apps")
+      .getOne<AIMicroAppRecord>(requestedAppId, { requestKey: null })
+      .then((app) => {
+        if (!active) return
+        setOpenedApp(app)
+        setSelectedId(app.id)
+      })
+      .catch((err) => {
+        if (active) {
+          setOpenedApp(null)
+          toast.error(extractErrorMessage(err, "Could not open AI micro app."))
+          navigate("/micro-apps", { replace: true })
+        }
+      })
+    return () => {
+      active = false
+    }
+  }, [apps, navigate, pinnedApps, requestedAppId, selectedId])
+
+  useEffect(() => {
+    if (!requestedAppId && selectedId) {
+      navigate(workspaceRecordUrl("micro-apps", selectedId), { replace: true })
+    }
+  }, [navigate, requestedAppId, selectedId])
+
+  const listedApps = [...pinnedApps, ...apps]
+  const allApps =
+    openedApp && !listedApps.some((app) => app.id === openedApp.id)
+      ? [openedApp, ...listedApps]
+      : listedApps
   const selectedApp = allApps.find((a) => a.id === selectedId) || null
+
+  const selectApp = (id: string) => {
+    setSelectedId(id)
+    navigate(workspaceRecordUrl("micro-apps", id), { replace: true })
+  }
 
   const togglePin = async (app: AIMicroAppRecord) => {
     try {
@@ -146,7 +198,11 @@ export function AIMicroAppsPage() {
         status: "archived",
         pinned: false,
       })
-      if (selectedId === id) setSelectedId(null)
+      if (selectedId === id) {
+        setSelectedId(null)
+        setOpenedApp(null)
+        navigate("/micro-apps", { replace: true })
+      }
       await loadList()
       toast.success("Archived.")
     } catch (err) {
@@ -157,7 +213,11 @@ export function AIMicroAppsPage() {
   const deleteApp = async (id: string) => {
     try {
       await pb.collection("ai_micro_apps").delete(id)
-      if (selectedId === id) setSelectedId(null)
+      if (selectedId === id) {
+        setSelectedId(null)
+        setOpenedApp(null)
+        navigate("/micro-apps", { replace: true })
+      }
       await loadList()
       toast.success("Deleted.")
     } catch (err) {
@@ -249,7 +309,7 @@ export function AIMicroAppsPage() {
                       key={app.id}
                       app={app}
                       selected={selectedId === app.id}
-                      onSelect={setSelectedId}
+                      onSelect={selectApp}
                       onTogglePin={togglePin}
                       onArchive={archiveApp}
                       onDelete={deleteApp}
@@ -264,7 +324,7 @@ export function AIMicroAppsPage() {
                       key={app.id}
                       app={app}
                       selected={selectedId === app.id}
-                      onSelect={setSelectedId}
+                      onSelect={selectApp}
                       onTogglePin={togglePin}
                       onArchive={archiveApp}
                       onDelete={deleteApp}

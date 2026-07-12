@@ -25,6 +25,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ToolInput } from "@/components/chat/tool-input"
 import { cn } from "@/lib/utils"
+import { workspaceRecordUrl } from "@/lib/workspace-navigation"
 
 type AIMicroAppSummary = {
   id: string
@@ -216,7 +217,9 @@ export function AIMicroAppsToolCard({ part }: { part: DynamicToolUIPart }) {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => navigate(`/micro-apps?app=${result.id}`)}
+                onClick={() =>
+                  navigate(workspaceRecordUrl("micro-apps", result.id))
+                }
               >
                 <HugeiconsIcon icon={ViewIcon} strokeWidth={2} />
                 Preview
@@ -265,7 +268,9 @@ export function AIMicroAppsToolCard({ part }: { part: DynamicToolUIPart }) {
                   <Button
                     variant="secondary"
                     size="sm"
-                    onClick={() => navigate(`/micro-apps?app=${app.id}`)}
+                    onClick={() =>
+                      navigate(workspaceRecordUrl("micro-apps", app.id))
+                    }
                   >
                     <HugeiconsIcon icon={ViewIcon} strokeWidth={2} />
                     Preview

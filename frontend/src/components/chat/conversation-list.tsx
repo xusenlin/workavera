@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react"
+import { useNavigate } from "react-router"
 
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
@@ -38,8 +39,9 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination"
-import { cn } from "@/lib/utils"
 import { formatRelativeTime } from "@/lib/chat-utils"
+import { cn } from "@/lib/utils"
+import { workspaceRecordUrl } from "@/lib/workspace-navigation"
 import { useChatStore } from "@/store/chat"
 import type { Conversation } from "@/types/chat"
 
@@ -266,6 +268,7 @@ function ConversationGroup({
 }
 
 export function ConversationList() {
+  const navigate = useNavigate()
   const conversations = useChatStore((s) => s.conversations)
   const activeConversationId = useChatStore((s) => s.activeConversationId)
   const setActiveConversation = useChatStore((s) => s.setActiveConversation)
@@ -294,8 +297,17 @@ export function ConversationList() {
     }
   }, [conversations, query])
 
+  const handleSelect = (id: string) => {
+    setActiveConversation(id)
+    navigate(workspaceRecordUrl("chat", id), { replace: true })
+  }
+
   const handleNew = () => {
-    void createConversation().catch(() => {})
+    void createConversation()
+      .then((id) =>
+        navigate(workspaceRecordUrl("chat", id), { replace: true })
+      )
+      .catch(() => {})
   }
 
   const hasResults = pinned.length > 0 || recent.length > 0
@@ -350,13 +362,13 @@ export function ConversationList() {
               label="Pinned"
               conversations={pinned}
               activeId={activeConversationId}
-              onSelect={setActiveConversation}
+              onSelect={handleSelect}
             />
             <ConversationGroup
               label="Recent"
               conversations={recent}
               activeId={activeConversationId}
-              onSelect={setActiveConversation}
+              onSelect={handleSelect}
             />
           </div>
         ) : (

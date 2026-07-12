@@ -118,13 +118,14 @@ function ActiveChat({ conversation }: { conversation: ChatConversation }) {
 
 export function ChatArea() {
   const conversations = useChatStore((state) => state.conversations)
+  const openedConversation = useChatStore((state) => state.openedConversation)
   const activeConversationId = useChatStore(
     (state) => state.activeConversationId
   )
   const createConversation = useChatStore((state) => state.createConversation)
   const activeConversation = conversations.find(
     (conversation) => conversation.id === activeConversationId
-  )
+  ) ?? (openedConversation?.id === activeConversationId ? openedConversation : null)
 
   if (!activeConversation) {
     return (

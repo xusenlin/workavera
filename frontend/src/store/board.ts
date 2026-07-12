@@ -93,11 +93,13 @@ const PROJECTS_PER_PAGE = 4
 type BoardState = {
   templates: BoardTemplate[]
   projects: Project[]
+  openedProject: Project | null
   projectPage: number
   projectTotalPages: number
   projectTotalItems: number
   states: ProjectState[]
   todos: Todo[]
+  openedTask: Todo | null
   labels: Label[]
   members: Member[]
   loading: boolean
@@ -107,6 +109,9 @@ type BoardState = {
   dispose: () => void
   clearError: () => void
   loadProjectPage: (page: number) => Promise<void>
+  openProject: (id: string) => Promise<Project | null>
+  openTask: (id: string) => Promise<Todo | null>
+  clearOpenedRecord: () => void
   addProject: (input: {
     name: string
     description?: string
@@ -443,11 +448,13 @@ async function connectRealtime(
 export const useBoardStore = create<BoardState>((set, get) => ({
   templates: [],
   projects: [],
+  openedProject: null,
   projectPage: 0,
   projectTotalPages: 1,
   projectTotalItems: 0,
   states: [],
   todos: [],
+  openedTask: null,
   labels: [],
   members: [],
   loading: false,
@@ -500,6 +507,71 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     }
   },
 
+  openProject: async (id) => {
+    const projectId = id.trim()
+    if (!projectId) return null
+    const existing = get().projects.find((project) => project.id === projectId)
+    if (existing) {
+      set({ openedProject: null })
+      return existing
+    }
+    try {
+      const record = await pb
+        .collection(COLLECTIONS.projects)
+        .getOne<ProjectRecord>(projectId, {
+          expand: "owner",
+          requestKey: null,
+        })
+      const project = toProject(record)
+      set({ openedProject: project })
+      return project
+    } catch (error) {
+      const message = messageFromError(error, "Could not open the project")
+      set({ error: message })
+      toast.error(message)
+      return null
+    }
+  },
+
+  openTask: async (id) => {
+    const taskId = id.trim()
+    if (!taskId) return null
+    const listedTask = get().todos.find((todo) => todo.id === taskId) ?? null
+    let task = listedTask
+    if (!task) {
+      try {
+        const record = await pb
+          .collection(COLLECTIONS.tasks)
+          .getOne<TodoRecord>(taskId, { requestKey: null })
+        task = toTodo(record)
+      } catch (error) {
+        if (error instanceof ClientResponseError && error.status === 404) {
+          return null
+        }
+        const message = messageFromError(error, "Could not open the task")
+        set({ error: message })
+        toast.error(message)
+        return null
+      }
+    }
+
+    const listedProject = get().projects.find(
+      (project) => project.id === task.projectId
+    )
+    if (listedTask && listedProject) {
+      set({ openedTask: null, openedProject: null })
+      return listedTask
+    }
+
+    const project = await get().openProject(task.projectId)
+    if (!project) return null
+    set({ openedTask: task, openedProject: project })
+    return task
+  },
+
+  clearOpenedRecord: () =>
+    set({ openedTask: null, openedProject: null }),
+
   dispose: () => {
     connectionWanted = false
     realtimeUnsubscribers.forEach((unsubscribe) => unsubscribe())
@@ -545,7 +617,13 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           { expand: "owner", requestKey: null }
         )
       set((state) => ({
-        projects: upsertById(state.projects, toProject(record)),
+        projects: state.projects.some((project) => project.id === id)
+          ? upsertById(state.projects, toProject(record))
+          : state.projects,
+        openedProject:
+          state.openedProject?.id === id
+            ? toProject(record)
+            : state.openedProject,
       }))
     } catch (error) {
       const message = messageFromError(error, "Could not update the project")
@@ -560,6 +638,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       await pb.collection(COLLECTIONS.projects).delete(id)
       set((state) => ({
         projects: state.projects.filter((project) => project.id !== id),
+        openedProject:
+          state.openedProject?.id === id ? null : state.openedProject,
         states: state.states.filter((item) => item.projectId !== id),
         todos: state.todos.filter((todo) => todo.projectId !== id),
         labels: state.labels.filter((label) => label.projectId !== id),
@@ -843,7 +923,14 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       const record = await pb
         .collection(COLLECTIONS.tasks)
         .update<TodoRecord>(id, todoPatchToRecord(patch))
-      set((state) => ({ todos: upsertById(state.todos, toTodo(record)) }))
+      const updated = toTodo(record)
+      set((state) => ({
+        todos: state.todos.some((todo) => todo.id === id)
+          ? upsertById(state.todos, updated)
+          : state.todos,
+        openedTask:
+          state.openedTask?.id === id ? updated : state.openedTask,
+      }))
     } catch (error) {
       const message = messageFromError(error, "Could not update the task")
       set({ error: message })
@@ -855,7 +942,10 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   removeTodo: async (id) => {
     try {
       await pb.collection(COLLECTIONS.tasks).delete(id)
-      set((state) => ({ todos: state.todos.filter((item) => item.id !== id) }))
+      set((state) => ({
+        todos: state.todos.filter((item) => item.id !== id),
+        openedTask: state.openedTask?.id === id ? null : state.openedTask,
+      }))
     } catch (error) {
       const message = messageFromError(error, "Could not delete the task")
       set({ error: message })

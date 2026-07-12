@@ -15,6 +15,7 @@ import {
 } from "lucide-react"
 import type { DynamicToolUIPart } from "ai"
 import type { ReactNode } from "react"
+import { useNavigate } from "react-router"
 
 import {
   Collapsible,
@@ -24,6 +25,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { ToolInput } from "@/components/chat/tool-input"
 import { cn } from "@/lib/utils"
+import { workspaceRecordUrl } from "@/lib/workspace-navigation"
 
 type ReadingItem = {
   id: string
@@ -112,6 +114,7 @@ function hostname(url: string): string {
 // ── Search card ──────────────────────────────────────────────
 
 export function ReadingSearchToolCard({ part }: { part: DynamicToolUIPart }) {
+  const navigate = useNavigate()
   const items = parseItems(part.output)
   const isError = part.state === "output-error"
   const isLoading =
@@ -184,9 +187,15 @@ export function ReadingSearchToolCard({ part }: { part: DynamicToolUIPart }) {
                             STATUS_COLORS[item.status] ?? "#64748b",
                         }}
                       />
-                      <span className="truncate text-sm font-medium">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          navigate(workspaceRecordUrl("reading", item.id))
+                        }
+                        className="truncate text-left text-sm font-medium hover:underline"
+                      >
                         {item.title}
-                      </span>
+                      </button>
                     </div>
                     <a
                       href={item.url}
@@ -250,6 +259,7 @@ const itemToolMeta: Record<
 }
 
 export function ReadingItemToolCard({ part }: { part: DynamicToolUIPart }) {
+  const navigate = useNavigate()
   const item = parseItem(part.output)
   const isError = part.state === "output-error"
   const isLoading =
@@ -333,9 +343,15 @@ export function ReadingItemToolCard({ part }: { part: DynamicToolUIPart }) {
                         STATUS_COLORS[item.status] ?? "#64748b",
                     }}
                   />
-                  <span className="truncate text-sm font-medium">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      navigate(workspaceRecordUrl("reading", item.id))
+                    }
+                    className="truncate text-left text-sm font-medium hover:underline"
+                  >
                     {item.title}
-                  </span>
+                  </button>
                 </div>
                 {isUpsert && (
                   <Badge variant="secondary" className="shrink-0 capitalize">

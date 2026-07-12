@@ -56,6 +56,7 @@ type NotificationsState = {
   dispose: () => void
   loadRecent: () => Promise<void>
   loadPage: (page?: number, filter?: NotificationFilter) => Promise<void>
+  openNotification: (id: string) => Promise<AppNotification | null>
   setFilter: (filter: NotificationFilter) => Promise<void>
   markRead: (id: string) => Promise<void>
   markAllRead: () => Promise<void>
@@ -170,13 +171,31 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
     }
   },
 
+  openNotification: async (id) => {
+    const notificationId = id.trim()
+    if (!notificationId) return null
+    const existing = [...get().items, ...get().recent].find(
+      (item) => item.id === notificationId
+    )
+    if (existing) return existing
+    try {
+      const record = await pb
+        .collection("notifications")
+        .getOne<NotificationRecord>(notificationId, { requestKey: null })
+      return toNotification(record)
+    } catch (error) {
+      toast.error(errorMessage(error, "Could not open notification"))
+      return null
+    }
+  },
+
   setFilter: async (filter) => get().loadPage(1, filter),
 
   markRead: async (id) => {
     const current = [...get().recent, ...get().items].find(
       (item) => item.id === id
     )
-    if (!current || current.readAt) return
+    if (current?.readAt) return
     const readAt = new Date().toISOString()
     set((state) => ({
       recent: state.recent.map((item) =>

@@ -23,6 +23,7 @@ import { pb } from "@/lib/pocketbase"
 import { PRIORITY_META } from "@/store/board"
 import { ToolInput } from "@/components/chat/tool-input"
 import { cn } from "@/lib/utils"
+import { workspaceRecordUrl } from "@/lib/workspace-navigation"
 import type { DynamicToolUIPart } from "ai"
 import type { ReactNode } from "react"
 import { useNavigate } from "react-router"
@@ -237,7 +238,9 @@ export function TasksToolCard({ part }: { part: TasksToolPart }) {
                         <TaskItem
                           key={task.id}
                           task={task}
-                          onClick={() => navigate("/board")}
+                          onClick={() =>
+                            navigate(workspaceRecordUrl("board", task.id))
+                          }
                         />
                       ))}
                     </div>
@@ -262,7 +265,9 @@ export function TasksToolCard({ part }: { part: TasksToolPart }) {
                         <TaskItem
                           key={task.id}
                           task={task}
-                          onClick={() => navigate("/board")}
+                          onClick={() =>
+                            navigate(workspaceRecordUrl("board", task.id))
+                          }
                         />
                       ))}
                     </div>

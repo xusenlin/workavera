@@ -9,6 +9,7 @@ import {
   subMonths,
 } from "date-fns"
 import { useNavigate, useSearchParams } from "react-router"
+import { toast } from "sonner"
 
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Add01Icon, Calendar03Icon } from "@hugeicons/core-free-icons"
@@ -30,11 +31,16 @@ import { EventList } from "@/components/calendar/event-list"
 import { EventDialog } from "@/components/calendar/event-dialog"
 import { buildCalendarItems, type CalendarEvent } from "@/lib/calendar-types"
 import { cn } from "@/lib/utils"
+import {
+  requestedRecordId,
+  workspaceRecordUrl,
+} from "@/lib/workspace-navigation"
 import { useCalendarStore, type CalendarEventInput } from "@/store/calendar"
 
 export function CalendarPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+  const requestedEventId = requestedRecordId(searchParams)
   const events = useCalendarStore((state) => state.events)
   const tasks = useCalendarStore((state) => state.tasks)
   const timezone = useCalendarStore((state) => state.timezone)
@@ -61,7 +67,6 @@ export function CalendarPage() {
   }, [dispose, initialize])
 
   useEffect(() => {
-    const requestedEventId = searchParams.get("event")
     if (
       !initialized ||
       !requestedEventId ||
@@ -69,7 +74,11 @@ export function CalendarPage() {
     )
       return
     const requestedEvent = events.find((event) => event.id === requestedEventId)
-    if (!requestedEvent) return
+    if (!requestedEvent) {
+      toast.error("Could not open calendar event.")
+      navigate("/calendar", { replace: true })
+      return
+    }
     openedRequestedEvent.current = requestedEventId
     const occurrence = searchParams.get("occurrence")
     const frame = requestAnimationFrame(() => {
@@ -78,7 +87,7 @@ export function CalendarPage() {
       setDialogOpen(true)
     })
     return () => cancelAnimationFrame(frame)
-  }, [events, initialized, searchParams])
+  }, [events, initialized, navigate, requestedEventId, searchParams])
 
   const items = useMemo(() => {
     const rangeStart = startOfMonth(subMonths(selectedDate, 1))
@@ -214,9 +223,14 @@ export function CalendarPage() {
             onEditEvent={(event) => {
               setEditingEvent(event)
               setDialogOpen(true)
+              navigate(workspaceRecordUrl("calendar", event.id), {
+                replace: true,
+              })
             }}
             onOpenTask={(taskId, projectId) =>
-              navigate("/board", { state: { taskId, projectId } })
+              navigate(workspaceRecordUrl("board", taskId), {
+                state: { projectId },
+              })
             }
           />
         </div>

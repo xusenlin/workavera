@@ -9,6 +9,7 @@ const PER_PAGE = 20
 
 type ChatState = {
   conversations: Conversation[]
+  openedConversation: Conversation | null
   activeConversationId: string | null
   loading: boolean
   initialized: boolean
@@ -20,6 +21,7 @@ type ChatState = {
   refresh: () => Promise<void>
   setPage: (page: number) => Promise<void>
   setActiveConversation: (id: string | null) => void
+  openConversation: (id: string) => Promise<boolean>
   createConversation: (title?: string) => Promise<string>
   deleteConversation: (id: string) => Promise<void>
   togglePin: (id: string) => Promise<void>
@@ -51,6 +53,7 @@ async function fetchPage(page: number) {
 
 export const useChatStore = create<ChatState>((set, get) => ({
   conversations: [],
+  openedConversation: null,
   activeConversationId: null,
   loading: false,
   initialized: false,
@@ -128,7 +131,41 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  setActiveConversation: (id) => set({ activeConversationId: id }),
+  setActiveConversation: (id) =>
+    set({ activeConversationId: id, openedConversation: null }),
+
+  openConversation: async (id) => {
+    const conversationId = id.trim()
+    if (!conversationId) return false
+
+    const existing = get().conversations.find(
+      (conversation) => conversation.id === conversationId
+    )
+    if (existing) {
+      set({ activeConversationId: existing.id, openedConversation: null })
+      return true
+    }
+
+    try {
+      const conversation = await pb
+        .collection("chat_conversations")
+        .getOne<Conversation>(conversationId, { requestKey: null })
+      if (conversation.status !== "active") {
+        set({ openedConversation: null })
+        toast.info("This conversation is archived.")
+        return false
+      }
+      set({
+        openedConversation: conversation,
+        activeConversationId: conversation.id,
+      })
+      return true
+    } catch (error) {
+      set({ openedConversation: null })
+      toast.error(extractErrorMessage(error, "Could not open conversation"))
+      return false
+    }
+  },
 
   createConversation: async (title = "New conversation") => {
     try {
@@ -140,6 +177,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         totalItems: state.totalItems + 1,
         totalPages: Math.ceil((state.totalItems + 1) / PER_PAGE),
         activeConversationId: conversation.id,
+        openedConversation: null,
       }))
       return conversation.id
     } catch (error) {
@@ -165,6 +203,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
             state.activeConversationId === id
               ? (conversations[0]?.id ?? null)
               : state.activeConversationId,
+          openedConversation:
+            state.openedConversation?.id === id
+              ? null
+              : state.openedConversation,
         }
       })
     } catch (error) {
@@ -174,7 +216,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   togglePin: async (id) => {
-    const current = get().conversations.find((item) => item.id === id)
+    const current =
+      get().conversations.find((item) => item.id === id) ??
+      (get().openedConversation?.id === id ? get().openedConversation : null)
     if (!current) return
     try {
       const conversation = await pb
@@ -184,6 +228,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
         conversations: state.conversations.map((item) =>
           item.id === id ? conversation : item
         ),
+        openedConversation:
+          state.openedConversation?.id === id
+            ? conversation
+            : state.openedConversation,
       }))
     } catch (error) {
       toast.error(extractErrorMessage(error, "Could not pin conversation"))
@@ -200,6 +248,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
         conversations: state.conversations.map((item) =>
           item.id === id ? conversation : item
         ),
+        openedConversation:
+          state.openedConversation?.id === id
+            ? conversation
+            : state.openedConversation,
       }))
     } catch (error) {
       toast.error(extractErrorMessage(error, "Could not rename conversation"))
@@ -226,6 +278,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
             state.activeConversationId === id
               ? (state.conversations.find((item) => item.id !== id)?.id ?? null)
               : state.activeConversationId,
+          openedConversation:
+            state.openedConversation?.id === id
+              ? null
+              : state.openedConversation,
         }
       })
     } catch (error) {

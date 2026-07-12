@@ -26,6 +26,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { workspaceRecordUrl } from "@/lib/workspace-navigation"
 
 type BoardMutationResult = {
   ok?: boolean
@@ -142,6 +143,10 @@ export function BoardMutationToolCard({ part }: { part: DynamicToolUIPart }) {
     icon: KanbanIcon,
   }
   const params = formatInput(part.input)
+  const targetId =
+    result?.resourceType === "project" || result?.resourceType === "task"
+      ? result.id
+      : result?.projectId
 
   return (
     <Collapsible
@@ -237,7 +242,11 @@ export function BoardMutationToolCard({ part }: { part: DynamicToolUIPart }) {
               variant="secondary"
               size="sm"
               className="shrink-0"
-              onClick={() => navigate("/board")}
+              onClick={() =>
+                navigate(
+                  targetId ? workspaceRecordUrl("board", targetId) : "/board"
+                )
+              }
             >
               Open Board
             </Button>

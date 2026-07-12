@@ -1,14 +1,24 @@
 import { useEffect, useState } from "react"
+import { useNavigate, useSearchParams } from "react-router"
+import { toast } from "sonner"
 
 import { HugeiconsIcon } from "@hugeicons/react"
 import { ContactBookIcon } from "@hugeicons/core-free-icons"
 
 import { ContactDetailSheet } from "@/components/contacts/contact-detail-sheet"
 import { ContactList } from "@/components/contacts/contact-list"
+import {
+  requestedRecordId,
+  workspaceRecordUrl,
+} from "@/lib/workspace-navigation"
 import { useContactsStore, type Contact } from "@/store/contacts"
 
 export function ContactsPage() {
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const requestedContactId = requestedRecordId(searchParams)
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [contactsLoaded, setContactsLoaded] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const contacts = useContactsStore((s) => s.contacts)
@@ -16,12 +26,34 @@ export function ContactsPage() {
   const selected = contacts.find((contact) => contact.id === selectedId) ?? null
 
   useEffect(() => {
-    void fetchContacts()
+    void fetchContacts().finally(() => setContactsLoaded(true))
   }, [fetchContacts])
+
+  useEffect(() => {
+    if (
+      !contactsLoaded ||
+      !requestedContactId ||
+      requestedContactId === selectedId
+    )
+      return
+    const contact = contacts.find((item) => item.id === requestedContactId)
+    if (!contact) {
+      toast.error("Could not open contact.")
+      navigate("/contacts", { replace: true })
+      return
+    }
+    void Promise.resolve().then(() => {
+      setSelectedId(contact.id)
+      setSheetOpen(true)
+    })
+  }, [contacts, contactsLoaded, navigate, requestedContactId, selectedId])
 
   const handleSelect = (contact: Contact | null) => {
     setSelectedId(contact?.id ?? null)
     setSheetOpen(true)
+    if (contact) {
+      navigate(workspaceRecordUrl("contacts", contact.id), { replace: true })
+    }
   }
 
   return (
@@ -51,7 +83,10 @@ export function ContactsPage() {
 
       <ContactDetailSheet
         open={sheetOpen}
-        onOpenChange={setSheetOpen}
+        onOpenChange={(open) => {
+          setSheetOpen(open)
+          if (!open) navigate("/contacts", { replace: true })
+        }}
         contact={selected}
       />
     </div>

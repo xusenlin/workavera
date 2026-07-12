@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { useNavigate, useSearchParams } from "react-router"
 import { toast } from "sonner"
 
 import { HugeiconsIcon } from "@hugeicons/react"
@@ -72,6 +73,10 @@ import {
 } from "@/store/reading"
 import { cn } from "@/lib/utils"
 import { formatRelativeTime } from "@/lib/chat-utils"
+import {
+  requestedRecordId,
+  workspaceRecordUrl,
+} from "@/lib/workspace-navigation"
 
 const NO_PROJECT = "__none__"
 const ALL = "all"
@@ -109,6 +114,9 @@ const SUMMARY_LANGUAGES = [
 ]
 
 export function ReadingPage() {
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const requestedReadingId = requestedRecordId(searchParams)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [query, setQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>(ALL)
@@ -122,31 +130,74 @@ export function ReadingPage() {
   const [deleteTarget, setDeleteTarget] = useState<ReadingItem | null>(null)
 
   const items = useReadingStore((s) => s.items)
+  const openedItem = useReadingStore((s) => s.openedItem)
   const projects = useReadingStore((s) => s.projects)
   const loading = useReadingStore((s) => s.loading)
   const saving = useReadingStore((s) => s.saving)
   const summarizing = useReadingStore((s) => s.summarizing)
   const fetchItems = useReadingStore((s) => s.fetchItems)
   const fetchProjects = useReadingStore((s) => s.fetchProjects)
+  const openItem = useReadingStore((s) => s.openItem)
+  const clearOpenedItem = useReadingStore((s) => s.clearOpenedItem)
   const addItem = useReadingStore((s) => s.addItem)
   const updateItem = useReadingStore((s) => s.updateItem)
   const deleteItem = useReadingStore((s) => s.deleteItem)
   const summarizeItem = useReadingStore((s) => s.summarizeItem)
   const togglePin = useReadingStore((s) => s.togglePin)
 
+  const selectItem = useCallback(
+    (item: ReadingItem | null) => {
+      setSelectedId(item?.id ?? null)
+      setDetailForm(item ? toForm(item) : emptyForm)
+      setSummarizeError(null)
+      if (!item || items.some((current) => current.id === item.id)) {
+        clearOpenedItem()
+      }
+      navigate(
+        item ? workspaceRecordUrl("reading", item.id) : "/reading",
+        { replace: true }
+      )
+    },
+    [clearOpenedItem, items, navigate]
+  )
+
   useEffect(() => {
-    void fetchItems().then(() => {
-      const loadedItems = useReadingStore
-        .getState()
-        .items.filter((item) => item.status !== "archived")
-      const firstItem =
-        loadedItems.find((item) => item.pinned) ?? loadedItems[0]
-      if (!firstItem) return
-      setSelectedId(firstItem.id)
-      setDetailForm(toForm(firstItem))
-    })
+    void fetchItems()
     void fetchProjects()
   }, [fetchItems, fetchProjects])
+
+  useEffect(() => {
+    if (loading || requestedReadingId === selectedId) return
+    if (requestedReadingId) {
+      let active = true
+      void openItem(requestedReadingId).then((item) => {
+        if (!active) return
+        if (item) {
+          selectItem(item)
+        } else {
+          navigate("/reading", { replace: true })
+        }
+      })
+      return () => {
+        active = false
+      }
+    }
+    if (selectedId) return
+    const visibleItems = items.filter((item) => item.status !== "archived")
+    const firstItem =
+      visibleItems.find((item) => item.pinned) ?? visibleItems[0]
+    if (firstItem) {
+      void Promise.resolve().then(() => selectItem(firstItem))
+    }
+  }, [
+    items,
+    loading,
+    openItem,
+    navigate,
+    requestedReadingId,
+    selectItem,
+    selectedId,
+  ])
 
   const projectNames = useMemo(
     () => Object.fromEntries(projects.map((p) => [p.id, p.name])),
@@ -177,13 +228,9 @@ export function ReadingPage() {
   const pinnedItems = filteredItems.filter((i) => i.pinned)
   const recentItems = filteredItems.filter((i) => !i.pinned)
 
-  const selectedItem = items.find((i) => i.id === selectedId) ?? null
-
-  const selectItem = (item: ReadingItem | null) => {
-    setSelectedId(item?.id ?? null)
-    setDetailForm(item ? toForm(item) : emptyForm)
-    setSummarizeError(null)
-  }
+  const selectedItem =
+    items.find((i) => i.id === selectedId) ??
+    (openedItem?.id === selectedId ? openedItem : null)
 
   const handleAdd = async () => {
     const item = await addItem(fromForm(addForm))

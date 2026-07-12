@@ -26,6 +26,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ToolInput } from "@/components/chat/tool-input"
 import { cn } from "@/lib/utils"
+import { workspaceRecordUrl } from "@/lib/workspace-navigation"
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -270,9 +271,7 @@ export function CalendarScheduleToolCard({
                           key={task.id}
                           task={task}
                           onClick={() =>
-                            navigate("/board", {
-                              state: { taskId: task.id },
-                            })
+                            navigate(workspaceRecordUrl("board", task.id))
                           }
                         />
                       ))}
@@ -563,7 +562,9 @@ export function CalendarMutationToolCard({
                 variant="secondary"
                 size="sm"
                 className="shrink-0"
-                onClick={() => navigate("/calendar")}
+                onClick={() =>
+                  navigate(workspaceRecordUrl("calendar", event.id))
+                }
               >
                 Open Calendar
               </Button>

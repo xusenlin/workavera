@@ -1,5 +1,5 @@
-import { useState } from "react"
-import { useLocation, useSearchParams } from "react-router"
+import { useEffect, useState } from "react"
+import { useNavigate, useSearchParams } from "react-router"
 
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Add01Icon, KanbanIcon } from "@hugeicons/core-free-icons"
@@ -7,17 +7,56 @@ import { Add01Icon, KanbanIcon } from "@hugeicons/core-free-icons"
 import { Button } from "@/components/ui/button"
 import { KanbanBoard } from "@/components/board/kanban-board"
 import { ProjectSheet } from "@/components/board/project-sheet"
-import type { Project } from "@/store/board"
+import {
+  requestedRecordId,
+  workspaceRecordUrl,
+} from "@/lib/workspace-navigation"
+import { useBoardStore, type Project } from "@/store/board"
 
 export function BoardPage() {
-  const location = useLocation()
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const requestedTaskId =
-    searchParams.get("task") ??
-    (location.state as { taskId?: string } | null)?.taskId ??
-    undefined
+  const requestedTaskId = requestedRecordId(searchParams) || undefined
   const [projectSheetOpen, setProjectSheetOpen] = useState(false)
   const [editingProject, setEditingProject] = useState<Project | null>(null)
+  const [resolvedTaskId, setResolvedTaskId] = useState<string | undefined>()
+  const initialized = useBoardStore((state) => state.initialized)
+  const openProject = useBoardStore((state) => state.openProject)
+  const openTask = useBoardStore((state) => state.openTask)
+  const clearOpenedRecord = useBoardStore((state) => state.clearOpenedRecord)
+
+  useEffect(() => {
+    if (!initialized || !requestedTaskId) return
+    let active = true
+    void openTask(requestedTaskId).then(async (task) => {
+      if (!active) return
+      if (task) {
+        setResolvedTaskId(task.id)
+        return
+      }
+      const project = await openProject(requestedTaskId)
+      if (!active) return
+      if (!project) {
+        clearOpenedRecord()
+        navigate("/board", { replace: true })
+        return
+      }
+      clearOpenedRecord()
+      setResolvedTaskId(undefined)
+      setEditingProject(project)
+      setProjectSheetOpen(true)
+    })
+    return () => {
+      active = false
+    }
+  }, [
+    clearOpenedRecord,
+    initialized,
+    navigate,
+    openProject,
+    openTask,
+    requestedTaskId,
+  ])
 
   const handleAddProject = () => {
     setEditingProject(null)
@@ -27,6 +66,15 @@ export function BoardPage() {
   const handleEditProject = (project: Project) => {
     setEditingProject(project)
     setProjectSheetOpen(true)
+    navigate(workspaceRecordUrl("board", project.id), { replace: true })
+  }
+
+  const handleProjectSheetOpenChange = (open: boolean) => {
+    setProjectSheetOpen(open)
+    if (!open && editingProject) {
+      clearOpenedRecord()
+      navigate("/board", { replace: true })
+    }
   }
 
   return (
@@ -56,13 +104,13 @@ export function BoardPage() {
 
       <KanbanBoard
         onEditProject={handleEditProject}
-        requestedTaskId={requestedTaskId}
+        requestedTaskId={resolvedTaskId}
       />
 
       <ProjectSheet
         key={editingProject?.id || "new"}
         open={projectSheetOpen}
-        onOpenChange={setProjectSheetOpen}
+        onOpenChange={handleProjectSheetOpenChange}
         project={editingProject}
       />
     </div>

@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge"
 import { pb } from "@/lib/pocketbase"
 import { ToolInput } from "@/components/chat/tool-input"
 import { cn } from "@/lib/utils"
+import { workspaceRecordUrl } from "@/lib/workspace-navigation"
 import type { DynamicToolUIPart } from "ai"
 import type { ReactNode } from "react"
 import { useNavigate } from "react-router"
@@ -218,7 +219,9 @@ export function BoardProjectDetailToolCard({
         {part.state === "output-available" && project && (
           <div
             className="cursor-pointer space-y-3 rounded-md border bg-card transition-colors hover:border-border/80 hover:bg-muted/50"
-            onClick={() => navigate("/board")}
+            onClick={() =>
+              navigate(workspaceRecordUrl("board", project.id))
+            }
           >
             <div className="px-3 py-2">
               {/* Name + archived + role + task count */}

@@ -16,6 +16,10 @@ import { NotificationItem } from "@/components/notifications/notification-item"
 import { cn } from "@/lib/utils"
 import { formatRelativeTime } from "@/lib/chat-utils"
 import {
+  requestedRecordId,
+  workspaceRecordUrl,
+} from "@/lib/workspace-navigation"
+import {
   useNotificationsStore,
   type AppNotification,
 } from "@/store/notifications"
@@ -23,6 +27,7 @@ import {
 export function NotificationsPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+  const requestedNotificationId = requestedRecordId(searchParams)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedSnapshot, setSelectedSnapshot] =
     useState<AppNotification | null>(null)
@@ -33,6 +38,9 @@ export function NotificationsPage() {
   const loading = useNotificationsStore((state) => state.loading)
   const unreadCount = useNotificationsStore((state) => state.unreadCount)
   const loadPage = useNotificationsStore((state) => state.loadPage)
+  const openNotification = useNotificationsStore(
+    (state) => state.openNotification
+  )
   const setFilter = useNotificationsStore((state) => state.setFilter)
   const markRead = useNotificationsStore((state) => state.markRead)
   const markAllRead = useNotificationsStore((state) => state.markAllRead)
@@ -42,8 +50,28 @@ export function NotificationsPage() {
     void loadPage(1)
   }, [loadPage])
 
-  const activeId =
-    selectedId ?? searchParams.get("notification") ?? items[0]?.id
+  useEffect(() => {
+    if (!requestedNotificationId || requestedNotificationId === selectedId)
+      return
+    let active = true
+    void openNotification(requestedNotificationId).then((notification) => {
+      if (!active) return
+      if (!notification) {
+        setSelectedId(null)
+        setSelectedSnapshot(null)
+        navigate("/notifications", { replace: true })
+        return
+      }
+      setSelectedId(notification.id)
+      setSelectedSnapshot(notification)
+      void markRead(notification.id)
+    })
+    return () => {
+      active = false
+    }
+  }, [markRead, navigate, openNotification, requestedNotificationId, selectedId])
+
+  const activeId = selectedId ?? requestedNotificationId ?? items[0]?.id
   const selected =
     items.find((item) => item.id === activeId) ??
     (selectedSnapshot?.id === activeId ? selectedSnapshot : null)
@@ -52,6 +80,9 @@ export function NotificationsPage() {
     setSelectedId(notification.id)
     setSelectedSnapshot(notification)
     void markRead(notification.id)
+    navigate(workspaceRecordUrl("notifications", notification.id), {
+      replace: true,
+    })
   }
 
   return (
@@ -165,11 +196,13 @@ export function NotificationsPage() {
               })
             }}
             onOpenTask={() =>
-              navigate(`/board?task=${selected.data.taskId ?? ""}`)
+              navigate(
+                workspaceRecordUrl("board", selected.data.taskId ?? "")
+              )
             }
             onOpenEvent={() =>
               navigate(
-                `/calendar?event=${selected.data.eventId ?? ""}&occurrence=${selected.data.occurrenceDate ?? ""}`
+                `${workspaceRecordUrl("calendar", selected.data.eventId ?? "")}&occurrence=${encodeURIComponent(selected.data.occurrenceDate ?? "")}`
               )
             }
           />

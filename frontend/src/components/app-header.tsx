@@ -52,6 +52,7 @@ import { useTheme } from "@/components/theme-provider"
 import { useAuthStore } from "@/store/auth"
 import { useChatRunsStore } from "@/store/chat-runs"
 import { useChatStore } from "@/store/chat"
+import { workspaceRecordUrl } from "@/lib/workspace-navigation"
 import { useNotificationsStore } from "@/store/notifications"
 import { flatNavItems } from "@/lib/navigation"
 import { pb } from "@/lib/pocketbase"
@@ -111,7 +112,7 @@ export function AppHeader() {
     )
     if (!run) return
     useChatStore.getState().setActiveConversation(run.conversationId)
-    navigate("/chat")
+    navigate(workspaceRecordUrl("chat", run.conversationId))
   }
 
   const keepNotificationsOpen = () => {
@@ -126,7 +127,7 @@ export function AppHeader() {
   const openNotification = (id: string) => {
     void markRead(id)
     setNotificationsOpen(false)
-    navigate(`/notifications?notification=${id}`)
+    navigate(workspaceRecordUrl("notifications", id))
   }
 
   return (
