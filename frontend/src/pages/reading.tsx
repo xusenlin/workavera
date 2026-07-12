@@ -135,7 +135,16 @@ export function ReadingPage() {
   const togglePin = useReadingStore((s) => s.togglePin)
 
   useEffect(() => {
-    void fetchItems()
+    void fetchItems().then(() => {
+      const loadedItems = useReadingStore
+        .getState()
+        .items.filter((item) => item.status !== "archived")
+      const firstItem =
+        loadedItems.find((item) => item.pinned) ?? loadedItems[0]
+      if (!firstItem) return
+      setSelectedId(firstItem.id)
+      setDetailForm(toForm(firstItem))
+    })
     void fetchProjects()
   }, [fetchItems, fetchProjects])
 
