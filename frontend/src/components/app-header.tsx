@@ -200,7 +200,7 @@ export function AppHeader() {
             </PopoverTrigger>
             <PopoverContent
               align="end"
-              className="w-96 overflow-hidden p-0"
+              className="w-96 gap-0 overflow-hidden p-0"
               onMouseEnter={keepNotificationsOpen}
               onMouseLeave={scheduleNotificationsClose}
             >
