@@ -1,12 +1,12 @@
 import { Calendar as CalendarPrimitive } from "@/components/ui/calendar"
-import type { CalendarEvent } from "@/lib/calendar-types"
+import type { CalendarItem } from "@/lib/calendar-types"
 import { EVENT_COLORS } from "@/lib/calendar-types"
 import { cn } from "@/lib/utils"
 
 type MiniCalendarProps = {
   selectedDate: Date
   onSelectDate: (date: Date) => void
-  events: CalendarEvent[]
+  events: CalendarItem[]
 }
 
 export function MiniCalendar({
@@ -14,7 +14,21 @@ export function MiniCalendar({
   onSelectDate,
   events,
 }: MiniCalendarProps) {
-  const eventDateSet = new Set(events.map((e) => e.date))
+  const eventsByDate = new Map<
+    string,
+    { hex: string; count: number }
+  >()
+  for (const e of events) {
+    const existing = eventsByDate.get(e.date)
+    if (existing) {
+      existing.count++
+    } else {
+      eventsByDate.set(e.date, {
+        hex: EVENT_COLORS[e.color].hex,
+        count: 1,
+      })
+    }
+  }
 
   return (
     <CalendarPrimitive
@@ -27,7 +41,7 @@ export function MiniCalendar({
       components={{
         DayButton: ({ day, modifiers, ...props }) => {
           const dateStr = day.date.toISOString().slice(0, 10)
-          const hasEvents = eventDateSet.has(dateStr)
+          const dot = eventsByDate.get(dateStr)
           return (
             <button
               {...props}
@@ -42,15 +56,15 @@ export function MiniCalendar({
               )}
             >
               <span>{day.date.getDate()}</span>
-              {hasEvents && (
+              {dot && (
                 <span
-                  className={cn(
-                    "absolute bottom-1 flex gap-0.5",
-                    modifiers.selected && "opacity-80"
-                  )}
-                >
-                  <span className="size-1 rounded-full bg-current" />
-                </span>
+                  className="absolute bottom-1 size-1.5 rounded-full"
+                  style={{
+                    backgroundColor: modifiers.selected
+                      ? "currentColor"
+                      : dot.hex,
+                  }}
+                />
               )}
             </button>
           )

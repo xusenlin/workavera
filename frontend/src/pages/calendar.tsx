@@ -9,24 +9,24 @@ import { MiniCalendar } from "@/components/calendar/mini-calendar"
 import { EventList } from "@/components/calendar/event-list"
 import { EventDialog } from "@/components/calendar/event-dialog"
 import {
-  type CalendarEvent,
-  MOCK_EVENTS,
+  type CalendarItem,
+  MOCK_ITEMS,
 } from "@/lib/calendar-types"
 import { cn } from "@/lib/utils"
 
 export function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [viewMode, setViewMode] = useState<"day" | "week">("day")
-  const [events, setEvents] = useState<CalendarEvent[]>(MOCK_EVENTS)
+  const [events, setEvents] = useState<CalendarItem[]>(MOCK_ITEMS)
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null)
+  const [editingEvent, setEditingEvent] = useState<CalendarItem | null>(null)
 
   const handleNewEvent = () => {
     setEditingEvent(null)
     setDialogOpen(true)
   }
 
-  const handleEditEvent = (event: CalendarEvent) => {
+  const handleEditEvent = (event: CalendarItem) => {
     setEditingEvent(event)
     setDialogOpen(true)
   }
