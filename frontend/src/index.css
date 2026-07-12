@@ -256,7 +256,7 @@
 }
 
 .workavera-milkdown-editor .milkdown .milkdown-table-block {
-  margin: 1.75rem 0;
+  margin: 1.25rem 0;
   overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -272,12 +272,14 @@
 
 .workavera-milkdown-editor .milkdown .milkdown-table-block th,
 .workavera-milkdown-editor .milkdown .milkdown-table-block td {
-  min-width: 8rem;
-  padding: 0.65rem 0.85rem;
+  min-width: 6rem;
+  padding: 0.4rem 0.6rem;
   border: 1px solid var(--border);
   color: var(--foreground);
   text-align: left;
   vertical-align: top;
+  font-size: 0.95rem;
+  line-height: 1.5;
 }
 
 .workavera-milkdown-editor .milkdown .milkdown-table-block th {

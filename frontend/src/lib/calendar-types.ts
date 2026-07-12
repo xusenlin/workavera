@@ -1,36 +1,119 @@
+import {
+  addDays,
+  addWeeks,
+  endOfDay,
+  format,
+  isAfter,
+  isBefore,
+  startOfDay,
+} from "date-fns"
+
 export type EventColor = "blue" | "green" | "amber" | "red" | "purple"
+export type RecurrenceFrequency =
+  | "none"
+  | "daily"
+  | "weekly"
+  | "monthly"
+  | "yearly"
+export type TaskPriority = "none" | "low" | "medium" | "high" | "urgent"
 
-export type CalendarItemType = "event" | "task"
-
-export type CalendarItem = {
+export type CalendarEvent = {
   id: string
-  type: CalendarItemType
   title: string
   description?: string
-  date: string // YYYY-MM-DD
-  startTime: string // HH:mm
-  endTime: string // HH:mm
-  color: EventColor
-  /** For events: a physical/virtual location. For tasks: the source project name. */
+  startAt: string
+  endAt: string
+  allDay: boolean
+  timezone: string
   location?: string
-  /** Task-specific: priority level. */
-  priority?: "none" | "low" | "medium" | "high" | "urgent"
+  color: EventColor
+  recurrenceFrequency: RecurrenceFrequency
+  recurrenceInterval: number
+  reminderMinutesBefore: number
 }
+
+export type CalendarTask = {
+  id: string
+  title: string
+  description?: string
+  dueDate: string
+  projectId: string
+  projectName: string
+  priority: TaskPriority
+  completed: boolean
+}
+
+type CalendarItemBase = {
+  key: string
+  id: string
+  title: string
+  description?: string
+  date: string
+  color: EventColor
+}
+
+export type CalendarEventItem = CalendarItemBase & {
+  type: "event"
+  startTime: string
+  endTime: string
+  allDay: boolean
+  location?: string
+  event: CalendarEvent
+}
+
+export type CalendarTaskItem = CalendarItemBase & {
+  type: "task"
+  startTime: ""
+  endTime: ""
+  allDay: true
+  location: string
+  priority: TaskPriority
+  completed: boolean
+  projectId: string
+}
+
+export type CalendarItem = CalendarEventItem | CalendarTaskItem
 
 export const EVENT_COLORS: Record<
   EventColor,
   { hex: string; bg: string; text: string }
 > = {
-  blue: { hex: "#3b82f6", bg: "bg-blue-500/10", text: "text-blue-600 dark:text-blue-400" },
-  green: { hex: "#22c55e", bg: "bg-green-500/10", text: "text-green-600 dark:text-green-400" },
-  amber: { hex: "#f59e0b", bg: "bg-amber-500/10", text: "text-amber-600 dark:text-amber-400" },
-  red: { hex: "#ef4444", bg: "bg-red-500/10", text: "text-red-600 dark:text-red-400" },
-  purple: { hex: "#8b5cf6", bg: "bg-purple-500/10", text: "text-purple-600 dark:text-purple-400" },
+  blue: {
+    hex: "#3b82f6",
+    bg: "bg-blue-500/10",
+    text: "text-blue-600 dark:text-blue-400",
+  },
+  green: {
+    hex: "#22c55e",
+    bg: "bg-green-500/10",
+    text: "text-green-600 dark:text-green-400",
+  },
+  amber: {
+    hex: "#f59e0b",
+    bg: "bg-amber-500/10",
+    text: "text-amber-600 dark:text-amber-400",
+  },
+  red: {
+    hex: "#ef4444",
+    bg: "bg-red-500/10",
+    text: "text-red-600 dark:text-red-400",
+  },
+  purple: {
+    hex: "#8b5cf6",
+    bg: "bg-purple-500/10",
+    text: "text-purple-600 dark:text-purple-400",
+  },
 }
 
-export const COLOR_OPTIONS: EventColor[] = ["blue", "green", "amber", "red", "purple"]
+export const COLOR_OPTIONS: EventColor[] = [
+  "blue",
+  "green",
+  "amber",
+  "red",
+  "purple",
+]
 
-const PRIORITY_COLORS: Record<string, EventColor> = {
+const PRIORITY_COLORS: Record<TaskPriority, EventColor> = {
   none: "blue",
   low: "blue",
   medium: "amber",
@@ -38,170 +121,129 @@ const PRIORITY_COLORS: Record<string, EventColor> = {
   urgent: "red",
 }
 
-function todayISO(offsetDays = 0): string {
-  const d = new Date()
-  d.setDate(d.getDate() + offsetDays)
-  return d.toISOString().slice(0, 10)
+function monthlyOccurrence(base: Date, offset: number) {
+  const candidate = new Date(
+    base.getFullYear(),
+    base.getMonth() + offset,
+    base.getDate(),
+    base.getHours(),
+    base.getMinutes(),
+    base.getSeconds(),
+    base.getMilliseconds()
+  )
+  return candidate.getDate() === base.getDate() ? candidate : null
 }
 
-export const MOCK_ITEMS: CalendarItem[] = [
-  // ── Custom events ──
-  {
-    id: "evt-1",
-    type: "event",
-    title: "Team standup",
-    description: "Daily sync with the engineering team",
-    date: todayISO(0),
-    startTime: "09:00",
-    endTime: "09:30",
-    color: "blue",
-    location: "Zoom",
-  },
-  {
-    id: "evt-2",
-    type: "event",
-    title: "Design review",
-    description: "Review the new calendar page mockups",
-    date: todayISO(0),
-    startTime: "11:00",
-    endTime: "12:00",
-    color: "amber",
-    location: "Meeting room A",
-  },
-  {
-    id: "evt-3",
-    type: "event",
-    title: "Sprint planning",
-    date: todayISO(1),
-    startTime: "14:00",
-    endTime: "15:30",
-    color: "green",
-    location: "Conference room B",
-  },
-  {
-    id: "evt-4",
-    type: "event",
-    title: "1:1 with Alex",
-    date: todayISO(2),
-    startTime: "10:00",
-    endTime: "10:30",
-    color: "purple",
-  },
-  {
-    id: "evt-5",
-    type: "event",
-    title: "Client demo",
-    description: "Demo the new AI workspace features",
-    date: todayISO(6),
-    startTime: "13:00",
-    endTime: "14:00",
-    color: "amber",
-    location: "Client office",
-  },
-  {
-    id: "evt-6",
-    type: "event",
-    title: "Weekly retro",
-    date: todayISO(4),
-    startTime: "16:00",
-    endTime: "17:00",
-    color: "green",
-    location: "Zoom",
-  },
-  {
-    id: "evt-7",
-    type: "event",
-    title: "Architecture workshop",
-    date: todayISO(-2),
-    startTime: "10:00",
-    endTime: "12:00",
-    color: "purple",
-  },
-  {
-    id: "evt-8",
-    type: "event",
-    title: "Quarterly OKR review",
-    date: todayISO(9),
-    startTime: "09:30",
-    endTime: "11:00",
-    color: "red",
-    location: "Main hall",
-  },
+function yearlyOccurrence(base: Date, offset: number) {
+  const candidate = new Date(
+    base.getFullYear() + offset,
+    base.getMonth(),
+    base.getDate(),
+    base.getHours(),
+    base.getMinutes(),
+    base.getSeconds(),
+    base.getMilliseconds()
+  )
+  return candidate.getMonth() === base.getMonth() &&
+    candidate.getDate() === base.getDate()
+    ? candidate
+    : null
+}
 
-  // ── Board tasks (with dueDate) ──
-  {
-    id: "task-1",
-    type: "task",
-    title: "Implement calendar page",
-    description: "Build the calendar UI with mini calendar and event list",
-    date: todayISO(0),
-    startTime: "00:00",
-    endTime: "23:59",
-    color: PRIORITY_COLORS["high"],
-    location: "Workavera Platform",
-    priority: "high",
-  },
-  {
-    id: "task-2",
-    type: "task",
-    title: "Fix docs_replace validation bug",
-    date: todayISO(0),
-    startTime: "00:00",
-    endTime: "23:59",
-    color: PRIORITY_COLORS["urgent"],
-    location: "Workavera Platform",
-    priority: "urgent",
-  },
-  {
-    id: "task-3",
-    type: "task",
-    title: "Design API endpoints for events",
-    description: "Define REST API schema for calendar events CRUD",
-    date: todayISO(3),
-    startTime: "00:00",
-    endTime: "23:59",
-    color: PRIORITY_COLORS["medium"],
-    location: "Workavera Platform",
-    priority: "medium",
-  },
-  {
-    id: "task-4",
-    type: "task",
-    title: "Write migration tests",
-    date: todayISO(2),
-    startTime: "00:00",
-    endTime: "23:59",
-    color: PRIORITY_COLORS["low"],
-    location: "Board Engine",
-    priority: "low",
-  },
-  {
-    id: "task-5",
-    type: "task",
-    title: "Product launch v2.0",
-    description: "Final release deadline",
-    date: todayISO(5),
-    startTime: "00:00",
-    endTime: "23:59",
-    color: PRIORITY_COLORS["urgent"],
-    location: "Workavera Platform",
-    priority: "urgent",
-  },
-  {
-    id: "task-6",
-    type: "task",
-    title: "Code review: reading tools",
-    date: todayISO(-1),
-    startTime: "00:00",
-    endTime: "23:59",
-    color: PRIORITY_COLORS["none"],
-    location: "Board Engine",
-    priority: "none",
-  },
-]
+function occurrenceAt(
+  base: Date,
+  frequency: RecurrenceFrequency,
+  interval: number,
+  index: number
+) {
+  const offset = interval * index
+  if (frequency === "daily") return addDays(base, offset)
+  if (frequency === "weekly") return addWeeks(base, offset)
+  if (frequency === "monthly") return monthlyOccurrence(base, offset)
+  if (frequency === "yearly") return yearlyOccurrence(base, offset)
+  return index === 0 ? base : null
+}
 
-/** @deprecated Use CalendarItem instead. Kept for backward compat. */
-export type CalendarEvent = CalendarItem
+function expandEvent(
+  event: CalendarEvent,
+  rangeStart: Date,
+  rangeEnd: Date
+): CalendarEventItem[] {
+  const baseStart = new Date(event.startAt)
+  const baseEnd = new Date(event.endAt)
+  const duration = baseEnd.getTime() - baseStart.getTime()
+  const repeating = event.recurrenceFrequency !== "none"
+  const items: CalendarEventItem[] = []
 
-/** @deprecated Use MOCK_ITEMS instead. */
-export const MOCK_EVENTS = MOCK_ITEMS
+  // The range is UI-controlled and finite. This guard also protects malformed
+  // legacy records from producing an unbounded expansion.
+  for (let index = 0; index < 100_000; index++) {
+    const occurrence = occurrenceAt(
+      baseStart,
+      event.recurrenceFrequency,
+      Math.max(1, event.recurrenceInterval),
+      index
+    )
+    if (!occurrence) {
+      if (!repeating) break
+      continue
+    }
+    if (isAfter(occurrence, rangeEnd)) break
+    if (!isBefore(new Date(occurrence.getTime() + duration), rangeStart)) {
+      const occurrenceEnd = new Date(occurrence.getTime() + duration)
+      const date = format(occurrence, "yyyy-MM-dd")
+      items.push({
+        key: `event:${event.id}:${date}`,
+        id: event.id,
+        type: "event",
+        title: event.title,
+        description: event.description,
+        date,
+        startTime: format(occurrence, "HH:mm"),
+        endTime: format(occurrenceEnd, "HH:mm"),
+        allDay: event.allDay,
+        color: event.color,
+        location: event.location,
+        event,
+      })
+    }
+    if (!repeating) break
+  }
+  return items
+}
+
+export function buildCalendarItems(
+  events: CalendarEvent[],
+  tasks: CalendarTask[],
+  rangeStart: Date,
+  rangeEnd: Date
+): CalendarItem[] {
+  const start = startOfDay(rangeStart)
+  const end = endOfDay(rangeEnd)
+  const eventItems = events.flatMap((event) =>
+    expandEvent(event, start, end)
+  )
+  const taskItems: CalendarTaskItem[] = tasks
+    .filter((task) => {
+      const due = new Date(`${task.dueDate}T00:00:00`)
+      return !isBefore(due, start) && !isAfter(due, end)
+    })
+    .map((task) => ({
+      key: `task:${task.id}`,
+      id: task.id,
+      type: "task",
+      title: task.title,
+      description: task.description,
+      date: task.dueDate,
+      startTime: "",
+      endTime: "",
+      allDay: true,
+      color: PRIORITY_COLORS[task.priority],
+      location: task.projectName,
+      priority: task.priority,
+      completed: task.completed,
+      projectId: task.projectId,
+    }))
+
+  return [...eventItems, ...taskItems]
+}

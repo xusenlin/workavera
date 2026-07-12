@@ -2,6 +2,7 @@ import { Calendar as CalendarPrimitive } from "@/components/ui/calendar"
 import type { CalendarItem } from "@/lib/calendar-types"
 import { EVENT_COLORS } from "@/lib/calendar-types"
 import { cn } from "@/lib/utils"
+import { format } from "date-fns"
 
 type MiniCalendarProps = {
   selectedDate: Date
@@ -40,7 +41,7 @@ export function MiniCalendar({
       className="w-full"
       components={{
         DayButton: ({ day, modifiers, ...props }) => {
-          const dateStr = day.date.toISOString().slice(0, 10)
+          const dateStr = format(day.date, "yyyy-MM-dd")
           const dot = eventsByDate.get(dateStr)
           return (
             <button

@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { addDays, format } from "date-fns"
 
 import {
   Dialog,
@@ -13,10 +14,20 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { DatePicker } from "@/components/ui/date-picker"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
   type CalendarEvent,
+  type EventColor,
+  type RecurrenceFrequency,
   COLOR_OPTIONS,
   EVENT_COLORS,
 } from "@/lib/calendar-types"
+import type { CalendarEventInput } from "@/store/calendar"
 import { cn } from "@/lib/utils"
 
 type EventDialogProps = {
@@ -24,19 +35,54 @@ type EventDialogProps = {
   onOpenChange: (open: boolean) => void
   event: CalendarEvent | null
   defaultDate: string
-  onSave: (event: CalendarEvent) => void
+  onSave: (event: CalendarEventInput) => Promise<void>
 }
 
-function emptyForm(defaultDate: string): CalendarEvent {
+type EventForm = {
+  title: string
+  description: string
+  date: string
+  startTime: string
+  endTime: string
+  allDay: boolean
+  color: EventColor
+  location: string
+  recurrenceFrequency: RecurrenceFrequency
+  recurrenceInterval: string
+  reminderMinutesBefore: string
+}
+
+function emptyForm(defaultDate: string): EventForm {
   return {
-    id: "",
     title: "",
     description: "",
     date: defaultDate,
     startTime: "09:00",
     endTime: "10:00",
+    allDay: false,
     color: "blue",
     location: "",
+    recurrenceFrequency: "none",
+    recurrenceInterval: "1",
+    reminderMinutesBefore: "-1",
+  }
+}
+
+function formFromEvent(event: CalendarEvent): EventForm {
+  const start = new Date(event.startAt)
+  const end = new Date(event.endAt)
+  return {
+    title: event.title,
+    description: event.description ?? "",
+    date: format(start, "yyyy-MM-dd"),
+    startTime: format(start, "HH:mm"),
+    endTime: format(end, "HH:mm"),
+    allDay: event.allDay,
+    color: event.color,
+    location: event.location ?? "",
+    recurrenceFrequency: event.recurrenceFrequency,
+    recurrenceInterval: String(event.recurrenceInterval),
+    reminderMinutesBefore: String(event.reminderMinutesBefore),
   }
 }
 
@@ -47,46 +93,72 @@ export function EventDialog({
   defaultDate,
   onSave,
 }: EventDialogProps) {
-  const [form, setForm] = useState<CalendarEvent>(
-    event ?? emptyForm(defaultDate)
+  const [form, setForm] = useState<EventForm>(() =>
+    event ? formFromEvent(event) : emptyForm(defaultDate)
   )
-  const [lastOpen, setLastOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState("")
 
-  // Reset form when the dialog opens
-  if (open && !lastOpen) {
-    setForm(event ?? emptyForm(defaultDate))
-    setLastOpen(true)
-  }
-  if (!open && lastOpen) {
-    setLastOpen(false)
-  }
+  const isEditing = Boolean(event)
 
-  const isEditing = Boolean(event?.id)
-
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.title.trim()) return
-    onSave({
-      ...form,
-      id: form.id || `evt-${Date.now()}`,
-      title: form.title.trim(),
-    })
-    onOpenChange(false)
+    const interval = Number(form.recurrenceInterval)
+    if (!Number.isInteger(interval) || interval < 1) {
+      setError("Repeat interval must be a positive whole number.")
+      return
+    }
+
+    const start = form.allDay
+      ? new Date(`${form.date}T00:00:00`)
+      : new Date(`${form.date}T${form.startTime}:00`)
+    const end = form.allDay
+      ? addDays(start, 1)
+      : new Date(`${form.date}T${form.endTime}:00`)
+    if (end <= start) {
+      setError("End time must be after start time.")
+      return
+    }
+
+    setSaving(true)
+    setError("")
+    try {
+      await onSave({
+        title: form.title.trim(),
+        description: form.description.trim() || undefined,
+        startAt: start.toISOString(),
+        endAt: end.toISOString(),
+        allDay: form.allDay,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+        location: form.location.trim() || undefined,
+        color: form.color,
+        recurrenceFrequency: form.recurrenceFrequency,
+        recurrenceInterval: interval,
+        reminderMinutesBefore: Number(form.reminderMinutesBefore),
+      })
+      onOpenChange(false)
+    } catch {
+      setError("The event could not be saved. Please try again.")
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{isEditing ? "Edit event" : "New event"}</DialogTitle>
           <DialogDescription>
             {isEditing
-              ? "Update the event details below."
-              : "Create a new event on your calendar."}
+              ? event?.recurrenceFrequency === "none"
+                ? "Update the event details below."
+                : "Changes apply to the entire repeating series."
+              : "Create a new event on your personal calendar."}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Title */}
           <div className="space-y-1.5">
             <Label htmlFor="event-title">Title</Label>
             <Input
@@ -98,40 +170,130 @@ export function EventDialog({
             />
           </div>
 
-          {/* Date */}
           <div className="space-y-1.5">
             <Label>Date</Label>
             <DatePicker
               value={form.date}
-              onChange={(value) => setForm({ ...form, date: value })}
+              onChange={(date) => setForm({ ...form, date })}
             />
           </div>
 
-          {/* Time range */}
+          <label className="flex cursor-pointer items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={form.allDay}
+              onChange={(e) =>
+                setForm({ ...form, allDay: e.target.checked })
+              }
+              className="size-4 accent-primary"
+            />
+            All day
+          </label>
+
+          {!form.allDay && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="event-start">Start time</Label>
+                <Input
+                  id="event-start"
+                  type="time"
+                  value={form.startTime}
+                  onChange={(e) =>
+                    setForm({ ...form, startTime: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="event-end">End time</Label>
+                <Input
+                  id="event-end"
+                  type="time"
+                  value={form.endTime}
+                  onChange={(e) =>
+                    setForm({ ...form, endTime: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="event-start">Start time</Label>
-              <Input
-                id="event-start"
-                type="time"
-                value={form.startTime}
-                onChange={(e) =>
-                  setForm({ ...form, startTime: e.target.value })
+              <Label>Repeat</Label>
+              <Select
+                value={form.recurrenceFrequency}
+                onValueChange={(value) =>
+                  setForm({
+                    ...form,
+                    recurrenceFrequency: value as RecurrenceFrequency,
+                  })
                 }
-              />
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Does not repeat</SelectItem>
+                  <SelectItem value="daily">Daily</SelectItem>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                  <SelectItem value="yearly">Yearly</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="event-end">End time</Label>
-              <Input
-                id="event-end"
-                type="time"
-                value={form.endTime}
-                onChange={(e) => setForm({ ...form, endTime: e.target.value })}
-              />
-            </div>
+            {form.recurrenceFrequency !== "none" && (
+              <div className="space-y-1.5">
+                <Label htmlFor="event-interval">Every</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="event-interval"
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={form.recurrenceInterval}
+                    onChange={(e) =>
+                      setForm({ ...form, recurrenceInterval: e.target.value })
+                    }
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    {{
+                      daily: "day",
+                      weekly: "week",
+                      monthly: "month",
+                      yearly: "year",
+                    }[form.recurrenceFrequency] ?? "period"}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Color */}
+          <div className="space-y-1.5">
+            <Label>Reminder</Label>
+            <Select
+              value={form.reminderMinutesBefore}
+              onValueChange={(value) =>
+                setForm({ ...form, reminderMinutesBefore: value })
+              }
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="-1">No reminder</SelectItem>
+                <SelectItem value="0">At start time</SelectItem>
+                <SelectItem value="5">5 minutes before</SelectItem>
+                <SelectItem value="10">10 minutes before</SelectItem>
+                <SelectItem value="30">30 minutes before</SelectItem>
+                <SelectItem value="60">1 hour before</SelectItem>
+                <SelectItem value="1440">1 day before</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Saved for future notifications; delivery is not enabled yet.
+            </p>
+          </div>
+
           <div className="space-y-1.5">
             <Label>Color</Label>
             <div className="flex gap-2">
@@ -139,6 +301,7 @@ export function EventDialog({
                 <button
                   key={color}
                   type="button"
+                  aria-label={`Use ${color}`}
                   onClick={() => setForm({ ...form, color })}
                   className={cn(
                     "flex size-8 cursor-pointer items-center justify-center rounded-full border-2 transition-colors",
@@ -156,39 +319,40 @@ export function EventDialog({
             </div>
           </div>
 
-          {/* Location */}
           <div className="space-y-1.5">
             <Label htmlFor="event-location">Location (optional)</Label>
             <Input
               id="event-location"
-              value={form.location ?? ""}
-              onChange={(e) =>
-                setForm({ ...form, location: e.target.value })
-              }
+              value={form.location}
+              onChange={(e) => setForm({ ...form, location: e.target.value })}
               placeholder="Meeting room, Zoom, etc."
             />
           </div>
 
-          {/* Description */}
           <div className="space-y-1.5">
             <Label htmlFor="event-desc">Description (optional)</Label>
             <Input
               id="event-desc"
-              value={form.description ?? ""}
+              value={form.description}
               onChange={(e) =>
                 setForm({ ...form, description: e.target.value })
               }
               placeholder="Add a note..."
             />
           </div>
+
+          {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={!form.title.trim()}>
-            {isEditing ? "Save changes" : "Create event"}
+          <Button
+            onClick={() => void handleSave()}
+            disabled={!form.title.trim() || saving}
+          >
+            {saving ? "Saving..." : isEditing ? "Save changes" : "Create event"}
           </Button>
         </DialogFooter>
       </DialogContent>

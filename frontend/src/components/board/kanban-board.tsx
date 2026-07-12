@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 import {
   DndContext,
@@ -19,9 +19,13 @@ import { TodoCardSheet } from "./todo-card-sheet"
 
 type KanbanBoardProps = {
   onEditProject?: (project: Project) => void
+  requestedTaskId?: string
 }
 
-export function KanbanBoard({ onEditProject }: KanbanBoardProps) {
+export function KanbanBoard({
+  onEditProject,
+  requestedTaskId,
+}: KanbanBoardProps) {
   const projects = useBoardStore((store) => store.projects)
   const projectPage = useBoardStore((store) => store.projectPage)
   const projectTotalPages = useBoardStore((store) => store.projectTotalPages)
@@ -42,11 +46,32 @@ export function KanbanBoard({ onEditProject }: KanbanBoardProps) {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [addStateId, setAddStateId] = useState("")
   const [addProjectId, setAddProjectId] = useState("")
+  const openedRequestedTask = useRef<string | null>(null)
 
   useEffect(() => {
     void initialize()
     return dispose
   }, [dispose, initialize])
+
+  useEffect(() => {
+    if (
+      !initialized ||
+      !requestedTaskId ||
+      openedRequestedTask.current === requestedTaskId
+    ) {
+      return
+    }
+    const requestedTask = todos.find((todo) => todo.id === requestedTaskId)
+    if (!requestedTask) return
+    openedRequestedTask.current = requestedTaskId
+    const frame = requestAnimationFrame(() => {
+      setAddProjectId(requestedTask.projectId)
+      setAddStateId(requestedTask.stateId)
+      setEditingTodo(requestedTask)
+      setSheetOpen(true)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [initialized, requestedTaskId, todos])
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } })

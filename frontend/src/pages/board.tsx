@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useLocation } from "react-router"
 
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Add01Icon, KanbanIcon } from "@hugeicons/core-free-icons"
@@ -9,6 +10,9 @@ import { ProjectSheet } from "@/components/board/project-sheet"
 import type { Project } from "@/store/board"
 
 export function BoardPage() {
+  const location = useLocation()
+  const requestedTaskId =
+    (location.state as { taskId?: string } | null)?.taskId ?? undefined
   const [projectSheetOpen, setProjectSheetOpen] = useState(false)
   const [editingProject, setEditingProject] = useState<Project | null>(null)
 
@@ -47,7 +51,10 @@ export function BoardPage() {
         </Button>
       </div>
 
-      <KanbanBoard onEditProject={handleEditProject} />
+      <KanbanBoard
+        onEditProject={handleEditProject}
+        requestedTaskId={requestedTaskId}
+      />
 
       <ProjectSheet
         key={editingProject?.id || "new"}

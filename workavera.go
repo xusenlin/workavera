@@ -11,6 +11,7 @@ import (
 	"github.com/pocketbase/pocketbase/tools/osutils"
 
 	"github.com/xusenlin/workavera/internal/board"
+	calendarfeature "github.com/xusenlin/workavera/internal/calendar"
 	"github.com/xusenlin/workavera/internal/chat"
 	"github.com/xusenlin/workavera/internal/contacts"
 	"github.com/xusenlin/workavera/internal/docs"
@@ -27,6 +28,7 @@ func main() {
 	app.RootCmd.Use = "workavera"
 	app.RootCmd.Version = version
 	board.Register(app)
+	calendarfeature.Register(app)
 	contacts.Register(app)
 	docs.Register(app)
 	microapps.Register(app)
