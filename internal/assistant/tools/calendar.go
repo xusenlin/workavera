@@ -70,7 +70,7 @@ func newCalendarCreateEventTool(app core.App, actorID string) fantasy.AgentTool 
 				return calendarToolResult(app, actorID, "create event", nil, fmt.Errorf("invalid endAt: %w", err))
 			}
 			result, err := workcalendar.CreateEvent(ctx, app, actorID, workcalendar.CreateEventCommand{
-				Title: input.Title, Description: input.Description, StartAt: startAt, EndAt: endAt,
+				Title: input.Title, Description: normalizeEscapedText(input.Description), StartAt: startAt, EndAt: endAt,
 				AllDay: input.AllDay, Location: input.Location, Color: input.Color,
 				RecurrenceFrequency: input.RecurrenceFrequency, RecurrenceInterval: input.RecurrenceInterval,
 				ReminderMinutesBefore: input.ReminderMinutesBefore,
@@ -95,7 +95,7 @@ func newCalendarUpdateEventTool(app core.App, actorID string) fantasy.AgentTool 
 				return calendarToolResult(app, actorID, "update event", nil, fmt.Errorf("invalid endAt: %w", err))
 			}
 			result, err := workcalendar.UpdateEvent(ctx, app, actorID, workcalendar.UpdateEventCommand{
-				EventID: input.EventID, Title: input.Title, Description: input.Description, StartAt: startAt,
+				EventID: input.EventID, Title: input.Title, Description: normalizeEscapedTextPtr(input.Description), StartAt: startAt,
 				EndAt: endAt, AllDay: input.AllDay, Location: input.Location,
 				Color: input.Color, RecurrenceFrequency: input.RecurrenceFrequency,
 				RecurrenceInterval: input.RecurrenceInterval, ReminderMinutesBefore: input.ReminderMinutesBefore,

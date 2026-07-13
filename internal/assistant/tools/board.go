@@ -180,7 +180,7 @@ func newBoardCreateProjectTool(app core.App, actorID string) fantasy.AgentTool {
 		"board_create_project",
 		"Create a Board project owned by the current user, either blank or from a template returned by board_list_templates. This tool never deletes resources.",
 		func(ctx context.Context, input boardCreateProjectInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
-			result, err := board.CreateProject(ctx, app, actorID, board.CreateProjectCommand{Name: input.Name, Description: input.Description, TemplateID: input.TemplateID})
+			result, err := board.CreateProject(ctx, app, actorID, board.CreateProjectCommand{Name: input.Name, Description: normalizeEscapedText(input.Description), TemplateID: input.TemplateID})
 			return boardToolResult(app, actorID, "create project", result, err)
 		},
 	)
@@ -191,7 +191,7 @@ func newBoardUpdateProjectTool(app core.App, actorID string) fantasy.AgentTool {
 		"board_update_project",
 		"Update a project name or description. Call board_get_project first and only use when capabilities.canEditProject is true. Server authorization requires the current user to be the owner.",
 		func(ctx context.Context, input boardUpdateProjectInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
-			result, err := board.UpdateProject(ctx, app, actorID, board.UpdateProjectCommand{ProjectID: input.ProjectID, Name: input.Name, Description: input.Description})
+			result, err := board.UpdateProject(ctx, app, actorID, board.UpdateProjectCommand{ProjectID: input.ProjectID, Name: input.Name, Description: normalizeEscapedTextPtr(input.Description)})
 			return boardToolResult(app, actorID, "update project", result, err)
 		},
 	)
@@ -235,7 +235,7 @@ func newBoardCreateTaskTool(app core.App, actorID string) fantasy.AgentTool {
 		"board_create_task",
 		"Create a task. Call board_get_project first, require capabilities.canEditTasks, and use only returned state, label, and participant IDs. Server authorization permits owner, admin, and member roles but denies viewers.",
 		func(ctx context.Context, input boardCreateTaskInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
-			result, err := board.CreateTask(ctx, app, actorID, board.CreateTaskCommand{ProjectID: input.ProjectID, StateID: input.StateID, Title: input.Title, Description: input.Description, Priority: input.Priority, DueDate: input.DueDate, LabelIDs: input.LabelIDs, AssigneeIDs: input.AssigneeIDs})
+			result, err := board.CreateTask(ctx, app, actorID, board.CreateTaskCommand{ProjectID: input.ProjectID, StateID: input.StateID, Title: input.Title, Description: normalizeEscapedText(input.Description), Priority: input.Priority, DueDate: input.DueDate, LabelIDs: input.LabelIDs, AssigneeIDs: input.AssigneeIDs})
 			return boardToolResult(app, actorID, "create task", result, err)
 		},
 	)
@@ -246,7 +246,7 @@ func newBoardUpdateTaskTool(app core.App, actorID string) fantasy.AgentTool {
 		"board_update_task",
 		"Patch an existing task without changing its project. Call board_get_project first, require capabilities.canEditTasks, and use only returned state, label, and participant IDs. Omitted fields stay unchanged; empty arrays clear relations; null dueDate clears it.",
 		func(ctx context.Context, input boardUpdateTaskInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
-			result, err := board.UpdateTask(ctx, app, actorID, board.UpdateTaskCommand{TaskID: input.TaskID, Title: input.Title, Description: input.Description, StateID: input.StateID, Priority: input.Priority, DueDate: input.DueDate, DueDateSet: input.dueDateSet, LabelIDs: input.LabelIDs, AssigneeIDs: input.AssigneeIDs})
+			result, err := board.UpdateTask(ctx, app, actorID, board.UpdateTaskCommand{TaskID: input.TaskID, Title: input.Title, Description: normalizeEscapedTextPtr(input.Description), StateID: input.StateID, Priority: input.Priority, DueDate: input.DueDate, DueDateSet: input.dueDateSet, LabelIDs: input.LabelIDs, AssigneeIDs: input.AssigneeIDs})
 			return boardToolResult(app, actorID, "update task", result, err)
 		},
 	)
