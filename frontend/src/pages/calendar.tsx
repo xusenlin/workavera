@@ -12,7 +12,11 @@ import { useNavigate, useSearchParams } from "react-router"
 import { toast } from "sonner"
 
 import { HugeiconsIcon } from "@hugeicons/react"
-import { Add01Icon, Calendar03Icon } from "@hugeicons/core-free-icons"
+import {
+  Add01Icon,
+  Calendar03Icon,
+  ListViewIcon,
+} from "@hugeicons/core-free-icons"
 
 import {
   AlertDialog,
@@ -28,6 +32,7 @@ import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { MiniCalendar } from "@/components/calendar/mini-calendar"
 import { EventList } from "@/components/calendar/event-list"
+import { AllEventsList } from "@/components/calendar/all-events-list"
 import { EventSheet } from "@/components/calendar/event-sheet"
 import { buildCalendarItems, type CalendarEvent } from "@/lib/calendar-types"
 import { cn } from "@/lib/utils"
@@ -57,6 +62,7 @@ export function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [displayedMonth, setDisplayedMonth] = useState(new Date())
   const [viewMode, setViewMode] = useState<"day" | "week">("day")
+  const [panel, setPanel] = useState<"calendar" | "events">("calendar")
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null)
   const [deletingEvent, setDeletingEvent] = useState<CalendarEvent | null>(null)
@@ -110,6 +116,12 @@ export function CalendarPage() {
     else await createEvent(input)
   }
 
+  const handleEditEvent = (event: CalendarEvent) => {
+    setEditingEvent(event)
+    setDialogOpen(true)
+    navigate(workspaceRecordUrl("calendar", event.id), { replace: true })
+  }
+
   const moveSelection = (direction: -1 | 1) => {
     const nextDate =
       viewMode === "day"
@@ -145,7 +157,7 @@ export function CalendarPage() {
               />
             </div>
             <h1 className="text-2xl font-semibold tracking-tight">Calendar</h1>
-            {dayItemCount > 0 && viewMode === "day" && (
+            {panel === "calendar" && dayItemCount > 0 && viewMode === "day" && (
               <span className="rounded-full bg-secondary px-2 py-0.5 text-xs text-secondary-foreground">
                 {dayItemCount} {dayItemCount === 1 ? "item" : "items"}
               </span>
@@ -156,19 +168,31 @@ export function CalendarPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <Button variant="outline" size="sm" onClick={() => moveSelection(-1)}>
-            Previous
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => selectDate(new Date())}
-          >
-            Today
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => moveSelection(1)}>
-            Next
-          </Button>
+          {panel === "calendar" && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => moveSelection(-1)}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => selectDate(new Date())}
+              >
+                Today
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => moveSelection(1)}
+              >
+                Next
+              </Button>
+            </>
+          )}
           <Button
             variant="secondary"
             size="sm"
@@ -208,44 +232,72 @@ export function CalendarPage() {
             />
           </div>
 
-          <div className="flex gap-1 rounded-lg border bg-card p-1">
-            {(["day", "week"] as const).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => setViewMode(mode)}
-                className={cn(
-                  "flex-1 cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium capitalize transition-colors",
-                  viewMode === mode
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {mode}
-              </button>
-            ))}
+          <div className="space-y-2">
+            <div className="flex gap-1 rounded-lg border bg-card p-1">
+              {(["day", "week"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => {
+                    setViewMode(mode)
+                    setPanel("calendar")
+                  }}
+                  className={cn(
+                    "flex-1 cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium capitalize transition-colors",
+                    panel === "calendar" && viewMode === mode
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setPanel("events")}
+              className={cn(
+                "flex w-full cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
+                panel === "events"
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "bg-card text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <HugeiconsIcon
+                icon={ListViewIcon}
+                strokeWidth={2}
+                className="size-4 shrink-0"
+              />
+              All custom events
+            </button>
           </div>
         </div>
 
         <div className="min-w-0 flex-1">
-          <EventList
-            items={items}
-            viewMode={viewMode}
-            selectedDate={selectedDate}
-            onDeleteEvent={setDeletingEvent}
-            onEditEvent={(event) => {
-              setEditingEvent(event)
-              setDialogOpen(true)
-              navigate(workspaceRecordUrl("calendar", event.id), {
-                replace: true,
-              })
-            }}
-            onOpenTask={(taskId, projectId) =>
-              navigate(workspaceRecordUrl("board", taskId), {
-                state: { projectId },
-              })
-            }
-          />
+          {panel === "events" ? (
+            <AllEventsList
+              events={events}
+              timezone={timezone}
+              onEditEvent={handleEditEvent}
+              onDeleteEvent={setDeletingEvent}
+            />
+          ) : (
+            <div className="max-h-[calc(100vh-12rem)] overflow-y-auto pr-1">
+              <EventList
+                items={items}
+                viewMode={viewMode}
+                selectedDate={selectedDate}
+                onDeleteEvent={setDeletingEvent}
+                onEditEvent={handleEditEvent}
+                onOpenTask={(taskId, projectId) =>
+                  navigate(workspaceRecordUrl("board", taskId), {
+                    state: { projectId },
+                  })
+                }
+              />
+            </div>
+          )}
         </div>
       </div>
 

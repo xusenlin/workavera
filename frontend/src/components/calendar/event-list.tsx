@@ -167,9 +167,16 @@ function ItemCard({
           : onOpenTask(item.id, item.projectId)
       }
     >
-      <div className="w-1 shrink-0" style={{ backgroundColor: color.hex }} />
+      {isTask && (
+        <div className="w-1 shrink-0" style={{ backgroundColor: color.hex }} />
+      )}
 
-      <div className="flex min-w-0 flex-1 items-center justify-between gap-3 py-2.5 pr-3">
+      <div
+        className={cn(
+          "flex min-w-0 flex-1 items-center justify-between gap-3 py-2.5 pr-3",
+          !isTask && "pl-3"
+        )}
+      >
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <HugeiconsIcon

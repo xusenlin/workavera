@@ -21,7 +21,7 @@ export function MiniCalendar({
 }: MiniCalendarProps) {
   const eventsByDate = new Map<
     string,
-    { hex: string; count: number }
+    { hex: string; count: number; isTask: boolean }
   >()
   for (const e of events) {
     const existing = eventsByDate.get(e.date)
@@ -31,6 +31,7 @@ export function MiniCalendar({
       eventsByDate.set(e.date, {
         hex: EVENT_COLORS[e.color].hex,
         count: 1,
+        isTask: e.type === "task",
       })
     }
   }
@@ -66,11 +67,21 @@ export function MiniCalendar({
               {dot && (
                 <span
                   className="absolute bottom-1 size-1.5 rounded-full"
-                  style={{
-                    backgroundColor: modifiers.selected
-                      ? "currentColor"
-                      : dot.hex,
-                  }}
+                  style={
+                    dot.isTask
+                      ? {
+                          backgroundColor: modifiers.selected
+                            ? "currentColor"
+                            : dot.hex,
+                        }
+                      : {
+                          // Custom events render as a hollow ring to set them
+                          // apart from priority-colored task dots.
+                          border: `1.5px solid ${
+                            modifiers.selected ? "currentColor" : dot.hex
+                          }`,
+                        }
+                  }
                 />
               )}
             </button>
