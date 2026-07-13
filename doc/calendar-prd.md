@@ -1,119 +1,143 @@
-# Calendar 模块 PRD
+# Calendar Product Requirements Document
 
-## 1. 背景
+[简体中文](./calendar-prd.zh-CN.md)
 
-Workavera 的 Board 已支持任务截止日期，但缺少统一的时间视图；现有 Calendar 页面仅使用前端 mock 数据。Calendar 首版将作为个人时间管理入口，统一展示个人事件和当前用户可见的 Board 到期任务。
+> Implementation baseline: Workavera `0.0.2`, verified against commit `3684be1` on 2026-07-13.
 
-## 2. 目标
+## 1. Purpose
 
-- 用户可以创建、查看、编辑和删除仅自己可见的日历事件。
-- Calendar 同时展示当前用户有权查看且设置了截止日期的 Board 任务。
-- 事件支持按天、周、月、年进行简单重复。
-- 事件可以保存一个提醒提前量，供后续通知系统消费。
-- 数据通过 PocketBase 持久化并实时同步。
+Calendar is Workavera's time-commitment layer. It presents personal calendar events and visible Board task deadlines in one place, using the administrator-configured system timezone for editing, recurrence expansion, AI operations, and reminder scheduling.
 
-## 3. 非目标
+## 2. Goals
 
-- 首版不支持共享事件、参与者或事件可见范围。
-- 首版不支持外部日历同步和事件来源字段。
-- 首版不支持一周多天、重复截止日期、重复次数或复杂 RRULE。
-- 首版不支持编辑或删除单个重复实例；操作始终作用于整个系列。
-- 首版不实现后台、邮件或浏览器推送，只保存提醒设置。
-- Calendar 不复制 Board 的任务管理能力，也不允许从 Calendar 删除任务。
+- Create, read, edit, and delete private calendar events.
+- Display due-dated Board tasks that the current user can access.
+- Support all-day and timed events, colors, location, description, simple recurrence, and reminders.
+- Provide day, week, mini-calendar, and all-custom-events views.
+- Persist events in PocketBase and synchronize event/task changes in real time.
+- Deliver deduplicated in-app reminders for configured event occurrences.
+- Let Chat query schedules and create or update personal events.
 
-## 4. 日历项目类型
+## 3. Non-goals
 
-Calendar 在展示层合并两种独立来源：
+- Shared events, guests, invitations, or per-event visibility settings.
+- External calendar import, export, or synchronization.
+- Complex RRULE patterns, multiple weekdays, recurrence end dates, or occurrence counts.
+- Editing or deleting a single occurrence; mutations apply to the entire series.
+- Email, browser-push, SMS, or mobile-push delivery.
+- Editing or deleting Board tasks from Calendar.
+- Event deletion through Assistant tools.
 
-- `event`：来自 `calendar_events`，是用户创建的个人事件。
-- `task`：来自 `board_tasks`，以 `due_date` 作为全天截止事项。
+## 4. Calendar item types
 
-两种记录不共享数据库表，也不需要 `source_type` 或 `source_id`。前端列表键使用 `event:<id>` 和 `task:<id>`，点击事件打开事件编辑器，点击任务进入 Board。
+Calendar merges two sources in the presentation layer:
 
-## 5. `calendar_events` 集合
-
-| 字段 | 类型 | 必填 | 说明 |
+| Type | Source | Time semantics | Interaction |
 | --- | --- | --- | --- |
-| `owner` | relation → users | 是 | 事件所属用户 |
-| `title` | text | 是 | 事件标题 |
-| `description` | text | 否 | 事件说明 |
-| `start_at` | date | 是 | 开始时间 |
-| `end_at` | date | 是 | 结束时间，必须晚于开始时间 |
-| `all_day` | bool | 否 | 是否为全天事件 |
-| `timezone` | text | 是 | 管理员在 `configs/system.timezone` 中配置的 IANA 时区 |
-| `location` | text | 否 | 地点或会议链接 |
-| `color` | select | 是 | `blue / green / amber / red / purple` |
-| `recurrence_frequency` | select | 是 | `none / daily / weekly / monthly / yearly` |
-| `recurrence_interval` | number | 是 | 重复间隔，最小为 1 |
-| `reminder_minutes_before` | number | 是 | 提前分钟数；`-1` 表示不提醒 |
-| `created` / `updated` | autodate | 是 | 时间戳 |
+| Event | `calendar_events` | Timed or all-day; may repeat | Opens the event sheet |
+| Task | `board_tasks` | `due_date` shown as an all-day deadline | Opens the task in Board |
 
-索引：`owner, start_at`。
+The records remain independent. UI keys are namespaced as `event:<id>` and `task:<id>`.
 
-## 6. 重复规则
+## 5. Event data model
 
-重复系列只保存一条主体记录，并在当前日历范围内动态展开：
+### `calendar_events`
 
-- `daily + 1`：每天重复。
-- `weekly + 1`：每周在开始日期相同的星期重复。
-- `monthly + 1`：每月在相同日期重复；月份不存在该日期时跳过。
-- `yearly + 1`：每年在相同月日重复；2 月 29 日仅在闰年出现。
-- `interval > 1`：每隔对应数量的周期重复。
+| Field | Type | Notes |
+| --- | --- | --- |
+| `owner` | relation → users | Required; cascade delete |
+| `title` | text | Required, max 240 characters |
+| `description` | text | Optional, max 10,000 characters |
+| `start_at` | date | Required instant |
+| `end_at` | date | Required and later than `start_at` |
+| `all_day` | bool | All-day presentation flag |
+| `timezone` | text | IANA timezone copied from `system.timezone` |
+| `location` | text | Optional place or meeting URL, max 500 characters |
+| `color` | select | `blue`, `green`, `amber`, `red`, or `purple` |
+| `recurrence_frequency` | select | `none`, `daily`, `weekly`, `monthly`, or `yearly` |
+| `recurrence_interval` | number | Positive whole number |
+| `reminder_minutes_before` | number | `-1`, `0`, `5`, `10`, `30`, `60`, or `1440` |
+| `created`, `updated` | autodate | Record timestamps |
 
-重复事件不会自动结束。编辑和删除提示用户操作会影响整个系列，并直接更新或删除主体记录。
+Events are indexed by `owner, start_at`.
 
-## 7. 提醒
+## 6. Timezone and recurrence rules
 
-事件编辑器提供：不提醒、开始时、提前 5 分钟、10 分钟、30 分钟、1 小时和 1 天。首版只保存 `reminder_minutes_before`；通知调度、送达和去重由后续通知模块实现。
+- `configs/system.timezone` is the authoritative IANA timezone; the default seed value is `Asia/Shanghai`.
+- The server overwrites an event's `timezone` with the configured system timezone on create and update.
+- The UI converts local date/time input in the system timezone to instants before persistence.
+- AI event tools accept `YYYY-MM-DDTHH:MM:SS` local values and parse them in the system timezone.
+- A repeating series stores one base record and expands occurrences for requested dates.
+- Daily recurrence advances by calendar days; weekly recurrence preserves the weekday.
+- Monthly recurrence preserves the day of month and skips months without that day.
+- Yearly recurrence preserves month and day; February 29 appears only in leap years.
+- `recurrence_interval` applies to the selected unit, such as every two weeks.
+- A non-repeating event appears on its start date. An occurrence keeps the base event duration.
 
-## 8. 页面与交互
+## 7. Reminders and notifications
 
-- 顶部提供 Today、上一周期、下一周期和 New event。
-- 左侧迷你月历标记有内容的日期。
-- 主区域首版提供日视图和周列表视图。
-- 普通事件按开始时间排序；任务作为全天事项优先展示。
-- 事件支持全天、日期、开始/结束时间、颜色、地点、描述、重复和提醒设置。
-- 重复事件卡片显示重复标记；任务显示项目、优先级和完成状态。
-- 完成状态通过 `board_project_states.category = completed` 判断。
-- 任务不能在 Calendar 中删除或作为普通事件编辑。
+The notification scheduler runs every six minutes and uses the system timezone.
 
-## 9. 权限
+- Events with `reminder_minutes_before >= 0` generate an in-app `calendar_event` notification when the reminder time is due.
+- Repeating events are expanded around the scheduler window before reminder evaluation.
+- The dedupe key contains event ID, occurrence start, and recipient, so one occurrence produces at most one notification per owner.
+- Notification data includes `eventId`, `occurrenceDate`, and `instanceStart` for deep linking.
+- Realtime notification subscriptions update the header dropdown and Notifications page.
 
-- List/View：仅 `owner = @request.auth.id`。
-- Create：必须登录，且 `owner = @request.auth.id`。
-- Update：仅 owner，且不能修改 owner。
-- Delete：仅 owner。
-- Board 任务继续使用现有项目权限规则。
+Board tasks also generate a `task_due` notification after 09:00 on their due date when their state is not completed. Assignees receive the notification; an unassigned task falls back to the project owner.
 
-## 10. 验收标准
+## 8. User experience
 
-- 刷新页面后个人事件仍存在，其他用户无法读取或修改。
-- 可创建、编辑和删除普通事件及整个重复系列。
-- 日、周视图与迷你月历能展示范围内展开后的重复实例。
-- 可见 Board 任务在截止日期当天显示为 task，且不会被事件编辑器修改或删除。
-- 标题为空、结束时间不晚于开始时间等无效数据不能保存。
-- 提醒和重复设置可持久化。
-- 两个同用户登录会话可实时看到事件变更。
+- The header provides Previous, Today, Next, and New event actions.
+- The left panel contains a mini-calendar, Day/Week selectors, and All custom events.
+- The mini-calendar marks dates containing expanded events or task deadlines.
+- Day and Week views put all-day task deadlines before timed events and sort events by start time.
+- All custom events lists every owned base event, including repeating series, sorted by base start time.
+- The right-side event sheet edits title, date, start/end time, all-day status, recurrence, reminder, color, location, and description.
+- Editing or deleting a repeating event clearly states that the entire series is affected.
+- Task items display project, priority, and completion state and deep-link to Board.
+- URLs use the shared `record` query parameter; event notifications may also include an `occurrence` date.
 
-## 11. Calendar AI 工具
+## 9. Permissions and realtime
+
+- List/View: authenticated owner only.
+- Create: authenticated user for themselves; the server enforces `owner = auth.id`.
+- Update/Delete: owner only; owner cannot be changed.
+- Board task visibility continues to follow Board project owner/member access.
+
+The frontend loads owned events, visible due-dated tasks, and the system timezone, then subscribes to `calendar_events` and `board_tasks`. Record changes update the combined calendar without a page refresh.
+
+## 10. Assistant tools
 
 ### `calendar_get_schedule`
 
-- 输入一个 `dates` 数组，元素使用 `YYYY-MM-DD`，一次最多查询 31 个去重日期。
-- 返回按日期分组的全部个人事件和当前用户可见的 Board 到期任务。
-- 服务端展开简单重复事件，并返回事件主体 ID、实例开始时间和实例结束时间。
-- Task 继续遵循 Board 项目的 owner/member 可见权限。
+- Accepts one to 31 unique `YYYY-MM-DD` dates.
+- Returns a sorted day list containing all personal event occurrences and visible Board task deadlines.
+- Returns event IDs, occurrence dates, instance start/end values, project/task metadata, and completed state.
 
 ### `calendar_create_event`
 
-- 为当前用户创建个人 `calendar_events` 记录。
-- 定时事件提供系统时区下的本地开始/结束时间，不接受 AI 自选时区。
-- 服务端使用管理员配置的 `system.timezone` 解析时间并保存带偏移的时间点。
-- 颜色、重复频率、重复间隔和提醒规则与 Calendar UI 使用相同的校验。
+- Creates an event owned by the current user after an explicit request.
+- Requires local start and end values in the configured system timezone.
+- Applies the same color, recurrence, interval, reminder, and time validation as the UI.
 
 ### `calendar_update_event`
 
-- 使用 `calendar_get_schedule` 返回的事件 ID 更新当前用户自己的事件。
-- 未提供的字段保持不变，空描述或地点可以清空对应字段。
-- 更新重复事件时作用于整个系列。
-- 工具不能修改 Board Task，也不提供事件删除能力。
+- Patches an owned event identified through schedule lookup.
+- Omitted fields remain unchanged; empty description or location clears the field.
+- Updates the whole repeating series.
+- Cannot modify Board tasks.
+
+No Calendar deletion tool is registered.
+
+## 11. Acceptance criteria
+
+- Personal events remain private and persist across refreshes.
+- Timed, all-day, and repeating events render on the correct local date in the configured system timezone.
+- Invalid titles, time ranges, colors, recurrence settings, and reminder values are rejected by the server.
+- Editing or deleting a repeating event affects the complete series.
+- Visible Board deadlines appear without becoming editable Calendar events.
+- Day, Week, mini-calendar, and All custom events views remain consistent.
+- Eligible event reminders and task-due reminders create one deduplicated in-app notification per recipient and occurrence/date.
+- Two sessions for the same user receive realtime event and notification updates.
+- Assistant schedule results match the UI's timezone, recurrence, visibility, and completion rules.

@@ -1,195 +1,184 @@
-# Fantasy Chat 模块实施计划
+# Chat Product Requirements and Fantasy Architecture
 
-## 决策
+[简体中文](./chat-fantasy-plan.zh-CN.md)
 
-- 后端采用 `charm.land/fantasy`；模型、消息和流回调适配封装在 `internal/agent`，应用工具通过组合根注入。
-- 项目只暴露两种 AI SDK UI 兼容的数据：最终消息 `ChatMessage` 和流式增量 `StreamChunk`。
-- 数据库的 `parts` 与前端 `UIMessage.parts` 使用同一种 JSON 结构；不再使用 `MessageBlock`、`thinking`、`tool_use`、`tool_result`。
-- 每次发送都必须显式提供 `modelConfigId`。会话不保存默认、上次或偏好模型。
-- 输入框初始模型来自当前用户 `llm_models.is_default = true` 的配置；没有默认配置时必须手动选择。
-- 模型配置关系和调用时快照保存在 assistant message 上。
-- 浏览器断开仅移除 SSE 订阅者，不取消后台生成。后台任务继续聚合并保存结果；显式停止、服务关闭或运行超时才取消 Agent context。
+> Implementation baseline: Workavera `0.0.2`, verified against commit `3684be1` on 2026-07-13.
 
-## 数据流
+## 1. Purpose
 
-```text
-Fantasy callbacks
-    -> internal/agent Fantasy adapter
-    -> AI SDK UI compatible StreamChunk
-       -> SSE subscriber (连接存在时)
-       -> Go reducer
-          -> ChatMessage snapshot
-             -> PocketBase chat_messages.parts/metadata
-```
+Chat is Workavera's AI workspace entry point. It combines user-owned model configurations, durable conversations, streamed reasoning and tool output, and permission-aware workspace actions. A conversation can search workspace context and create or update supported records only when the user explicitly requests a mutation.
 
-`StreamChunk` 对齐 AI SDK UI Message Stream v1，包括：
+## 2. Goals
 
-- `start`、`finish`、`abort`、`error`
-- `start-step`、`finish-step`
-- `text-start`、`text-delta`、`text-end`
-- `reasoning-start`、`reasoning-delta`、`reasoning-end`
-- `tool-input-start`、`tool-input-delta`、`tool-input-available`
-- `tool-output-available`、`tool-output-error`
-- `source-url`、`source-document`、`file`
-- `message-metadata`
+- Persist conversations and AI SDK UI-compatible message parts in PocketBase.
+- Stream text, reasoning, sources, and dynamic tool states through SSE.
+- Support OpenAI, OpenAI-compatible, Anthropic, and Google model configurations.
+- Require an explicit user-owned model configuration for every turn.
+- Continue a run when the browser disconnects and allow the client to reconnect while the process remains alive.
+- Let users explicitly stop a run and show active runs across the application.
+- Reconstruct multi-step tool history correctly for subsequent model calls.
+- Keep provider credentials server-side and expose only safe message metadata and errors.
+- Provide custom UI cards and deep links for workspace tool results.
 
-工具定义在 Go 后端，因此 UI 工具流统一设置 `dynamic: true`，最终聚合为 `DynamicToolUIPart`。
+## 3. Non-goals
 
-SSE 出网前执行 UI Message Stream v1 必填字段校验。Fantasy 产生的空 text、reasoning、tool-input delta 会被忽略，避免 `omitempty` 生成缺字段事件并触发前端 Zod 中断。`input` 和 `output` 的 JSON `null` 是合法值，必须保留。
+- Shared conversations or collaborative chat editing.
+- Anonymous chat or server-owned model selection.
+- Durable multi-instance job execution; active runs are process-local.
+- Automatic retry of failed model or tool calls.
+- Allowing the browser to submit authoritative conversation history.
+- Unconfirmed workspace mutations.
+- Destructive Board or Calendar Assistant tools.
 
-持久化的 `step-start` 是模型历史回放边界。多步工具消息必须恢复为 `assistant(tool_use) -> tool(tool_result) -> assistant(final text)`，reasoning provider metadata（包括只有签名、没有文本的 part）也必须一并恢复。
+## 4. Model configuration
 
-## 工具链与依赖
+Each chat turn references a record in `llm_models` owned by the caller.
 
-### Go
+- Supported protocols: `openai`, `openai-compatible`, `anthropic`, and `google`.
+- Configuration includes display name, model ID, base URL, API key, optional maximum output tokens, and default status.
+- The first model created for a user becomes the default; users can choose another default.
+- The prompt selects the conversation's last-used `model_config` when available, otherwise the user's default.
+- Model selection is submitted with each run and updates the conversation's last-used `model_config`.
+- The assistant message stores a model relation plus a metadata snapshot containing configuration ID, model ID, display name, and protocol.
+- Received shared model copies record `shared_from` and cannot be shared onward; only the original author can share a configuration.
+- API keys are hidden from Records APIs and are returned only as `hasApiKey` through authenticated custom endpoints.
 
-- `go.mod` 升级到 Go 1.26.4。
-- Docker builder 升级到 `golang:1.26.4-alpine`。
-- README 环境要求同步为 Go 1.26.4+。
-- 固定 `charm.land/fantasy v0.35.0`。
-- Fantasy 工具循环最多执行 12 step，外层运行仍保留 10 分钟超时。
+Fantasy uses at most 12 agent steps and defaults to 16,384 output tokens unless the selected configuration provides a positive limit.
 
-### 应用工具
-
-- `internal/assistant/tools` 只负责把应用能力包装为 Fantasy 工具和注册工具。
-- `internal/contacts`、`internal/board` 负责领域查询与可见性；工具不得直接复制 collection 权限规则。
-- 工具工厂在 Chat 组合根用 PocketBase App 创建，再按当前 `actorId` 为每次运行创建工具。
-- 列表型工具必须有默认和最大返回数量，避免把整个集合塞入模型上下文。
-- 联系人工具仅返回非敏感摘要；手机号等资料不默认发送给外部模型。
-- Mock 工具不进入生产注册表。
-
-### 前端
-
-- `ai` 对齐到 `7.0.15`。
-- 安装 `@ai-sdk/react 4.0.16`，使用 `useChat` 管理流式消息、状态、错误和停止请求。
-- 继续使用现有 AI Elements 组件渲染 Markdown、reasoning 和工具状态。
-- Zustand 只管理会话目录；不再保存和归并消息流。
-
-## PocketBase 集合
+## 5. Data model
 
 ### `chat_conversations`
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Notes |
 | --- | --- | --- |
-| `owner` | Relation -> users | 所有者，用户删除时级联删除 |
-| `title` | Text | 会话标题 |
-| `status` | Select | `active`、`archived` |
-| `pinned` | Bool | 是否置顶 |
-| `last_message_at` | Date | 会话排序时间 |
-| `message_count` | Number | 缓存消息数 |
-| `tool_call_count` | Number | 缓存工具调用数 |
-| `input_tokens` | Number | 累计输入 token |
-| `output_tokens` | Number | 累计输出 token |
-| `total_tokens` | Number | 累计总 token |
-| `created`、`updated` | Autodate | 时间戳 |
+| `owner` | relation → users | Required, cascade delete |
+| `model_config` | relation → llm_models | Last model used by this conversation |
+| `title` | text | Required, max 200 characters; defaults to `New conversation` |
+| `status` | select | `active` or `archived` |
+| `pinned` | bool | Personal pin; maximum six pinned conversations |
+| `last_message_at` | date | Turn ordering timestamp |
+| `message_count` | number | Cached total message count |
+| `tool_call_count` | number | Cached completed dynamic tool-call count |
+| `input_tokens` | number | Accumulated input usage |
+| `output_tokens` | number | Accumulated output usage |
+| `total_tokens` | number | Accumulated total usage |
+| `created`, `updated` | autodate | Record timestamps |
 
-会话中不保存任何模型字段。
+All Records API rules are owner-scoped. Users can create, rename, pin, archive, restore, and delete their own conversations.
 
 ### `chat_messages`
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Notes |
 | --- | --- | --- |
-| `conversation` | Relation -> chat_conversations | 所属会话，级联删除 |
-| `parent_message` | Relation -> chat_messages | assistant 对应的 user message，可空 |
-| `sequence` | Number | 会话内顺序 |
-| `role` | Select | `user`、`assistant` |
-| `status` | Select | `pending`、`streaming`、`complete`、`error`、`cancelled` |
-| `model_config` | Relation -> llm_models | assistant 实际使用的模型配置，可空、不级联 |
-| `parts` | JSON | 与 `UIMessage.parts` 一致 |
-| `metadata` | JSON | 模型快照、usage、finish reason、公开错误 |
-| `created`、`updated` | Autodate | 时间戳 |
+| `conversation` | relation → chat_conversations | Required, cascade delete |
+| `parent_message` | relation → chat_messages | User message associated with an assistant response |
+| `sequence` | number | Unique order within the conversation |
+| `role` | select | `user` or `assistant` |
+| `status` | select | `pending`, `streaming`, `complete`, `error`, or `cancelled` |
+| `model_config` | relation → llm_models | Model used for an assistant message |
+| `parts` | JSON | AI SDK `UIMessage.parts`-compatible content, up to 4 MiB |
+| `metadata` | JSON | Run, model, usage, finish reason, step count, and safe error data |
+| `created`, `updated` | autodate | Record timestamps |
 
-`metadata.model` 保存调用时的 `configId`、`modelId`、`name`、`protocol`，因此模型配置修改或删除后历史仍可解释。
+Messages are readable only through their owner-scoped conversation. Client Records API writes are disabled; the Chat service creates and checkpoints messages.
 
-## 后端包
+## 6. Stream and persistence architecture
 
 ```text
-internal/agent/
-  agent.go       Runner、Request、Result
-  types.go       Message、Part、StreamChunk
-  fantasy.go     Fantasy 回调适配及 provider 创建
-
-internal/assistant/tools/
-  registry.go    actor-scoped 工具工厂
-  contacts.go    联系人工具适配
-  board_projects.go
-
-internal/contacts/
-  query.go       联系人安全投影与有界搜索
-
-internal/board/
-  queries.go     owner/member 可见项目查询
-
-internal/chat/
-  chat.go        路由注册
-  conversations.go
-  messages.go
-  stream.go      后台运行、SSE 订阅、停止
-  reducer.go     StreamChunk -> Message snapshot
-  repository.go  PocketBase 写入
-  protocol.go    AI SDK UI SSE v1
+Fantasy callbacks
+  -> internal/agent adapter
+  -> AI SDK UI Message Stream v1 chunks
+     -> in-memory run history -> SSE subscribers
+     -> reducer -> chat_messages parts/metadata snapshots
 ```
 
-Chat 包从数据库加载可信历史和模型配置，组装系统提示词与上下文，再调用 Agent。浏览器不上传完整历史。
+Supported stream parts include lifecycle, step, text, reasoning, tool input/output, source URL/document, and message metadata events. Application tools are dynamic tools because their definitions live on the Go server.
 
-## API
+Important protocol rules:
 
-- `GET /api/chat/conversations`
-- `POST /api/chat/conversations`
-- `PATCH /api/chat/conversations/{id}`
-- `DELETE /api/chat/conversations/{id}`
+- Invalid wire chunks and empty deltas are dropped before SSE serialization.
+- JSON `null` remains valid tool input/output.
+- `step-start` markers are persisted so multi-step assistant/tool history can be reconstructed.
+- Provider metadata on reasoning and tool parts is retained, including Anthropic thinking signatures.
+- The browser sends only the new user message; trusted history is loaded from PocketBase.
+- Model context uses at most 30 complete messages and 15 user turns, trimmed to begin with a user message.
+- User and assistant records are created transactionally before the model starts.
+- Streaming snapshots are saved on significant part changes and when a later chunk arrives after the one-second checkpoint interval.
+- Successful completion stores final parts and metadata, then updates conversation usage counters.
+
+## 7. Run lifecycle and recovery
+
+- The client supplies a UUID `runId`; the server creates one when omitted.
+- Only one active run is allowed per conversation, and duplicate run IDs are rejected.
+- A run uses a background context with a ten-minute timeout, independent of the initiating HTTP request.
+- Disconnecting an SSE client leaves the run active. `GET /api/chat/runs/{id}/stream` replays buffered chunks and follows new ones.
+- The UI reloads persisted messages and resumes a message whose metadata has a `runId` and status `streaming`.
+- `POST /api/chat/runs/{id}/stop` cancels the owned run and persists the assistant message as `cancelled`.
+- Process termination cancels every in-memory run.
+- On startup, remaining `streaming` messages are marked `error` with `run_interrupted`.
+- Provider failures, timeouts, and panics expose stable safe messages to clients while detailed diagnostics remain in server logs.
+
+Run resumption is guaranteed only within the same live server process. A multi-instance deployment requires a durable queue, shared event log, and lease/ownership mechanism.
+
+## 8. API surface
+
+Conversation CRUD uses PocketBase Records APIs for `chat_conversations`.
+
+Custom authenticated endpoints:
+
 - `GET /api/chat/conversations/{id}/messages`
 - `POST /api/chat/stream`
+- `GET /api/chat/runs/{id}/stream`
 - `POST /api/chat/runs/{id}/stop`
 
-`POST /api/chat/stream` 必须包含：
+`POST /api/chat/stream` accepts:
 
 ```json
 {
-  "runId": "client generated UUID",
-  "conversationId": "conversation record id",
-  "modelConfigId": "llm_models record id",
+  "runId": "client-generated UUID",
+  "conversationId": "conversation record ID",
+  "modelConfigId": "owned llm_models record ID",
   "message": {
-    "id": "client id",
+    "id": "client message ID",
     "role": "user",
     "parts": [{ "type": "text", "text": "hello" }]
   }
 }
 ```
 
-`runId` 由客户端在发送前生成，使用户在尚未收到第一段 SSE 时也能通过 stop API 精确取消后台运行。
+The service requires a non-empty user text part and validates ownership of both conversation and model. Stream responses use `text/event-stream` and `X-Vercel-AI-UI-Message-Stream: v1`.
 
-服务端验证会话和模型配置都属于当前用户。响应使用 `text/event-stream` 和 `x-vercel-ai-ui-message-stream: v1`。
+## 9. Assistant tools
 
-## 断连与后台运行
+The actor-scoped production registry contains:
 
-- 请求处理器创建一个不继承 `Request.Context()` 取消信号的运行 context。
-- 运行 context 仍带最大运行时间，并登记到进程级 run registry。
-- Agent 在后台 goroutine 中执行，Reducer 和数据库持久化属于运行本身。
-- SSE writer 是可移除 subscriber；写失败或请求断开后只注销 subscriber。
-- 显式 stop API 调用 run registry 中的 cancel function，将消息标记为 `cancelled`。
-- 服务关闭时统一取消 registry 中的运行。
-- 不在整个模型调用期间持有数据库事务；按 part 完成、工具状态变化、定时 checkpoint 和最终完成进行短事务写入。
-- 后台 goroutine panic 时发布公开错误事件并把 assistant message 标记为 `error`，不能留下永久 `streaming` 记录。
-- Provider 原始错误和 panic stack 只写服务端结构化日志；消息 metadata 仅保存稳定错误码和安全文案。
+- Contacts: safe contact search.
+- Board: project/task/template reads and permission-aware project, workflow, label, member, and task mutations.
+- Calendar: schedule lookup plus event creation and update.
+- Reading: search, get, upsert, and summarize.
+- Docs: search, get, optimistic-concurrency upsert, and exact-text replace.
+- AI Micro Apps: create, update, get, list, search, replace, and chunked HTML writing.
 
-单实例阶段 run registry 使用内存即可。多实例部署前需引入持久队列/租约，否则断连续跑只保证在当前进程存活期间成立。
+Tool descriptions require explicit mutation intent, real IDs from prior reads, current revisions where applicable, and sequential writes to the same resource. Tool outputs render in module-specific UI cards and can open records through unified workspace deep links. Mock tools are excluded from the production registry.
 
-## 前端
+## 10. Frontend experience
 
-- 会话列表仍由 Zustand 和 PocketBase API 管理。
-- 活跃会话消息由 `useChat<ChatUIMessage>` 管理。
-- `DefaultChatTransport` 负责解析标准 SSE；请求准备函数只发送当前 user message、`conversationId` 和必填 `modelConfigId`。
-- Prompt 输入框从 `useLlmSettingsStore.models` 读取模型；初始选择 `isDefault` 配置。
-- 没有模型或未选择模型时禁用发送。
-- 模型下拉框变化只影响下一次 `sendMessage` 参数，不写入 conversation。
-- `ChatMessageItem` 直接渲染 `message.parts`。
+- The conversation directory is paginated at 20 active conversations per page and separates pinned from recent items.
+- Users can create, rename, pin/unpin, archive, restore, and delete conversations; archived results are paginated separately.
+- The active conversation is addressed by the shared `record` query parameter.
+- AI SDK `Chat`/`useChat` owns live message state; Zustand owns the conversation directory.
+- The message renderer supports Markdown, code, reasoning, tool states, custom result cards, model attribution, and safe errors.
+- Sending is disabled until a model exists and is selected.
+- A global run monitor subscribes to streaming assistant messages and lets users open or stop runs from other conversations.
 
-## 验证
+## 11. Acceptance criteria
 
-- Go 单元测试覆盖 Fantasy text/reasoning/tool/source 映射、metadata-only reasoning、Reducer、多 step、断连续跑、panic 收敛和错误脱敏。
-- 领域查询测试覆盖工具返回上限、联系人敏感字段排除、Board owner/member 可见性。
-- API 测试覆盖所有权、必填模型、集合 CRUD 和消息持久化。
-- 使用 Go 生成 SSE fixture，并由 `ai` 包解析，形成跨语言协议契约测试。
-- 前端验证默认模型、必填模型、模型切换、流式渲染、刷新恢复和停止行为。
-- 最终执行 `go test ./...`、`pnpm typecheck`、`pnpm lint`、`pnpm build`。
+- Conversations, messages, tool results, model snapshots, and usage survive refreshes.
+- A user cannot read another user's conversations, messages, models, or runs.
+- Text, reasoning, tools, sources, metadata, errors, and cancellation produce valid AI SDK UI parts.
+- Multi-step tool history can be sent back to all supported providers without losing required metadata.
+- Disconnecting and reconnecting within the same server process resumes the active stream.
+- Explicit stop, timeout, provider failure, panic, and server restart reach a terminal persisted status.
+- Only one run can modify a conversation at a time.
+- Workspace mutations occur only after explicit user intent and successful permission-aware tool execution.
+- Pinned limits, archive flows, deep links, and the active-run monitor behave consistently across refreshes.

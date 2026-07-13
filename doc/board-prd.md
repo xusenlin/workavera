@@ -1,304 +1,211 @@
-# Board 模块 PRD
+# Board Product Requirements Document
 
-## 1. 背景
+[简体中文](./board-prd.zh-CN.md)
 
-当前 Board 前端使用本地 Zustand 数据，流程状态固定为 `Todo / In Progress / Testing / Done`。本次改造将 Board 数据迁移到 PocketBase，并让每个项目拥有独立、可编辑的流程。
+> Implementation baseline: Workavera `0.0.2`, verified against commit `3684be1` on 2026-07-13.
 
-## 2. 目标
+## 1. Purpose
 
-- 项目可从内置模板创建，也可创建空项目；数据模型同时支持后续加入个人模板管理。
-- 模板中的状态和标签仅在创建项目时复制，之后与项目完全独立。
-- 用户可以在项目中新增、编辑、排序和删除状态。
-- 任务必须属于项目中的一个状态；空项目不能创建任务。
-- 项目、状态、任务、成员和标签通过 PocketBase 实时同步。
-- 保留现有任务标题、描述、优先级、标签、负责人和截止日期能力。
-- `board_projects.owner` 是项目所有权的唯一数据来源，成员表只保存协作者。
-- 项目 owner 可以维护项目设置、流程、标签和成员，并可将所有权转移给任意用户。
-- owner 与成员都属于项目参与者，可被指派任务；任务和项目详情可以查看服务端生成的操作记录。
-
-## 3. 非目标
+Board is Workavera's action layer. It turns plans produced in Chat, Docs, Reading, and Contacts into projects and tasks with an owner, workflow, priority, assignees, labels, due dates, linked documents, and an audit trail.
 
-- 模板变更不自动同步到已有项目。
-- 首版不提供“套用新模板到已有项目”。
-- 首版不提供状态删除时的任务自动迁移；状态存在任务时拒绝删除。
-- 首版不实现评论、附件和通知。
+Board data is persisted in PocketBase and synchronized in real time. Every project owns an independent workflow and label set; templates are copied only when a project is created.
 
-## 4. 核心规则
-
-1. 项目允许没有状态。
-2. `board_tasks.state` 必填，因此项目没有状态时不能创建任务。
-3. 任务的项目必须与状态的项目一致。
-4. 状态存在任务时不能删除。
-5. 模板没有运行时关联；项目不记录来源模板。
-6. 公共模板的 `owner` 为空，个人模板的 `owner` 为用户 ID。
-7. 普通用户只能读取公共模板，不能修改或删除。
-8. 项目 owner 仅保存在 `board_projects.owner`，不得在 `board_project_members` 中创建重复记录。
-9. 项目参与者集合为 `project.owner + project members`，按用户 ID 去重。
-10. 任务负责人必须是项目 owner 或项目成员。
-11. 只有当前 owner 可以编辑项目设置或转移所有权；转移后原 owner 自动成为普通 member。
-
-## 5. 集合设计
-
-所有 Board 业务集合使用 `board_` 前缀，认证集合 `users` 保持不变。
-
-### 5.1 `board_templates`
-
-| 字段 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `name` | text | 是 | 模板名称 |
-| `description` | text | 否 | 使用场景说明 |
-| `owner` | relation → users | 否 | 空为公共模板，有值为个人模板 |
-| `states` | json | 是 | 有序状态定义数组 |
-| `labels` | json | 否 | 默认标签定义数组 |
-
-状态定义包含 `name`、`color`、`category`；标签定义包含 `name`、`color`。
-
-`category` 可选值：
-
-- `pending`：尚未开始
-- `active`：处理中
-- `completed`：已完成
+## 2. Goals
 
-### 5.2 `board_projects`
-
-| 字段 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `name` | text | 是 | 项目名称 |
-| `description` | text | 否 | 项目说明 |
-| `owner` | relation → users | 是 | 项目所有者 |
-| `archived` | bool | 否 | 是否归档 |
-
-### 5.3 `board_project_states`
+- Create a blank project or copy one of the built-in bilingual templates.
+- Let each project owner manage its workflow, labels, members, and ownership.
+- Let eligible participants create, edit, move, reorder, and delete tasks.
+- Keep owner identity canonical in `board_projects.owner`; store only collaborators in `board_project_members`.
+- Validate every project-scoped relationship on the server.
+- Record project and task changes in read-only activity collections.
+- Synchronize projects, states, members, labels, and tasks between sessions.
+- Let tasks link to reusable Docs from the same project.
+- Expose permission-aware, non-destructive Board tools to Chat.
+
+## 3. Non-goals
+
+- Synchronizing later template changes into existing projects.
+- Applying a template to an existing project.
+- Automatically moving tasks when a state is deleted; a non-empty state cannot be deleted.
+- Task comments, file attachments, subtasks, dependencies, or estimates.
+- Destructive Board operations through AI tools.
+- Ownership transfer through AI tools; it remains a confirmed UI operation.
 
-| 字段 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `project` | relation → board_projects | 是 | 所属项目 |
-| `name` | text | 是 | 状态名称 |
-| `color` | text | 是 | 状态颜色 |
-| `category` | select | 是 | `pending / active / completed` |
-| `sort_order` | number | 是 | 列排序值 |
+## 4. Roles and core rules
 
-同一项目内状态名称唯一。排序初始间隔为 1024。
+Project participants are the project owner plus distinct member records.
 
-### 5.4 `board_project_members`
+| Role | Read project | Edit tasks | Manage workflow, labels, and members | Edit/delete project | Transfer ownership |
+| --- | --- | --- | --- | --- | --- |
+| Owner | Yes | Yes | Yes | Yes | Yes |
+| Admin | Yes | Yes | No | No | No |
+| Member | Yes | Yes | No | No | No |
+| Viewer | Yes | No | No | No | No |
 
-| 字段 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `project` | relation → board_projects | 是 | 所属项目 |
-| `user` | relation → users | 是 | 成员 |
-| `role` | select | 是 | `admin / member / viewer` |
+Core invariants:
 
-`project + user` 唯一。项目 owner 不写入本集合，且不能被重复添加为成员。
+1. A project may have no states, but a task must have a state. A blank project therefore cannot contain tasks until a state is added.
+2. A task's state and labels must belong to its project.
+3. Every assignee must be the project owner or a project member.
+4. Every linked document must be a project document from the same project. Private and cross-project documents are rejected.
+5. A state containing tasks cannot be deleted.
+6. The owner must not also have a member record.
+7. Only the current owner may change project settings or transfer ownership.
+8. Ownership transfer removes any member record for the new owner, changes `board_projects.owner`, adds the previous owner as a `member`, and records the transfer in one transaction.
+9. Server hooks and the shared command layer enforce task-write permissions even when PocketBase Records APIs are used directly.
 
-### 5.5 `board_project_labels`
+## 5. Data model
 
-| 字段 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `project` | relation → board_projects | 是 | 所属项目 |
-| `name` | text | 是 | 标签名称 |
-| `color` | text | 是 | 标签颜色 |
+### `board_templates`
 
-同一项目内标签名称唯一。
+| Field | Type | Notes |
+| --- | --- | --- |
+| `name` | text | Required; unique per owner scope |
+| `description` | text | Optional usage guidance |
+| `owner` | relation → users | Empty for built-in templates; populated for personal templates |
+| `states` | JSON | Ordered `name`, `color`, and `category` definitions |
+| `labels` | JSON | `name` and `color` definitions |
 
-### 5.6 `board_tasks`
+State categories are `pending`, `active`, and `completed`. Built-in templates are readable by authenticated users and writable only through administrative access; personal templates are owner-scoped.
 
-| 字段 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `project` | relation → board_projects | 是 | 所属项目 |
-| `state` | relation → board_project_states | 是 | 当前状态 |
-| `title` | text | 是 | 任务标题 |
-| `description` | text | 否 | 任务描述 |
-| `priority` | select | 是 | `none / low / medium / high / urgent` |
-| `rank` | number | 否 | 当前列中的排序值 |
-| `due_date` | date | 否 | 截止日期 |
-| `assignees` | multi relation → users | 否 | 负责人 |
-| `labels` | multi relation → board_project_labels | 否 | 标签 |
-| `created_by` | relation → users | 是 | 创建者 |
+### `board_projects`
 
-索引：`project, state, rank`。
+| Field | Type | Notes |
+| --- | --- | --- |
+| `name` | text | Required, max 160 characters |
+| `description` | text | Optional, max 2,000 characters |
+| `owner` | relation → users | Required, canonical owner |
+| `archived` | bool | Excluded from the active Board list |
+| `created`, `updated` | autodate | Record timestamps |
 
-### 5.7 `board_task_operation_logs`
+### `board_project_states`
 
-| 字段 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `project` | relation → board_projects | 是 | 所属项目 |
-| `task_id` | text | 是 | 任务 ID 快照，任务删除后仍保留 |
-| `task_title` | text | 是 | 操作发生时的任务标题 |
-| `actor` | relation → users | 否 | 操作用户 |
-| `actor_name` | text | 是 | 操作用户名称快照 |
-| `action` | select | 是 | `create / update / move / delete` |
-| `changes` | json | 否 | 字段变更前后值 |
-| `created` | autodate | 是 | 操作时间 |
+| Field | Type | Notes |
+| --- | --- | --- |
+| `project` | relation → board_projects | Required, cascade delete |
+| `name` | text | Required; unique within the project |
+| `color` | text | Required |
+| `category` | select | `pending`, `active`, or `completed` |
+| `sort_order` | number | Column order; new states use 1,024-point spacing |
 
-日志只允许项目参与者（Owner 或成员）读取，由服务端任务 Hook 或共享命令层创建，Records API 禁止客户端新增、修改和删除。
+### `board_project_members`
 
-### 5.8 `board_project_operation_logs`
+| Field | Type | Notes |
+| --- | --- | --- |
+| `project` | relation → board_projects | Required, cascade delete |
+| `user` | relation → users | Required |
+| `role` | select | `admin`, `member`, or `viewer` |
 
-| 字段 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `project` | relation → board_projects | 是 | 所属项目 |
-| `actor` | relation → users | 否 | 操作用户 |
-| `actor_name` | text | 是 | 操作用户名称快照 |
-| `action` | select | 是 | 项目、状态、标签、成员及 Owner 转移操作类型 |
-| `changes` | json | 否 | 操作对象快照及字段变更前后值 |
-| `created` | autodate | 是 | 操作时间 |
+`project + user` is unique. The project owner is never duplicated here.
 
-支持的操作类型：
+### `board_project_labels`
 
-- `transfer_owner`
-- `update_project`
-- `create_state / update_state / delete_state`
-- `create_label / update_label / delete_label`
-- `add_member / update_member / remove_member`
+| Field | Type | Notes |
+| --- | --- | --- |
+| `project` | relation → board_projects | Required, cascade delete |
+| `name` | text | Required; unique within the project |
+| `color` | text | Required |
 
-Owner 转移日志在转移事务中创建；其他项目活动由服务端 Record Request Hook 或共享命令层创建。项目 owner 和成员可读，Records API 禁止客户端新增、修改和删除。
+### `board_tasks`
 
-## 6. 内置模板
+| Field | Type | Notes |
+| --- | --- | --- |
+| `project` | relation → board_projects | Required, cascade delete |
+| `state` | relation → board_project_states | Required |
+| `title` | text | Required, max 240 characters |
+| `description` | text | Optional Markdown/plain text, max 10,000 characters |
+| `priority` | select | `none`, `low`, `medium`, `high`, or `urgent` |
+| `rank` | number | Order within a state |
+| `due_date` | date | Optional deadline |
+| `assignees` | multi-relation → users | Up to 20 project participants |
+| `labels` | multi-relation → board_project_labels | Up to 20 project labels |
+| `documents` | multi-relation → docs | Up to 20 documents from the same project |
+| `created_by` | relation → users | Set by the server on creation |
 
-### Software Development（默认）/ 软件开发
+Deleting a linked document unlinks it without deleting the task. Task search results resolve document IDs to titles.
 
-- 英文状态：Todo、In Progress、Testing、Done
-- 英文标签：Bug、Feature、Design、Docs、Refactor、API、Performance
-- 中文状态：待办、进行中、测试中、已完成
-- 中文标签：缺陷、功能、设计、文档、重构、API、性能
+### Activity collections
 
-### Simple Kanban / 简易看板
+`board_task_operation_logs` stores immutable `create`, `update`, `move`, and `delete` events with task/actor snapshots and field changes. Changes include linked-document title lists.
 
-- 英文状态：Backlog、In Progress、Done
-- 英文标签：Blocked、Improvement
-- 中文状态：待处理、进行中、已完成
-- 中文标签：阻塞、改进
+`board_project_operation_logs` stores immutable project, workflow, label, member, and `transfer_owner` events. Both collections are readable by project participants and cannot be mutated through Records APIs.
 
-### Content Production / 内容生产
+## 6. Built-in templates
 
-- 英文状态：Ideas、Drafting、Review、Published
-- 英文标签：Article、Video、Social、Campaign
-- 中文状态：选题、撰写中、审核中、已发布
-- 中文标签：文章、视频、社交媒体、营销活动
+Ten templates are seeded: English and Chinese variants of five workflows.
 
-### Issue Tracking / 问题跟踪
+| Workflow | States | Default labels |
+| --- | --- | --- |
+| Software Development / 软件开发 | Todo, In Progress, Testing, Done | Bug, Feature, Design, Docs, Refactor, API, Performance |
+| Simple Kanban / 简易看板 | Backlog, In Progress, Done | Blocked, Improvement |
+| Content Production / 内容生产 | Ideas, Drafting, Review, Published | Article, Video, Social, Campaign |
+| Issue Tracking / 问题跟踪 | Reported, Triaged, In Progress, Verification, Resolved | Bug, Incident, Regression, Security |
+| Self-Media Operations / 自媒体运营 | Ideas, Creating, Scheduled, Published | Short Video, Article, Live Stream, Brand Partnership |
 
-- 英文状态：Reported、Triaged、In Progress、Verification、Resolved
-- 英文标签：Bug、Incident、Regression、Security
-- 中文状态：已报告、已分诊、处理中、验证中、已解决
-- 中文标签：缺陷、事故、回归、安全
+The Chinese variants contain localized names and descriptions. Templates are copied into project states and labels and have no runtime link to the project.
 
-### Self-Media Operations / 自媒体运营
+## 7. User experience
 
-- 英文状态：Ideas、Creating、Scheduled、Published
-- 英文标签：Short Video、Article、Live Stream、Brand Partnership
-- 中文状态：选题池、创作中、待发布、已发布
-- 中文标签：短视频、图文、直播、品牌合作
+### Project creation and settings
 
-## 7. 用户流程
+- The creation sheet accepts a name, description, template or blank workflow, initial labels, and members.
+- Project creation is transactional; the caller becomes the owner.
+- Owners can edit project details, configure states, manage labels and members, inspect Project Activity, transfer ownership, and delete the project.
+- Board project loading is paginated; child records are loaded only for projects on the current page.
 
-### 创建项目
+### Kanban workflow
 
-1. 输入名称和描述。
-2. 选择一个模板或 Blank Project。
-3. 后端在事务中创建项目，将当前用户写入 `board_projects.owner`，并复制模板状态和标签；不创建 owner 成员记录。
-4. 打开新项目；空项目展示添加状态引导。
+- Tasks are grouped by state and ordered by `rank`.
+- Dragging within or across columns updates rank and, when needed, state.
+- Optimistic UI updates are followed by PocketBase persistence; failures reload authoritative data.
+- Task cards show priority, due date, assignees, labels, and linked-document count.
+- The task sheet edits all supported fields and shows a reverse-chronological activity timeline.
+- The document picker searches active project documents, and linked documents open through the unified workspace deep link.
 
-### 管理 Owner 和成员
+### Realtime behavior
 
-- Edit Project 将 Owner 与 Members 分区展示，Owner 不出现在成员列表中。
-- 只有当前 Owner 可以打开项目编辑入口、管理成员和删除项目。
-- Owner 可以从所有有效用户中选择新 Owner，并在确认对话框中完成转移。
-- 转移在单一数据库事务中完成：移除新 Owner 已有的成员记录、更新项目 Owner、将原 Owner 写为普通 member，并创建审计日志。
-- 转移成功后原 Owner 失去项目设置编辑权限，但仍以 member 身份参与项目。
-- Project Activity 同时记录成员新增、移除和角色调整。
+The Board subscribes to `board_projects`, `board_project_states`, `board_project_members`, `board_project_labels`, and `board_tasks`. Record events are applied as upserts/deletes; reconnect or failed optimistic writes trigger a reload. Task and project activity are loaded when their detail surfaces open.
 
-### 编辑流程
+## 8. HTTP and Records API surface
 
-- 从项目菜单打开 Configure workflow。
-- 可修改状态名称、颜色、语义分类。
-- 可新增状态并调整顺序。
-- 删除有任务的状态时显示阻止原因。
-- 状态新增、编辑、排序和删除均写入 Project Activity。
+- `POST /api/board/projects` creates blank or templated projects transactionally.
+- `PATCH /api/board/projects/{id}/owner` transfers ownership transactionally.
+- Standard PocketBase Records APIs handle permitted project, state, label, member, and task CRUD.
+- Server request hooks validate ownership, roles, cross-project relationships, state deletion, and activity logging.
 
-### 管理标签
+All user-facing operations require authenticated `users` records.
 
-- 从项目菜单打开 Manage labels。
-- 可新增、改名、改色和删除标签。
-- 删除已使用标签时先从相关任务移除，并生成任务标签变更日志。
-- 标签新增、编辑和删除同时写入 Project Activity。
+## 9. Assistant tools
 
-### 创建和移动任务
+Read tools:
 
-- 从状态列中创建任务，状态必填。
-- 负责人候选列表为项目 Owner 与成员的合并结果，Owner 无需成员记录也可被指派。
-- 拖拽跨列时同时更新 `state` 和 `rank`。
-- rank 使用间隔排序，正常拖拽只更新当前任务。
-- 编辑任务时在 Activity 区域按时间倒序展示创建、移动和字段变更。
+- `board_search_projects`
+- `board_get_project`
+- `board_search_tasks`
+- `board_list_templates`
 
-## 8. 实时同步
+Mutation tools:
 
-Board 页面订阅：
+- `board_create_project`
+- `board_update_project`
+- `board_upsert_state`
+- `board_upsert_label`
+- `board_upsert_member`
+- `board_create_task`
+- `board_update_task`
 
-- `board_projects`
-- `board_project_states`
-- `board_project_members`
-- `board_project_labels`
-- `board_tasks`
+`board_get_project` returns the caller's role and `canEditProject`, `canManageWorkflow`, `canManageMembers`, and `canEditTasks` capabilities. Existing data must be read before mutation so the assistant uses real IDs and the latest state. Task updates use patch semantics; empty arrays clear assignees, labels, or documents, and a null due date clears the deadline.
 
-任务详情打开时按 `task_id` 加载并订阅 `board_task_operation_logs`，关闭详情后取消该订阅。
+No AI deletion or ownership-transfer tool is registered. The assistant must direct users to Board for destructive actions.
 
-Edit Project 打开时按 `project` 加载并订阅 `board_project_operation_logs`，在 Project Activity 中展示项目名称或描述、流程状态、标签、成员和 Owner 转移记录。
+## 10. Acceptance criteria
 
-实时事件按记录 ID 执行 upsert/delete。前端操作使用乐观更新，失败时重新加载对应数据；断线重连后执行一次完整刷新。
-
-## 9. 权限
-
-- owner：项目设置、成员、流程、标签、任务和所有权转移的全部权限；其身份只来自 `board_projects.owner`。
-- admin：任务管理；流程和标签管理首版仍由 owner 负责。
-- member：任务管理。
-- viewer：只读。
-- 个人模板仅 owner 可写；公共模板仅管理员可写。
-
-所有写入都需要服务端校验跨项目关系，不能依赖前端。
-
-## 10. 验收标准
-
-- 可使用五类中英文内置模板（共十套）或空白方式创建项目。
-- 不同项目拥有完全独立的状态和标签。
-- 项目状态可以新增、编辑、排序和删除。
-- 项目标签可以新增、编辑和删除。
-- 任务创建、状态移动、字段修改和删除由服务端写入只读操作日志。
-- 任务详情可以加载并实时显示 Activity 时间线。
-- Owner 在成员表中没有重复记录，但仍可被指派任务并计入项目参与人数。
-- 只有 Owner 可以编辑项目，并可将所有权转移给任意有效用户。
-- 转移后新 Owner 唯一，原 Owner 成为 member，Project Activity 展示完整转移记录。
-- 项目名称或描述、状态、标签和成员变更都由服务端写入只读 Project Activity。
-- 空项目不能创建任务，并提供明确引导。
-- 任务不能关联其他项目的状态或标签。
-- 两个登录会话可实时看到项目、状态和任务变化。
-- 刷新页面后数据由 PocketBase 恢复，业务数据不再依赖 localStorage。
-
-## 11. Board AI 工具
-
-### 查询和能力判断
-
-- `board_search_projects`：查询当前用户可见项目及各状态任务数。
-- `board_get_project`：返回项目 Owner、成员、参与者、状态、标签，以及当前用户的角色和 capability。
-- `board_search_tasks`：按项目、状态和负责人查询任务。
-- `board_list_templates`：列出当前用户可见的公共或个人模板。
-
-项目 capability 包含 `canEditProject`、`canManageWorkflow`、`canManageMembers` 和 `canEditTasks`。删除 capability 固定为 false。capability 用于帮助 AI 选择工具，服务端仍在每次写操作时重新鉴权。
-
-### 新建和修改
-
-- `board_create_project`：登录用户创建空白项目或从模板创建项目，调用者成为 Owner。
-- `board_update_project`：Owner 修改项目名称或描述。
-- `board_upsert_state`：Owner 新建或修改状态，不支持删除。
-- `board_upsert_label`：Owner 新建或修改标签，不支持删除。
-- `board_upsert_member`：Owner 添加成员或调整 `admin / member / viewer` 角色，不支持移除成员，也不能将 Owner 加入成员表。
-- `board_create_task`：Owner、admin、member 创建任务。
-- `board_update_task`：Owner、admin、member 修改任务；viewer 只读。
-
-AI 修改已有数据前必须先调用 `board_get_project`，检查 capability，并使用详情返回的真实状态、标签和参与者 ID。任务更新采用 patch 语义：省略字段表示保持不变，空数组清空标签或负责人，`dueDate: null` 清除截止日期。
-
-所有 AI 写操作进入与 Board HTTP 接口一致的共享命令层，服务端负责权限、跨项目关联、Owner/成员关系和操作日志校验。只有持久化成功后工具才返回成功结果。
-
-### 暂不支持的操作
-
-本期不注册任何 Board AI 删除工具，包括项目、任务、状态、标签和成员删除；也不实现 pending 命令、二次确认或审批卡。用户通过 Chat 请求删除时，Assistant 应说明需要前往 Board 页面手动完成。Owner 转移继续使用现有 Board UI 和专用接口。
+- A user can create an independent project from any seeded template or as a blank project.
+- Only owners can manage settings, members, workflow, labels, and ownership.
+- Admins and members can edit tasks; viewers are read-only.
+- Cross-project states, labels, documents, and non-participant assignees are rejected by the server.
+- The Board picker can link and unlink up to 20 active documents from the task's project; server validation rejects private and cross-project links, and deleting a document does not delete the task.
+- Task and project activity accurately record successful changes and cannot be edited by clients.
+- Two sessions see Board record changes through PocketBase realtime.
+- Refreshing the page restores data from PocketBase rather than local storage.
+- Chat can query and perform permitted non-destructive Board mutations while honoring current roles and revisions.

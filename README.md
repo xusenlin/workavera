@@ -1,91 +1,186 @@
 # Workavera
 
-Workavera 是一个可自托管的 AI 团队工作台，让聊天直接变成任务、文档、联系人和可发布内容。
+[简体中文](./README.zh-CN.md)
 
-基于 Go 和 PocketBase 构建，免费、开源，并支持自行部署。
+Workavera is a self-hosted AI team workspace that connects conversations, knowledge, relationships, projects, tasks, and time commitments in one application.
 
-## 产品定位
+**Use Chat to put your workspace in motion.** AI can use the workspace capabilities you already have permission to use—finding context and creating or updating supported records—without receiving access beyond your own. Every action is authorized again by the server before it is applied.
 
-Workavera 面向个人开发者和小团队，底层由 AI 驱动，核心目标不是替代大型协作套件，而是把 AI 对话、任务推进、外部资料和团队上下文连接起来，形成一个轻量、可自托管的工作流。
+It uses Go and PocketBase for the backend and Vite, React, and TypeScript for the frontend. The compiled frontend is served by the same PocketBase process in packaged deployments.
 
-核心模块定位：
+![Workavera Board task detail](./screenShot/workavera_task.png)
 
-- `Reading` 是外部信息输入层，用于保存文章、网页、GitHub 项目、产品资料和调研链接，再通过 AI 总结为文档、任务或行动项。
-- `Contacts` 是关系上下文层，用于管理客户、伙伴、候选人和协作者，并为 AI 提供安全的联系人上下文。
-- `Chat` 是 AI 工作入口，用于理解问题、生成方案、查询工作区上下文，并把对话结果转成任务、文档、联系人记录或微应用。
-- `Docs` 是工作沉淀层和发布层，用于把聊天、任务、客户沟通和项目过程中的有效信息沉淀为可搜索、可复用、可发布的轻量文档。
-- `Board` 是行动推进层，用于管理项目、任务、负责人、状态、优先级和截止日期。
-- `Calendar` 是时间承诺层，用于集中展示任务截止、联系人跟进、项目节点、个人提醒和 AI 创建的日程。
-- `AI Micro Apps` 是轻量交付层，用于把思想灵感快速变成原型，并生成和管理自包含的小工具、演示页或一次性工作应用。
+## Product areas
 
-`Docs`、`Reading` 和 `Calendar` 的边界应保持清晰：`Reading` 负责吸收外部资料，`Docs` 负责沉淀内部知识，`Calendar` 负责承接必须在某个时间行动的承诺。
+- **Dashboard** shows counts for active projects, open tasks, the next seven days, and unread Reading items, together with due tasks, upcoming events and deadlines, recently updated Docs/Chat/Reading records, and quick links.
+- **Reading** saves external URLs and notes with project, tags, read status, pins, archive, configurable summary language, and AI-generated summaries.
+- **Contacts** provides a searchable contact list, detailed profiles, and personal favorites; Chat can search a bounded, non-sensitive contact projection.
+- **Chat** streams model output, reasoning, and tool calls into durable conversations. Runs continue across browser disconnects and can be resumed or stopped.
+- **Docs** stores private and project Markdown documents with Milkdown rich editing, Source/Diff/fullscreen modes, explicit versions, conflict detection, pins, archive, and AI editing.
+- **Board** manages independent project workflows, labels, roles, tasks, activity history, due dates, and same-project document links. Ten bilingual workflow templates are included.
+- **Calendar** combines personal events with visible Board deadlines, supports recurrence and system-timezone scheduling, and produces in-app reminders.
+- **AI Micro Apps** manages self-contained HTML tools and prototypes with sandboxed preview, pins, archive/restore actions, and Assistant tools for HTML generation and revision.
+- **Notifications** provides realtime model-share requests, task-due notices, and calendar reminders with record deep links.
+- **Settings and Profile** manage model configurations, model sharing, per-user appearance, profile fields, and avatars.
 
-## 环境要求
+Reading is the external-information intake layer, Docs is the reusable knowledge layer, Board is the action layer, Calendar is the time-commitment layer, and AI Micro Apps is the interactive delivery layer.
 
-- Go 1.26.4+
-- [Task](https://taskfile.dev/) 3+
-- PocketBase v0.39.4（已作为 Go 模块依赖）
+Chat connects these layers as a permission-aware AI control surface. It can search the context visible to you and invoke registered tools for Board, Calendar, Reading, Docs, Contacts, and AI Micro Apps. Tool availability never bypasses product rules: the backend checks identity, role, ownership, relationships, and revisions for every operation.
 
-## 本地开发
+## Technology
+
+- Go 1.26.4
+- PocketBase 0.39.4
+- Fantasy 0.35.0
+- React 19, TypeScript 6, Vite 8
+- Tailwind CSS 4 and local shadcn/ui components
+- AI SDK UI message streaming
+- Zustand and the PocketBase JavaScript SDK
+- Milkdown Crepe for Markdown editing
+
+## Requirements
+
+- Go 1.26.4 or newer
+- Node.js and [pnpm](https://pnpm.io/)
+- [Task](https://taskfile.dev/) 3 or newer
+- Docker with Buildx only when building or publishing containers
+
+## Local development
+
+Install frontend dependencies once:
 
 ```bash
-task dev
+cd frontend
+pnpm install
+cd ..
 ```
 
-该任务会先构建 `frontend/dist`，再启动 PocketBase。单独开发前端时可运行 `task frontend:dev`。
-
-启动后可访问：
-
-- 应用首页：<http://127.0.0.1:8090>
-- 管理后台：<http://127.0.0.1:8090/_/>
-- 健康检查：<http://127.0.0.1:8090/api/health>
-
-首次打开管理后台时，按照页面提示创建超级管理员账号。
-
-## 常用命令
+Run the backend and Vite frontend in separate terminals:
 
 ```bash
-task dev    # 启动开发服务器
-task build  # 构建可执行文件
-task frontend:build # 构建前端资源
-task frontend:dev   # 启动 Vite 开发服务器
-task docker:build # 构建带版本标签的 Docker 镜像
-task test   # 运行测试
-task tidy   # 整理 Go 依赖
+task dev:go
 ```
 
-应用版本由根目录的 `VERSION` 文件统一维护。构建后的程序可通过 `./workavera --version` 查看版本。
+```bash
+task dev:ui
+```
 
-PocketBase 的运行数据保存在 `pb_data/`，该目录不会提交到 Git。数据库结构变更会在使用 `go run` 开发时自动生成 Go 迁移文件并保存在 `migrations/`。
+Open <http://127.0.0.1:5173>. Vite proxies `/api` to PocketBase at <http://127.0.0.1:8090>.
+
+PocketBase also exposes:
+
+- Admin UI: <http://127.0.0.1:8090/_/>
+- Health endpoint: <http://127.0.0.1:8090/api/health>
+
+Create the first PocketBase superuser and application users through the Admin UI. Workavera's login page accepts administrator-created accounts. After signing in, add at least one model configuration in Settings before using Chat or AI summaries.
+
+When `task dev:go` runs through `go run`, PocketBase automigration is enabled and schema changes are written to `migrations/`.
+
+## Build and run
+
+Build the frontend and backend:
+
+```bash
+task build:ui
+task build:go
+```
+
+Run the packaged application after the frontend has been built:
+
+```bash
+task run
+```
+
+Open <http://127.0.0.1:8090>. `task run` rebuilds the Go binary and serves the existing `frontend/dist` directory.
+
+The version comes from [`VERSION`](./VERSION) and is injected into the binary. Check it with:
+
+```bash
+./workavera --version
+```
+
+## Commands
+
+| Command | Purpose |
+| --- | --- |
+| `task dev:go` | Run the Go/PocketBase development server |
+| `task dev:ui` | Run the Vite development server |
+| `task build:ui` | Type-check and build `frontend/dist` |
+| `task build:go` | Build the `workavera` binary |
+| `task run` | Build and run the Go binary |
+| `task build:docker` | Build the frontend and local `ghcr.io/xusenlin/workavera:latest` image |
+| `task push` | Build and push `linux/amd64` version and `latest` images |
+| `task test` | Run `go test ./...` |
+| `task tidy` | Run `go mod tidy` |
+
+Frontend-only commands are documented in [`frontend/README.md`](./frontend/README.md).
 
 ## Docker
 
+Build the local image:
+
 ```bash
-task docker:build
+task build:docker
+```
+
+Run it with a persistent PocketBase volume:
+
+```bash
 docker run --rm \
   -p 8090:8090 \
   -v workavera-data:/app/pb_data \
-  ghcr.io/xusenlin/workavera:0.0.1
+  ghcr.io/xusenlin/workavera:latest
 ```
 
-`task docker:build` 每次都会先在宿主机打包前端资源。容器内的二进制位于 `/app/workavera`，前端产物位于 `/app/frontend/dist`；本地与容器中的 PocketBase 都使用 `frontend/dist` 作为首页。容器使用非 root 用户运行，PocketBase 数据由 `workavera-data` 卷持久化。
+The container runs as a non-root user, includes CA certificates and timezone data, exposes a health check, stores data in `/app/pb_data`, and serves `/app/frontend/dist` from the Workavera binary.
 
-镜像会同时生成 `ghcr.io/xusenlin/workavera:0.0.1` 和 `ghcr.io/xusenlin/workavera:latest` 标签，并写入 OCI 版本标签与 `APP_VERSION` 环境变量。
+`task push` uses the value in `VERSION` to publish both `:<version>` and `:latest` for `linux/amd64`.
 
-## 项目结构
+## Data and security notes
+
+- Runtime data lives in `pb_data/` and is not committed.
+- Model API keys stay in the hidden `llm_models.api_key` field and are accessed through authenticated server endpoints.
+- User-facing records are protected by PocketBase rules and server-side domain validation.
+- Chat history is loaded by the server; browsers do not provide authoritative prior messages.
+- Active Chat runs are process-local. Stream reconnection works while the same server process is alive; production multi-instance execution requires shared durable run infrastructure.
+- Calendar scheduling and reminders use `configs/system.timezone`.
+
+## Repository structure
 
 ```text
 .
-├── workavera.go     # PocketBase 启动入口与自定义路由
-├── Dockerfile       # 多阶段容器构建
-├── VERSION          # 应用版本
-├── frontend/        # Vite 前端项目，构建产物为 dist/
-├── internal/board/  # Board 路由、领域校验与操作日志 Hook
-├── internal/agent/  # Fantasy 封装与 AI SDK UI 兼容流
-├── internal/assistant/tools/ # 应用能力到 Fantasy 工具的适配与注册
-├── internal/contacts/ # 联系人领域查询与安全投影
-├── internal/chat/   # 会话持久化、后台运行与 SSE API
-├── migrations/      # 数据库迁移
-├── go.mod
-└── Taskfile.yml
+├── workavera.go                 # PocketBase entry point and frontend serving
+├── internal/
+│   ├── agent/                   # Fantasy and AI SDK stream adaptation
+│   ├── assistant/tools/         # Actor-scoped workspace tools
+│   ├── board/                   # Projects, tasks, roles, validation, activity
+│   ├── calendar/                # Events, recurrence, and schedule queries
+│   ├── chat/                    # Conversations, runs, SSE, persistence
+│   ├── configs/                 # System configuration API
+│   ├── contacts/                # Contacts and safe Assistant queries
+│   ├── docs/                    # Markdown documents and versions
+│   ├── llm/                     # Model settings and sharing
+│   ├── microapps/               # AI Micro Apps domain and previews
+│   ├── notifications/           # Realtime notifications and scheduler
+│   └── reading/                 # Reading library and summaries
+├── migrations/                  # PocketBase schema migrations and tests
+├── frontend/                    # Vite React application
+│   └── src/
+│       ├── components/          # Feature and UI components
+│       ├── pages/               # Route-level pages
+│       ├── store/               # Zustand stores
+│       └── lib/                 # PocketBase and shared utilities
+├── doc/                         # English and Chinese product documents
+├── Dockerfile
+├── Taskfile.yml
+└── VERSION
 ```
+
+## Product documentation
+
+| Module | English | 简体中文 |
+| --- | --- | --- |
+| Board | [Board PRD](./doc/board-prd.md) | [Board PRD](./doc/board-prd.zh-CN.md) |
+| Calendar | [Calendar PRD](./doc/calendar-prd.md) | [Calendar PRD](./doc/calendar-prd.zh-CN.md) |
+| Chat | [Chat PRD and Fantasy architecture](./doc/chat-fantasy-plan.md) | [Chat PRD 与 Fantasy 架构](./doc/chat-fantasy-plan.zh-CN.md) |
+| Docs | [Docs PRD](./doc/docs-prd.md) | [Docs PRD](./doc/docs-prd.zh-CN.md) |
