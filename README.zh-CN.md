@@ -8,6 +8,14 @@ Workavera 是一个可自托管的 AI 团队工作台，在同一个应用中连
 
 后端使用 Go 与 PocketBase，前端使用 Vite、React 与 TypeScript。打包部署时，PocketBase 进程直接提供编译后的前端资源。
 
+## 产品截图
+
+### Chat 与工作区工具
+
+![Workavera Chat 调用 Board 工具创建项目](./screenShot/workavera_chat.png)
+
+### Board 任务详情
+
 ![Workavera Board 任务详情](./screenShot/workavera_task.png)
 
 ## 产品模块

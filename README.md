@@ -8,6 +8,14 @@ Workavera is a self-hosted AI team workspace that connects conversations, knowle
 
 It uses Go and PocketBase for the backend and Vite, React, and TypeScript for the frontend. The compiled frontend is served by the same PocketBase process in packaged deployments.
 
+## Screenshots
+
+### Chat and workspace tools
+
+![Workavera Chat using Board tools to create a project](./screenShot/workavera_chat.png)
+
+### Board task details
+
 ![Workavera Board task detail](./screenShot/workavera_task.png)
 
 ## Product areas
