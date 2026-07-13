@@ -17,6 +17,8 @@ export type LlmModelConfig = {
   protocol: LlmProtocol
   maxOutputTokens: number
   isDefault: boolean
+  sharedFrom: string
+  sharedFromName: string
   hasApiKey: boolean
   created: string
   updated: string

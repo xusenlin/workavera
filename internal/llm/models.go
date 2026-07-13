@@ -31,6 +31,8 @@ type modelResponse struct {
 	Protocol        string `json:"protocol"`
 	MaxOutputTokens int    `json:"maxOutputTokens"`
 	IsDefault       bool   `json:"isDefault"`
+	SharedFrom      string `json:"sharedFrom"`
+	SharedFromName  string `json:"sharedFromName"`
 	HasAPIKey       bool   `json:"hasApiKey"`
 	Created         string `json:"created"`
 	Updated         string `json:"updated"`
@@ -84,6 +86,8 @@ func listModels(event *core.RequestEvent) error {
 		return event.InternalServerError("Could not load model configurations.", err)
 	}
 
+	// Batch-load the shared_from author for the whole page in one query.
+	event.App.ExpandRecords(records, []string{"shared_from"}, nil)
 	result := make([]modelResponse, 0, len(records))
 	for _, record := range records {
 		result = append(result, toModelResponse(record))
@@ -150,7 +154,7 @@ func createModel(event *core.RequestEvent) error {
 	if err != nil {
 		return event.InternalServerError("Model configuration was created but could not be loaded.", err)
 	}
-	return event.JSON(http.StatusCreated, toModelResponse(record))
+	return event.JSON(http.StatusCreated, modelResponseFor(event.App, record))
 }
 
 func updateModel(event *core.RequestEvent) error {
@@ -203,7 +207,7 @@ func updateModel(event *core.RequestEvent) error {
 	if err := event.App.Save(record); err != nil {
 		return event.BadRequestError("Could not update model configuration.", err)
 	}
-	return event.JSON(http.StatusOK, toModelResponse(record))
+	return event.JSON(http.StatusOK, modelResponseFor(event.App, record))
 }
 
 func deleteModel(event *core.RequestEvent) error {
@@ -291,7 +295,7 @@ func setDefaultModel(event *core.RequestEvent) error {
 	if err != nil {
 		return event.InternalServerError("Default model was updated but could not be loaded.", err)
 	}
-	return event.JSON(http.StatusOK, toModelResponse(record))
+	return event.JSON(http.StatusOK, modelResponseFor(event.App, record))
 }
 
 func listShareTargets(event *core.RequestEvent) error {
@@ -320,8 +324,12 @@ func listShareTargets(event *core.RequestEvent) error {
 
 func shareModel(event *core.RequestEvent) error {
 	sourceID := event.Request.PathValue("id")
-	if _, err := findOwnedModel(event.App, sourceID, event.Auth.Id); err != nil {
+	source, err := findOwnedModel(event.App, sourceID, event.Auth.Id)
+	if err != nil {
 		return event.NotFoundError("Model configuration not found.", err)
+	}
+	if source.GetString("shared_from") != "" {
+		return apis.NewApiError(http.StatusForbidden, "This configuration was shared with you and cannot be shared onward. Only the original author can share it.", nil)
 	}
 
 	var request shareModelRequest
@@ -336,7 +344,7 @@ func shareModel(event *core.RequestEvent) error {
 		return event.BadRequestError("You can share a configuration with at most 100 users at once.", nil)
 	}
 
-	err := event.App.RunInTransaction(func(txApp core.App) error {
+	err = event.App.RunInTransaction(func(txApp core.App) error {
 		source, err := findOwnedModel(txApp, sourceID, event.Auth.Id)
 		if err != nil {
 			return err
@@ -428,7 +436,7 @@ func respondToShare(event *core.RequestEvent) error {
 				status = current
 				if id, _ := data["acceptedModelId"].(string); id != "" {
 					if record, findErr := txApp.FindRecordById(modelsCollection, id); findErr == nil {
-						model = toModelResponse(record)
+						model = modelResponseFor(txApp, record)
 					}
 				}
 				return nil
@@ -459,11 +467,14 @@ func respondToShare(event *core.RequestEvent) error {
 			record.Set("protocol", source.GetString("protocol"))
 			record.Set("max_output_tokens", source.GetInt("max_output_tokens"))
 			record.Set("is_default", len(existing) == 0)
+			// Record the author this copy came from: marks it as a received
+			// copy (blocks onward sharing) and keeps the source traceable.
+			record.Set("shared_from", senderID)
 			if err := txApp.Save(record); err != nil {
 				return err
 			}
 			data["acceptedModelId"] = record.Id
-			model = toModelResponse(record)
+			model = modelResponseFor(txApp, record)
 			status = "accepted"
 		}
 		data["shareStatus"] = status
@@ -541,7 +552,15 @@ func uniqueNonEmptyStrings(values []string) []string {
 	return result
 }
 
+// toModelResponse builds the API payload for a record. The shared_from author
+// name is read from the expanded relation, so callers must expand "shared_from"
+// beforehand (via modelResponseFor for a single record, or ExpandRecords for a
+// list); an unexpanded or since-deleted author yields an empty name.
 func toModelResponse(record *core.Record) modelResponse {
+	sharedFromName := ""
+	if author := record.ExpandedOne("shared_from"); author != nil {
+		sharedFromName = strings.TrimSpace(author.GetString("name"))
+	}
 	return modelResponse{
 		ID:              record.Id,
 		Name:            record.GetString("name"),
@@ -550,8 +569,17 @@ func toModelResponse(record *core.Record) modelResponse {
 		Protocol:        record.GetString("protocol"),
 		MaxOutputTokens: int(record.GetInt("max_output_tokens")),
 		IsDefault:       record.GetBool("is_default"),
+		SharedFrom:      record.GetString("shared_from"),
+		SharedFromName:  sharedFromName,
 		HasAPIKey:       record.GetString("api_key") != "",
 		Created:         record.GetDateTime("created").String(),
 		Updated:         record.GetDateTime("updated").String(),
 	}
+}
+
+// modelResponseFor expands the shared_from author for a single record and builds
+// its response. Expansion is a no-op for owner-created models (empty relation).
+func modelResponseFor(app core.App, record *core.Record) modelResponse {
+	app.ExpandRecord(record, []string{"shared_from"}, nil)
+	return toModelResponse(record)
 }

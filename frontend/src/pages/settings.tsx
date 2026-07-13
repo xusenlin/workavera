@@ -251,7 +251,14 @@ export function SettingsPage() {
                   <TableRow key={model.id}>
                     <TableCell className="pl-6">
                       <div className="flex flex-col gap-0.5">
-                        <span className="font-medium">{model.name}</span>
+                        <span className="flex items-center gap-2 font-medium">
+                          {model.name}
+                          {model.sharedFrom && (
+                            <Badge variant="outline" className="font-normal">
+                              Shared by {model.sharedFromName || "another user"}
+                            </Badge>
+                          )}
+                        </span>
                         <span className="truncate text-xs text-muted-foreground">
                           {model.modelId} · {model.baseUrl}
                         </span>
@@ -289,14 +296,16 @@ export function SettingsPage() {
                         >
                           <HugeiconsIcon icon={Pin02Icon} strokeWidth={2} />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => openCopyDialog(model)}
-                          aria-label="Share with users"
-                        >
-                          <HugeiconsIcon icon={Share08Icon} strokeWidth={2} />
-                        </Button>
+                        {!model.sharedFrom && (
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => openCopyDialog(model)}
+                            aria-label="Share with users"
+                          >
+                            <HugeiconsIcon icon={Share08Icon} strokeWidth={2} />
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon-sm"

@@ -303,6 +303,67 @@ func TestShareModelRequiresAcceptanceAndCopiesCurrentConfiguration(t *testing.T)
 	}
 }
 
+func TestSharedFromBlocksOnwardSharing(t *testing.T) {
+	server := newLLMTestServer(t)
+	created := server.request(t, http.MethodPost, "/api/llm/models", server.ownerToken, `{
+		"name":"Author model",
+		"modelId":"claude-sonnet-4",
+		"baseUrl":"https://api.anthropic.com/v1",
+		"apiKey":"author-secret",
+		"protocol":"anthropic"
+	}`)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create: %d: %s", created.Code, created.Body.String())
+	}
+	source := decodeModelResponse(t, created)
+	if source.SharedFrom != "" {
+		t.Fatal("author-created model must not have a shared_from author")
+	}
+
+	share := server.request(t, http.MethodPost, "/api/llm/models/"+source.ID+"/share", server.ownerToken, `{"userIds":["`+server.targetID+`"]}`)
+	if share.Code != http.StatusCreated {
+		t.Fatalf("share: %d: %s", share.Code, share.Body.String())
+	}
+	notification, err := server.app.FindFirstRecordByFilter("notifications", "recipient = {:recipient} && type = 'model_share'", dbx.Params{"recipient": server.targetID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	accepted := server.request(t, http.MethodPost, "/api/llm/shares/"+notification.Id+"/respond", server.targetToken, `{"decision":"accept"}`)
+	if accepted.Code != http.StatusOK {
+		t.Fatalf("accept: %d: %s", accepted.Code, accepted.Body.String())
+	}
+
+	copyRecord, err := server.app.FindFirstRecordByFilter(modelsCollection, "owner = {:owner}", dbx.Params{"owner": server.targetID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if copyRecord.GetString("shared_from") != server.ownerID {
+		t.Fatalf("accepted copy must record the author it was shared from, got %q", copyRecord.GetString("shared_from"))
+	}
+
+	// The recipient's model list resolves the author id to a display name.
+	list := server.request(t, http.MethodGet, "/api/llm/models", server.targetToken, "")
+	if list.Code != http.StatusOK {
+		t.Fatalf("list: %d: %s", list.Code, list.Body.String())
+	}
+	var models []modelResponse
+	if err := json.Unmarshal(list.Body.Bytes(), &models); err != nil {
+		t.Fatalf("decode list %q: %v", list.Body.String(), err)
+	}
+	if len(models) != 1 {
+		t.Fatalf("recipient should have one model, got %d", len(models))
+	}
+	if models[0].SharedFrom != server.ownerID || models[0].SharedFromName != "LLM Owner" {
+		t.Fatalf("list must surface the sharer id and name, got sharedFrom=%q sharedFromName=%q", models[0].SharedFrom, models[0].SharedFromName)
+	}
+
+	// The recipient must not be able to share the received copy onward.
+	reshare := server.request(t, http.MethodPost, "/api/llm/models/"+copyRecord.Id+"/share", server.targetToken, `{"userIds":["`+server.ownerID+`"]}`)
+	if reshare.Code != http.StatusForbidden {
+		t.Fatalf("re-share of a received copy must be forbidden, got %d: %s", reshare.Code, reshare.Body.String())
+	}
+}
+
 func TestValidateShareRecipientsRejectsMissingUsersAndSender(t *testing.T) {
 	server := newLLMTestServer(t)
 	if err := validateShareRecipients(server.app, []string{server.targetID}, server.ownerID); err != nil {
