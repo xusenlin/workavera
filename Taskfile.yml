@@ -48,6 +48,20 @@ tasks:
     cmds:
       - docker build --build-arg VERSION={{.VERSION}}  -t {{.IMAGE}}:latest .
 
+  push:
+    desc: 构建 CentOS 服务器使用的 linux/amd64 镜像并推送
+    deps:
+      - build:ui
+    cmds:
+      - >-
+        docker buildx build
+        --platform linux/amd64
+        --build-arg VERSION={{.VERSION}}
+        --tag {{.IMAGE}}:{{.VERSION}}
+        --tag {{.IMAGE}}:latest
+        --push
+        .
+
   test:
     desc: 运行测试
     cmds:
