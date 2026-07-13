@@ -79,6 +79,9 @@ func TestSearchVisibleProjectsFiltersByTaskAssigneeIncludingOwner(t *testing.T) 
 	if len(result) != 1 || result[0].ID != project.Id {
 		t.Fatalf("expected project assigned to owner, got %#v", result)
 	}
+	if len(result[0].States) != 1 || result[0].States[0].TaskCount != 1 {
+		t.Fatalf("expected bulk-loaded state task count, got %#v", result[0].States)
+	}
 }
 
 func createQueryTestUser(t *testing.T, app core.App, email, name string) *core.Record {

@@ -96,38 +96,12 @@ func SearchVisibleProjects(ctx context.Context, app core.App, actorID string, op
 		clauses = append(clauses, "name ~ {:query}")
 		params["query"] = query
 	}
-	if len(options.UserIDs) > 0 {
-		taskRecords, err := app.FindRecordsByFilter(boardTasksCollection, "", "", 0, 0)
-		if err != nil {
-			return nil, err
-		}
-		wantedUsers := make(map[string]bool, len(options.UserIDs))
-		for _, uid := range options.UserIDs {
-			wantedUsers[uid] = true
-		}
-		projectIDSet := make(map[string]bool)
-		for _, task := range taskRecords {
-			for _, assigneeID := range task.GetStringSlice("assignees") {
-				if wantedUsers[assigneeID] {
-					projectIDSet[task.GetString("project")] = true
-					break
-				}
-			}
-		}
-		if len(projectIDSet) == 0 {
-			return []ProjectSummary{}, nil
-		}
-		projectIDClauses := make([]string, 0, len(projectIDSet))
-		for id := range projectIDSet {
-			key := fmt.Sprintf("pid_%s", id)
-			projectIDClauses = append(projectIDClauses, "id = {:"+key+"}")
-			params[key] = id
-		}
-		clauses = append(clauses, "("+strings.Join(projectIDClauses, " || ")+")")
-	}
-
 	finalFilter := strings.Join(clauses, " && ")
-	records, err := app.FindRecordsByFilter(boardProjectsCollection, finalFilter, "-updated", limit, 0, params)
+	recordLimit := limit
+	if len(options.UserIDs) > 0 {
+		recordLimit = 0
+	}
+	records, err := app.FindRecordsByFilter(boardProjectsCollection, finalFilter, "-updated", recordLimit, 0, params)
 	if err != nil {
 		return nil, err
 	}
@@ -135,24 +109,96 @@ func SearchVisibleProjects(ctx context.Context, app core.App, actorID string, op
 		return nil, err
 	}
 
-	result := make([]ProjectSummary, 0, len(records))
-	for _, record := range records {
-		states, err := loadProjectStatesWithCounts(ctx, app, record.Id)
+	if len(options.UserIDs) > 0 {
+		records, err = filterProjectsByAssignees(ctx, app, records, options.UserIDs, limit)
 		if err != nil {
 			return nil, err
 		}
+	}
+	if len(records) == 0 {
+		return []ProjectSummary{}, nil
+	}
+
+	statesByProject, err := loadProjectStatesWithCountsBulk(ctx, app, records)
+	if err != nil {
+		return nil, err
+	}
+	ownersByID, err := loadProjectOwners(app, records)
+	if err != nil {
+		return nil, err
+	}
+	rolesByProject, err := loadProjectRoles(app, records, actorID)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]ProjectSummary, 0, len(records))
+	for _, record := range records {
+		role := rolesByProject[record.Id]
 		result = append(result, ProjectSummary{
 			ID:               record.Id,
 			Name:             record.GetString("name"),
 			Description:      record.GetString("description"),
 			Archived:         record.GetBool("archived"),
-			Owner:            projectParticipantFromUser(app, record.GetString("owner"), "owner", ""),
-			States:           states,
-			CurrentActorRole: projectActorRole(app, record, actorID),
-			Capabilities:     projectCapabilities(projectActorRole(app, record, actorID)),
+			Owner:            projectParticipantFromRecord(ownersByID[record.GetString("owner")], record.GetString("owner"), "owner", ""),
+			States:           statesByProject[record.Id],
+			CurrentActorRole: role,
+			Capabilities:     projectCapabilities(role),
 		})
 	}
 	return result, nil
+}
+
+func filterProjectsByAssignees(ctx context.Context, app core.App, projects []*core.Record, userIDs []string, limit int) ([]*core.Record, error) {
+	if len(projects) == 0 {
+		return nil, nil
+	}
+	projectIDs := make([]string, 0, len(projects))
+	for _, project := range projects {
+		projectIDs = append(projectIDs, project.Id)
+	}
+	filter, params := fieldMatchesAny("project", "project", projectIDs)
+	tasks, err := app.FindRecordsByFilter(boardTasksCollection, filter, "", 0, 0, params)
+	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	wantedUsers := make(map[string]bool, len(userIDs))
+	for _, userID := range userIDs {
+		wantedUsers[userID] = true
+	}
+	assignedProjects := make(map[string]bool)
+	for _, task := range tasks {
+		for _, assigneeID := range task.GetStringSlice("assignees") {
+			if wantedUsers[assigneeID] {
+				assignedProjects[task.GetString("project")] = true
+				break
+			}
+		}
+	}
+	filtered := make([]*core.Record, 0, min(limit, len(projects)))
+	for _, project := range projects {
+		if assignedProjects[project.Id] {
+			filtered = append(filtered, project)
+			if len(filtered) == limit {
+				break
+			}
+		}
+	}
+	return filtered, nil
+}
+
+func fieldMatchesAny(field, keyPrefix string, values []string) (string, dbx.Params) {
+	clauses := make([]string, 0, len(values))
+	params := make(dbx.Params, len(values))
+	for index, value := range values {
+		key := fmt.Sprintf("%s%d", keyPrefix, index)
+		clauses = append(clauses, field+" = {:"+key+"}")
+		params[key] = value
+	}
+	return "(" + strings.Join(clauses, " || ") + ")", params
 }
 
 // GetVisibleProject returns a single project by ID if it is visible to the
@@ -247,11 +293,70 @@ func projectCapabilities(role string) ProjectCapabilities {
 }
 
 func projectParticipantFromUser(app core.App, userID, role, membershipID string) ProjectParticipantSummary {
-	user := boardAssigneeSummary(app, userID)
+	record, _ := app.FindRecordById("users", userID)
+	return projectParticipantFromRecord(record, userID, role, membershipID)
+}
+
+func projectParticipantFromRecord(record *core.Record, userID, role, membershipID string) ProjectParticipantSummary {
+	user := TaskAssigneeSummary{ID: userID, Name: userID}
+	if record != nil {
+		user = taskAssigneeFromRecord(record)
+	}
 	return ProjectParticipantSummary{
 		ID: user.ID, Name: user.Name, Avatar: user.Avatar,
 		CollectionID: user.CollectionID, Role: role, MembershipID: membershipID,
 	}
+}
+
+func loadProjectOwners(app core.App, projects []*core.Record) (map[string]*core.Record, error) {
+	ownerIDs := make([]string, 0, len(projects))
+	seen := make(map[string]bool, len(projects))
+	for _, project := range projects {
+		ownerID := project.GetString("owner")
+		if ownerID != "" && !seen[ownerID] {
+			seen[ownerID] = true
+			ownerIDs = append(ownerIDs, ownerID)
+		}
+	}
+	if len(ownerIDs) == 0 {
+		return map[string]*core.Record{}, nil
+	}
+	filter, params := fieldMatchesAny("id", "owner", ownerIDs)
+	records, err := app.FindRecordsByFilter("users", filter, "", 0, 0, params)
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string]*core.Record, len(records))
+	for _, record := range records {
+		result[record.Id] = record
+	}
+	return result, nil
+}
+
+func loadProjectRoles(app core.App, projects []*core.Record, actorID string) (map[string]string, error) {
+	roles := make(map[string]string, len(projects))
+	memberProjectIDs := make([]string, 0, len(projects))
+	for _, project := range projects {
+		if project.GetString("owner") == actorID {
+			roles[project.Id] = "owner"
+		} else {
+			memberProjectIDs = append(memberProjectIDs, project.Id)
+		}
+	}
+	if len(memberProjectIDs) == 0 {
+		return roles, nil
+	}
+	filter, params := fieldMatchesAny("project", "roleProject", memberProjectIDs)
+	filter += " && user = {:actor}"
+	params["actor"] = actorID
+	memberships, err := app.FindRecordsByFilter(boardProjectMembersCollection, filter, "", 0, 0, params)
+	if err != nil {
+		return nil, err
+	}
+	for _, membership := range memberships {
+		roles[membership.GetString("project")] = membership.GetString("role")
+	}
+	return roles, nil
 }
 
 func loadProjectMembers(app core.App, projectID string) ([]ProjectParticipantSummary, error) {
@@ -291,6 +396,46 @@ func loadProjectLabels(app core.App, projectID string) ([]ProjectLabelSummary, e
 	for _, record := range records {
 		result = append(result, ProjectLabelSummary{
 			ID: record.Id, Name: record.GetString("name"), Color: record.GetString("color"),
+		})
+	}
+	return result, nil
+}
+
+func loadProjectStatesWithCountsBulk(ctx context.Context, app core.App, projects []*core.Record) (map[string][]ProjectStateSummary, error) {
+	projectIDs := make([]string, 0, len(projects))
+	result := make(map[string][]ProjectStateSummary, len(projects))
+	for _, project := range projects {
+		projectIDs = append(projectIDs, project.Id)
+		result[project.Id] = []ProjectStateSummary{}
+	}
+	filter, params := fieldMatchesAny("project", "stateProject", projectIDs)
+	stateRecords, err := app.FindRecordsByFilter(boardProjectStatesCollection, filter, "project,sort_order", 0, 0, params)
+	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	taskFilter, taskParams := fieldMatchesAny("project", "taskProject", projectIDs)
+	taskRecords, err := app.FindRecordsByFilter(boardTasksCollection, taskFilter, "", 0, 0, taskParams)
+	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	taskCounts := make(map[string]int)
+	for _, task := range taskRecords {
+		taskCounts[task.GetString("state")]++
+	}
+	for _, state := range stateRecords {
+		projectID := state.GetString("project")
+		result[projectID] = append(result[projectID], ProjectStateSummary{
+			ID:        state.Id,
+			Name:      state.GetString("name"),
+			Color:     state.GetString("color"),
+			Category:  state.GetString("category"),
+			TaskCount: taskCounts[state.Id],
 		})
 	}
 	return result, nil

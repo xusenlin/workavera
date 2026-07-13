@@ -34,10 +34,19 @@ func TestGetScheduleExpandsOwnedEventsAndFiltersVisibleTasks(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := CreateEvent(context.Background(), app, actor.Id, CreateEventCommand{
+		Title: "One-off review", StartAt: "2026-07-20T14:00:00+08:00", EndAt: "2026-07-20T15:00:00+08:00", Timezone: "Asia/Shanghai",
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	visibleProject := createCalendarTestProject(t, app, actor.Id, "Visible")
 	visibleState := createCalendarTestState(t, app, visibleProject.Id, "Todo", "pending")
 	createCalendarTestTask(t, app, visibleProject.Id, visibleState.Id, actor.Id, "Visible task", "2026-07-20")
+	sharedProject := createCalendarTestProject(t, app, other.Id, "Shared")
+	sharedState := createCalendarTestState(t, app, sharedProject.Id, "Doing", "active")
+	createCalendarTestMembership(t, app, sharedProject.Id, actor.Id)
+	createCalendarTestTask(t, app, sharedProject.Id, sharedState.Id, other.Id, "Shared task", "2026-07-20")
 	hiddenProject := createCalendarTestProject(t, app, other.Id, "Hidden")
 	hiddenState := createCalendarTestState(t, app, hiddenProject.Id, "Done", "completed")
 	createCalendarTestTask(t, app, hiddenProject.Id, hiddenState.Id, other.Id, "Hidden task", "2026-07-20")
@@ -49,13 +58,13 @@ func TestGetScheduleExpandsOwnedEventsAndFiltersVisibleTasks(t *testing.T) {
 	if len(result.Days) != 2 || result.Days[0].Date != "2026-07-13" || result.Days[1].Date != "2026-07-20" {
 		t.Fatalf("unexpected days: %#v", result.Days)
 	}
-	if len(result.Days[0].Events) != 1 || len(result.Days[1].Events) != 1 {
+	if len(result.Days[0].Events) != 1 || len(result.Days[1].Events) != 2 {
 		t.Fatalf("weekly event was not expanded: %#v", result.Days)
 	}
 	if result.Days[1].Events[0].ID != created.Event.ID || result.Days[1].Events[0].InstanceStart != "2026-07-20T09:00:00+08:00" {
 		t.Fatalf("unexpected occurrence: %#v", result.Days[1].Events[0])
 	}
-	if len(result.Days[1].Tasks) != 1 || result.Days[1].Tasks[0].Title != "Visible task" {
+	if len(result.Days[1].Tasks) != 2 || result.Days[1].Tasks[0].Title != "Shared task" || result.Days[1].Tasks[1].Title != "Visible task" {
 		t.Fatalf("task visibility was not enforced: %#v", result.Days[1].Tasks)
 	}
 }
@@ -135,6 +144,21 @@ func createCalendarTestState(t *testing.T, app core.App, projectID, name, catego
 		t.Fatal(err)
 	}
 	return record
+}
+
+func createCalendarTestMembership(t *testing.T, app core.App, projectID, userID string) {
+	t.Helper()
+	collection, err := app.FindCollectionByNameOrId("board_project_members")
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := core.NewRecord(collection)
+	record.Set("project", projectID)
+	record.Set("user", userID)
+	record.Set("role", "member")
+	if err := app.Save(record); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func createCalendarTestTask(t *testing.T, app core.App, projectID, stateID, creatorID, title, dueDate string) *core.Record {

@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from "react"
 
-import { Crepe } from "@milkdown/crepe"
+import { LanguageDescription } from "@codemirror/language"
+import { CrepeBuilder } from "@milkdown/crepe/builder"
+import { codeMirror } from "@milkdown/crepe/feature/code-mirror"
+import { cursor } from "@milkdown/crepe/feature/cursor"
+import { linkTooltip } from "@milkdown/crepe/feature/link-tooltip"
+import { listItem } from "@milkdown/crepe/feature/list-item"
+import { placeholder } from "@milkdown/crepe/feature/placeholder"
+import { table } from "@milkdown/crepe/feature/table"
 import "@milkdown/crepe/theme/common/reset.css"
 import "@milkdown/crepe/theme/common/prosemirror.css"
 import "@milkdown/crepe/theme/common/cursor.css"
@@ -66,6 +73,76 @@ import { cn } from "@/lib/utils"
 
 export type DocumentEditorMode = "rich-text" | "source" | "diff"
 
+const CODE_LANGUAGES = [
+  LanguageDescription.of({
+    name: "JavaScript",
+    alias: ["js", "jsx"],
+    load: () =>
+      import("@codemirror/lang-javascript").then(({ javascript }) =>
+        javascript({ jsx: true })
+      ),
+  }),
+  LanguageDescription.of({
+    name: "TypeScript",
+    alias: ["ts", "tsx"],
+    load: () =>
+      import("@codemirror/lang-javascript").then(({ javascript }) =>
+        javascript({ jsx: true, typescript: true })
+      ),
+  }),
+  LanguageDescription.of({
+    name: "Python",
+    alias: ["py"],
+    load: () =>
+      import("@codemirror/lang-python").then(({ python }) => python()),
+  }),
+  LanguageDescription.of({
+    name: "Go",
+    load: () => import("@codemirror/lang-go").then(({ go }) => go()),
+  }),
+  LanguageDescription.of({
+    name: "Java",
+    load: () => import("@codemirror/lang-java").then(({ java }) => java()),
+  }),
+  LanguageDescription.of({
+    name: "C/C++",
+    alias: ["c", "cpp", "c++"],
+    load: () => import("@codemirror/lang-cpp").then(({ cpp }) => cpp()),
+  }),
+  LanguageDescription.of({
+    name: "Rust",
+    alias: ["rs"],
+    load: () => import("@codemirror/lang-rust").then(({ rust }) => rust()),
+  }),
+  LanguageDescription.of({
+    name: "HTML",
+    load: () => import("@codemirror/lang-html").then(({ html }) => html()),
+  }),
+  LanguageDescription.of({
+    name: "CSS",
+    load: () => import("@codemirror/lang-css").then(({ css }) => css()),
+  }),
+  LanguageDescription.of({
+    name: "JSON",
+    load: () => import("@codemirror/lang-json").then(({ json }) => json()),
+  }),
+  LanguageDescription.of({
+    name: "SQL",
+    load: () => import("@codemirror/lang-sql").then(({ sql }) => sql()),
+  }),
+  LanguageDescription.of({
+    name: "Markdown",
+    alias: ["md"],
+    load: () =>
+      import("@codemirror/lang-markdown").then(({ markdown }) => markdown()),
+  }),
+  LanguageDescription.of({
+    name: "YAML",
+    alias: ["yml"],
+    load: () => import("@codemirror/lang-yaml").then(({ yaml }) => yaml()),
+  }),
+]
+
 export function MilkdownDocumentEditor({
   value,
   savedValue,
@@ -126,23 +203,16 @@ function MilkdownEditorBody({
   }
 
   useEditor((root) => {
-    const crepe = new Crepe({
+    const crepe = new CrepeBuilder({
       root,
       defaultValue: value,
-      features: {
-        [Crepe.Feature.Toolbar]: false,
-        [Crepe.Feature.TopBar]: false,
-        [Crepe.Feature.AI]: false,
-        [Crepe.Feature.ImageBlock]: false,
-        [Crepe.Feature.Latex]: false,
-        [Crepe.Feature.BlockEdit]: false,
-      },
-      featureConfigs: {
-        [Crepe.Feature.Placeholder]: {
-          text: "Start writing…",
-        },
-      },
     })
+      .addFeature(cursor)
+      .addFeature(listItem)
+      .addFeature(linkTooltip)
+      .addFeature(placeholder, { text: "Start writing…" })
+      .addFeature(table)
+      .addFeature(codeMirror, { languages: CODE_LANGUAGES })
     crepe.on((listener) => {
       listener.markdownUpdated((_ctx, markdown, previousMarkdown) => {
         if (markdown !== previousMarkdown) onChange(markdown)

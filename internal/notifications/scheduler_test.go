@@ -70,6 +70,29 @@ func TestCalendarSchedulerUsesConfiguredTimezone(t *testing.T) {
 	}
 }
 
+func TestCalendarSchedulerKeepsRecurringEventsOutsideOneOffWindow(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer app.Cleanup()
+	owner := createSchedulerUser(t, app, "recurring-reminder@example.com")
+	createSchedulerRecord(t, app, "calendar_events", map[string]any{
+		"owner": owner.Id, "title": "Weekly review", "start_at": "2026-07-05 02:05:00.000Z", "end_at": "2026-07-05 03:05:00.000Z", "timezone": "UTC", "color": "blue", "recurrence_frequency": "weekly", "recurrence_interval": 1, "reminder_minutes_before": 10,
+	})
+	location, _ := time.LoadLocation("Asia/Shanghai")
+	if err := RunDue(context.Background(), app, time.Date(2026, 7, 12, 10, 0, 0, 0, location)); err != nil {
+		t.Fatal(err)
+	}
+	records, err := app.FindRecordsByFilter(CollectionName, "recipient = {:recipient} && type = 'calendar_event'", "", 0, 0, dbx.Params{"recipient": owner.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(records) != 1 || records[0].GetString("title") != "Event reminder: Weekly review" {
+		t.Fatalf("expected recurring reminder, got %#v", records)
+	}
+}
+
 func createSchedulerUser(t *testing.T, app core.App, email string) *core.Record {
 	t.Helper()
 	users, err := app.FindCollectionByNameOrId("users")

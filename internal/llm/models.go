@@ -3,6 +3,7 @@ package llm
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -340,18 +341,14 @@ func shareModel(event *core.RequestEvent) error {
 		if err != nil {
 			return err
 		}
+		if err := validateShareRecipients(txApp, userIDs, event.Auth.Id); err != nil {
+			return err
+		}
 		senderName := strings.TrimSpace(event.Auth.GetString("name"))
 		if senderName == "" {
 			senderName = "A Workavera user"
 		}
 		for _, userID := range userIDs {
-			if userID == event.Auth.Id {
-				return errors.New("cannot share a configuration with yourself")
-			}
-			user, err := txApp.FindRecordById("users", userID)
-			if err != nil || user.Collection().Name != "users" {
-				return errors.New("one or more selected users no longer exist")
-			}
 			dedupeKey := "model-share:" + event.Auth.Id + ":" + userID + ":" + sourceID
 			input := notifications.CreateInput{
 				RecipientID: userID,
@@ -377,6 +374,24 @@ func shareModel(event *core.RequestEvent) error {
 		return event.BadRequestError("Could not share model configuration.", err)
 	}
 	return event.JSON(http.StatusCreated, shareModelResponse{Shared: len(userIDs)})
+}
+
+func validateShareRecipients(app core.App, userIDs []string, senderID string) error {
+	clauses := make([]string, 0, len(userIDs))
+	params := make(dbx.Params, len(userIDs))
+	for index, userID := range userIDs {
+		if userID == senderID {
+			return errors.New("cannot share a configuration with yourself")
+		}
+		key := fmt.Sprintf("recipient%d", index)
+		clauses = append(clauses, "id = {:"+key+"}")
+		params[key] = userID
+	}
+	records, err := app.FindRecordsByFilter("users", "("+strings.Join(clauses, " || ")+")", "", 0, 0, params)
+	if err != nil || len(records) != len(userIDs) {
+		return errors.New("one or more selected users no longer exist")
+	}
+	return nil
 }
 
 func respondToShare(event *core.RequestEvent) error {

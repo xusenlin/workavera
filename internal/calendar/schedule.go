@@ -10,6 +10,8 @@ import (
 
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
+
+	"github.com/xusenlin/workavera/internal/configs"
 )
 
 const maxScheduleDates = 31
@@ -174,22 +176,44 @@ func visibleProjectRecords(app core.App, actorID string) (map[string]*core.Recor
 	if err != nil {
 		return nil, err
 	}
+	projectClauses := make([]string, 0, len(memberships))
+	projectParams := dbx.Params{}
 	for _, membership := range memberships {
 		projectID := membership.GetString("project")
 		if result[projectID] != nil {
 			continue
 		}
-		project, err := app.FindRecordById("board_projects", projectID)
-		if err != nil {
-			continue
-		}
+		key := fmt.Sprintf("project%d", len(projectClauses))
+		projectClauses = append(projectClauses, "id = {:"+key+"}")
+		projectParams[key] = projectID
+	}
+	if len(projectClauses) == 0 {
+		return result, nil
+	}
+	projects, err := app.FindRecordsByFilter("board_projects", "("+strings.Join(projectClauses, " || ")+")", "", 0, 0, projectParams)
+	if err != nil {
+		return nil, err
+	}
+	for _, project := range projects {
 		result[project.Id] = project
 	}
 	return result, nil
 }
 
 func addOwnedEvents(ctx context.Context, app core.App, actorID string, dates []time.Time, days map[string]*ScheduleDay) error {
-	events, err := app.FindRecordsByFilter(eventsCollection, "owner = {:actor}", "start_at", 0, 0, dbx.Params{"actor": actorID})
+	location := configs.SystemLocation(app)
+	first := dates[0]
+	last := dates[len(dates)-1]
+	start := time.Date(first.Year(), first.Month(), first.Day(), 0, 0, 0, 0, location).UTC()
+	end := time.Date(last.Year(), last.Month(), last.Day(), 0, 0, 0, 0, location).AddDate(0, 0, 1).UTC()
+	events, err := app.FindRecordsByFilter(
+		eventsCollection,
+		"owner = {:actor} && (recurrence_frequency != 'none' || (start_at >= {:start} && start_at < {:end}))",
+		"start_at",
+		0,
+		0,
+		dbx.Params{"actor": actorID, "start": start, "end": end},
+	)
 	if err != nil {
 		return err
 	}

@@ -15,7 +15,7 @@ import (
 const schedulerJobID = "workavera_notifications"
 
 func registerScheduler(app core.App) {
-	if err := app.Cron().Add(schedulerJobID, "* * * * *", func() {
+	if err := app.Cron().Add(schedulerJobID, "*/6 * * * *", func() {
 		if err := RunDue(context.Background(), app, time.Now()); err != nil {
 			app.Logger().Error("notification scheduler failed", "error", err)
 		}
@@ -44,17 +44,32 @@ func createTaskNotifications(ctx context.Context, app core.App, now time.Time) e
 	if err != nil {
 		return err
 	}
+	statesByID := make(map[string]*core.Record)
+	projectsByID := make(map[string]*core.Record)
 	for _, task := range tasks {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		state, err := app.FindRecordById("board_project_states", task.GetString("state"))
-		if err != nil || state.GetString("category") == "completed" {
+		stateID := task.GetString("state")
+		state, found := statesByID[stateID]
+		if !found {
+			state, err = app.FindRecordById("board_project_states", stateID)
+			if err != nil {
+				continue
+			}
+			statesByID[stateID] = state
+		}
+		if state.GetString("category") == "completed" {
 			continue
 		}
-		project, err := app.FindRecordById("board_projects", task.GetString("project"))
-		if err != nil {
-			continue
+		projectID := task.GetString("project")
+		project, found := projectsByID[projectID]
+		if !found {
+			project, err = app.FindRecordById("board_projects", projectID)
+			if err != nil {
+				continue
+			}
+			projectsByID[projectID] = project
 		}
 		recipients := task.GetStringSlice("assignees")
 		if len(recipients) == 0 {
@@ -83,11 +98,19 @@ func createTaskNotifications(ctx context.Context, app core.App, now time.Time) e
 }
 
 func createCalendarNotifications(ctx context.Context, app core.App, now time.Time, location *time.Location) error {
-	events, err := app.FindRecordsByFilter("calendar_events", "reminder_minutes_before >= 0", "", 0, 0)
+	oldest := now.Add(-24 * time.Hour)
+	latest := now.Add(24 * time.Hour)
+	events, err := app.FindRecordsByFilter(
+		"calendar_events",
+		"reminder_minutes_before >= 0 && (recurrence_frequency != 'none' || (start_at >= {:oldest} && start_at <= {:latest}))",
+		"",
+		0,
+		0,
+		dbx.Params{"oldest": oldest.UTC(), "latest": latest.UTC()},
+	)
 	if err != nil {
 		return err
 	}
-	oldest := now.Add(-24 * time.Hour)
 	for _, event := range events {
 		if err := ctx.Err(); err != nil {
 			return err

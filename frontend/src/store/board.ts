@@ -1,5 +1,9 @@
 import { create } from "zustand"
-import { ClientResponseError, type RecordModel } from "pocketbase"
+import {
+  ClientResponseError,
+  type RecordListOptions,
+  type RecordModel,
+} from "pocketbase"
 import { toast } from "sonner"
 
 import { pb } from "@/lib/pocketbase"
@@ -89,6 +93,7 @@ type StateInput = Pick<ProjectState, "name" | "color" | "category">
 type LabelInput = Pick<Label, "name" | "color">
 
 const PROJECTS_PER_PAGE = 4
+const RECORDS_PER_REQUEST = 200
 
 type BoardState = {
   templates: BoardTemplate[]
@@ -236,7 +241,7 @@ function toProject(record: ProjectRecord): Project {
     ownerAvatar:
       owner?.avatar && owner ? pb.files.getURL(owner, owner.avatar) : undefined,
     archived: record.archived,
-    collapsed: expandedProjectId === record.id,
+    collapsed: expandedProjectId !== record.id,
   }
 }
 
@@ -344,42 +349,54 @@ function todoPatchToRecord(patch: Partial<Omit<Todo, "id">>) {
   return body
 }
 
-async function loadBoardPage(page: number) {
-  const [templates, projectResult, states, todos, labels, members] =
-    await Promise.all([
-      pb
-        .collection(COLLECTIONS.templates)
-        .getFullList<TemplateRecord>({ sort: "name", requestKey: null }),
-      pb
-        .collection(COLLECTIONS.projects)
-        .getList<ProjectRecord>(page + 1, PROJECTS_PER_PAGE, {
-          filter: "archived = false",
-          sort: "-created",
-          expand: "owner",
-          requestKey: null,
-        }),
-      pb
-        .collection(COLLECTIONS.states)
-        .getFullList<StateRecord>({ sort: "sort_order", requestKey: null }),
-      pb
-        .collection(COLLECTIONS.tasks)
-        .getFullList<TodoRecord>({ sort: "rank", requestKey: null }),
-      pb
-        .collection(COLLECTIONS.labels)
-        .getFullList<LabelRecord>({ sort: "name", requestKey: null }),
-      pb.collection(COLLECTIONS.members).getFullList<MemberRecord>({
-        expand: "user",
-        sort: "created",
+async function listAllPages<T extends RecordModel>(
+  collection: string,
+  options: RecordListOptions = {}
+) {
+  const records: T[] = []
+  let page = 1
+  while (true) {
+    const result = await pb
+      .collection(collection)
+      .getList<T>(page, RECORDS_PER_REQUEST, {
+        ...options,
         requestKey: null,
-      }),
-    ])
+      })
+    records.push(...result.items)
+    if (page >= result.totalPages) return records
+    page += 1
+  }
+}
 
+function recordsFilter(field: "id" | "project", ids: string[]) {
+  const params: Record<string, string> = {}
+  const clauses = ids.map((id, index) => {
+    const key = `id${index}`
+    params[key] = id
+    return `${field} = {:${key}}`
+  })
+  return pb.filter(clauses.join(" || "), params)
+}
+
+async function loadProjectRelations(projectIds: string[]) {
+  if (projectIds.length === 0) {
+    return { states: [], todos: [], labels: [], members: [] }
+  }
+  const filter = recordsFilter("project", projectIds)
+  const [states, todos, labels, members] = await Promise.all([
+    listAllPages<StateRecord>(COLLECTIONS.states, {
+      filter,
+      sort: "sort_order",
+    }),
+    listAllPages<TodoRecord>(COLLECTIONS.tasks, { filter, sort: "rank" }),
+    listAllPages<LabelRecord>(COLLECTIONS.labels, { filter, sort: "name" }),
+    listAllPages<MemberRecord>(COLLECTIONS.members, {
+      filter,
+      expand: "user",
+      sort: "created",
+    }),
+  ])
   return {
-    templates: templates.map(toTemplate),
-    projects: projectResult.items.map(toProject),
-    projectPage: page,
-    projectTotalPages: projectResult.totalPages,
-    projectTotalItems: projectResult.totalItems,
     states: states.map(toState),
     todos: todos.map(toTodo),
     labels: labels.map(toLabel),
@@ -387,13 +404,51 @@ async function loadBoardPage(page: number) {
   }
 }
 
+async function loadBoardPage(
+  page: number,
+  existingTemplates?: BoardTemplate[]
+) {
+  const [templates, projectResult] = await Promise.all([
+    existingTemplates
+      ? Promise.resolve(existingTemplates)
+      : listAllPages<TemplateRecord>(COLLECTIONS.templates, {
+          sort: "name",
+        }).then((records) => records.map(toTemplate)),
+    pb
+      .collection(COLLECTIONS.projects)
+      .getList<ProjectRecord>(page + 1, PROJECTS_PER_PAGE, {
+        filter: "archived = false",
+        sort: "-created",
+        expand: "owner",
+        requestKey: null,
+      }),
+  ])
+  const relations = await loadProjectRelations(
+    projectResult.items.map((project) => project.id)
+  )
+
+  return {
+    templates,
+    projects: projectResult.items.map(toProject),
+    projectPage: page,
+    projectTotalPages: projectResult.totalPages,
+    projectTotalItems: projectResult.totalItems,
+    ...relations,
+  }
+}
+
 async function connectRealtime(
   set: (
     patch: Partial<BoardState> | ((state: BoardState) => Partial<BoardState>)
-  ) => void
+  ) => void,
+  projectIds: string[]
 ) {
   realtimeUnsubscribers.forEach((unsubscribe) => unsubscribe())
   realtimeUnsubscribers = []
+  if (projectIds.length === 0) return
+
+  const projectFilter = recordsFilter("id", projectIds)
+  const relationFilter = recordsFilter("project", projectIds)
 
   const subscribe = async <T extends RecordModel>(
     collection: string,
@@ -403,14 +458,14 @@ async function connectRealtime(
     try {
       const options =
         key === "members"
-          ? { expand: "user", requestKey: null }
+          ? { filter: relationFilter, expand: "user", requestKey: null }
           : key === "projects"
             ? {
-                filter: "archived = false",
+                filter: `(${projectFilter}) && archived = false`,
                 expand: "owner",
                 requestKey: null,
               }
-            : { requestKey: null }
+            : { filter: relationFilter, requestKey: null }
       const unsubscribe = await pb.collection(collection).subscribe<T>(
         "*",
         (event) => {
@@ -476,7 +531,12 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         })),
         initialized: true,
       })
-      if (connectionWanted) await connectRealtime(set)
+      if (connectionWanted) {
+        await connectRealtime(
+          set,
+          snapshot.projects.map((project) => project.id)
+        )
+      }
     } catch (error) {
       const message = messageFromError(error, "Could not load the board")
       set({ error: message })
@@ -489,7 +549,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   loadProjectPage: async (page) => {
     set({ loading: true, error: null })
     try {
-      const snapshot = await loadBoardPage(page)
+      const snapshot = await loadBoardPage(page, get().templates)
       expandedProjectId = snapshot.projects[0]?.id ?? null
       set({
         ...snapshot,
@@ -498,6 +558,12 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           collapsed: p.id !== expandedProjectId,
         })),
       })
+      if (connectionWanted) {
+        await connectRealtime(
+          set,
+          snapshot.projects.map((project) => project.id)
+        )
+      }
     } catch (error) {
       const message = messageFromError(error, "Could not load the board")
       set({ error: message })
@@ -523,7 +589,26 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           requestKey: null,
         })
       const project = toProject(record)
-      set({ openedProject: project })
+      const relations = await loadProjectRelations([projectId])
+      set((state) => ({
+        openedProject: project,
+        states: [
+          ...state.states.filter((item) => item.projectId !== projectId),
+          ...relations.states,
+        ],
+        todos: [
+          ...state.todos.filter((item) => item.projectId !== projectId),
+          ...relations.todos,
+        ],
+        labels: [
+          ...state.labels.filter((item) => item.projectId !== projectId),
+          ...relations.labels,
+        ],
+        members: [
+          ...state.members.filter((item) => item.projectId !== projectId),
+          ...relations.members,
+        ],
+      }))
       return project
     } catch (error) {
       const message = messageFromError(error, "Could not open the project")
@@ -569,8 +654,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     return task
   },
 
-  clearOpenedRecord: () =>
-    set({ openedTask: null, openedProject: null }),
+  clearOpenedRecord: () => set({ openedTask: null, openedProject: null }),
 
   dispose: () => {
     connectionWanted = false
@@ -594,8 +678,14 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           members: input.members,
         },
       })
-      const snapshot = await loadBoardPage(0)
+      const snapshot = await loadBoardPage(0, get().templates)
       set(snapshot)
+      if (connectionWanted) {
+        await connectRealtime(
+          set,
+          snapshot.projects.map((project) => project.id)
+        )
+      }
     } catch (error) {
       const message = messageFromError(error, "Could not create the project")
       set({ error: message })
@@ -636,15 +726,19 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   removeProject: async (id) => {
     try {
       await pb.collection(COLLECTIONS.projects).delete(id)
-      set((state) => ({
-        projects: state.projects.filter((project) => project.id !== id),
-        openedProject:
-          state.openedProject?.id === id ? null : state.openedProject,
-        states: state.states.filter((item) => item.projectId !== id),
-        todos: state.todos.filter((todo) => todo.projectId !== id),
-        labels: state.labels.filter((label) => label.projectId !== id),
-        members: state.members.filter((member) => member.projectId !== id),
-      }))
+      let page = get().projectPage
+      let snapshot = await loadBoardPage(page, get().templates)
+      if (page > 0 && snapshot.projects.length === 0) {
+        page = Math.max(0, snapshot.projectTotalPages - 1)
+        snapshot = await loadBoardPage(page, get().templates)
+      }
+      set({ ...snapshot, openedProject: null })
+      if (connectionWanted) {
+        await connectRealtime(
+          set,
+          snapshot.projects.map((project) => project.id)
+        )
+      }
     } catch (error) {
       const message = messageFromError(error, "Could not delete the project")
       set({ error: message })
@@ -660,8 +754,14 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         method: "PATCH",
         body: { ownerId },
       })
-      const snapshot = await loadBoardPage(get().projectPage)
+      const snapshot = await loadBoardPage(get().projectPage, get().templates)
       set(snapshot)
+      if (connectionWanted) {
+        await connectRealtime(
+          set,
+          snapshot.projects.map((project) => project.id)
+        )
+      }
     } catch (error) {
       const message = messageFromError(
         error,
@@ -772,11 +872,17 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         )
       )
     } catch (error) {
-      const snapshot = await loadBoardPage(get().projectPage)
+      const snapshot = await loadBoardPage(get().projectPage, get().templates)
       set({
         ...snapshot,
         error: messageFromError(error, "Could not reorder states"),
       })
+      if (connectionWanted) {
+        await connectRealtime(
+          set,
+          snapshot.projects.map((project) => project.id)
+        )
+      }
     }
   },
 
@@ -928,8 +1034,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         todos: state.todos.some((todo) => todo.id === id)
           ? upsertById(state.todos, updated)
           : state.todos,
-        openedTask:
-          state.openedTask?.id === id ? updated : state.openedTask,
+        openedTask: state.openedTask?.id === id ? updated : state.openedTask,
       }))
     } catch (error) {
       const message = messageFromError(error, "Could not update the task")

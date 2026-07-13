@@ -1,4 +1,4 @@
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 import { createAvatar } from "@dicebear/core"
 import {
@@ -12,7 +12,7 @@ import {
   notionists,
   shapes,
   thumbs,
-} from "@dicebear/collection"
+} from "@dicebear/collection/async"
 
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Upload04Icon } from "@hugeicons/core-free-icons"
@@ -27,6 +27,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
+import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/lib/utils"
 import { dataUriToFile, validateAvatarFile } from "@/lib/avatar"
 
@@ -36,17 +37,17 @@ type AvatarStyle = {
   style: any
 }
 
-const AVATAR_STYLES: AvatarStyle[] = [
-  { name: "Adventurer", style: adventurer },
-  { name: "Avataaars", style: avataaars },
-  { name: "Big Smile", style: bigSmile },
-  { name: "Bottts", style: bottts },
-  { name: "Fun Emoji", style: funEmoji },
-  { name: "Lorelei", style: lorelei },
-  { name: "Micah", style: micah },
-  { name: "Notionists", style: notionists },
-  { name: "Shapes", style: shapes },
-  { name: "Thumbs", style: thumbs },
+const AVATAR_STYLE_LOADERS = [
+  { name: "Adventurer", load: adventurer },
+  { name: "Avataaars", load: avataaars },
+  { name: "Big Smile", load: bigSmile },
+  { name: "Bottts", load: bottts },
+  { name: "Fun Emoji", load: funEmoji },
+  { name: "Lorelei", load: lorelei },
+  { name: "Micah", load: micah },
+  { name: "Notionists", load: notionists },
+  { name: "Shapes", load: shapes },
+  { name: "Thumbs", load: thumbs },
 ]
 
 const SEEDS = ["Senlin", "Alice", "Bob", "Diana", "Eric", "Luna", "Max", "Zoe"]
@@ -178,6 +179,29 @@ function PresetSheet({
   value?: string
   onSelect: (avatar: string, filename: string) => Promise<void>
 }) {
+  const [styles, setStyles] = useState<AvatarStyle[] | null>(null)
+  const [loadFailed, setLoadFailed] = useState(false)
+
+  useEffect(() => {
+    if (!open || styles) return
+    let active = true
+    void Promise.all(
+      AVATAR_STYLE_LOADERS.map(async ({ name, load }) => ({
+        name,
+        style: await load(),
+      }))
+    )
+      .then((loadedStyles) => {
+        if (active) setStyles(loadedStyles)
+      })
+      .catch(() => {
+        if (active) setLoadFailed(true)
+      })
+    return () => {
+      active = false
+    }
+  }, [open, styles])
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full sm:max-w-lg!">
@@ -189,7 +213,17 @@ function PresetSheet({
         </SheetHeader>
 
         <div className="flex flex-col gap-6 overflow-y-auto px-6 pb-6">
-          {AVATAR_STYLES.map((entry) => (
+          {!styles && !loadFailed && (
+            <div className="flex min-h-40 items-center justify-center">
+              <Spinner className="size-5" />
+            </div>
+          )}
+          {loadFailed && (
+            <p className="py-8 text-center text-sm text-destructive">
+              Could not load preset avatars. Please try again.
+            </p>
+          )}
+          {styles?.map((entry) => (
             <div key={entry.name} className="flex flex-col gap-2">
               <span className="text-xs font-medium text-muted-foreground">
                 {entry.name}

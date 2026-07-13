@@ -3,6 +3,7 @@ package chat
 import (
 	"encoding/json"
 	"errors"
+	"slices"
 
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
@@ -14,6 +15,8 @@ const (
 	conversationsCollection = "chat_conversations"
 	messagesCollection      = "chat_messages"
 	modelsCollection        = "llm_models"
+	maxHistoryMessages      = 30
+	maxHistoryUserTurns     = 15
 )
 
 func findOwnedConversation(app core.App, id, ownerID string) (*core.Record, error) {
@@ -39,10 +42,12 @@ func modelConfig(record *core.Record) workagent.ModelConfig {
 }
 
 func loadConversationMessages(app core.App, conversationID, excludeID string) ([]workagent.Message, error) {
-	records, err := app.FindRecordsByFilter(messagesCollection, "conversation = {:conversation} && id != {:exclude} && status = 'complete'", "sequence", 0, 0, dbx.Params{"conversation": conversationID, "exclude": excludeID})
+	records, err := app.FindRecordsByFilter(messagesCollection, "conversation = {:conversation} && id != {:exclude} && status = 'complete'", "-sequence", maxHistoryMessages, 0, dbx.Params{"conversation": conversationID, "exclude": excludeID})
 	if err != nil {
 		return nil, err
 	}
+	records = trimHistoryRecords(records)
+	slices.Reverse(records)
 	result := make([]workagent.Message, 0, len(records))
 	for _, record := range records {
 		parts := []workagent.Part{}
@@ -54,6 +59,26 @@ func loadConversationMessages(app core.App, conversationID, excludeID string) ([
 		result = append(result, workagent.Message{ID: record.Id, Role: record.GetString("role"), Parts: parts})
 	}
 	return result, nil
+}
+
+func trimHistoryRecords(records []*core.Record) []*core.Record {
+	userTurns := 0
+	end := len(records)
+	for index, record := range records {
+		if record.GetString("role") != "user" {
+			continue
+		}
+		userTurns++
+		if userTurns == maxHistoryUserTurns {
+			end = index + 1
+			break
+		}
+	}
+	records = records[:end]
+	for len(records) > 0 && records[len(records)-1].GetString("role") != "user" {
+		records = records[:len(records)-1]
+	}
+	return records
 }
 
 func saveMessageSnapshot(app core.App, messageID, status string, parts []workagent.Part, metadata map[string]any) error {

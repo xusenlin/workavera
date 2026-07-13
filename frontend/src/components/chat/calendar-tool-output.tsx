@@ -40,7 +40,7 @@ type ScheduleTask = {
   projectName: string
   stateId: string
   stateName: string
-  completed: bool
+  completed: boolean
 }
 
 type CalendarEvent = {

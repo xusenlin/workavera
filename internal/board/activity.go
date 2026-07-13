@@ -113,6 +113,10 @@ func boardAssigneeSummary(app core.App, userID string) TaskAssigneeSummary {
 	if err != nil {
 		return TaskAssigneeSummary{ID: userID, Name: userID}
 	}
+	return taskAssigneeFromRecord(record)
+}
+
+func taskAssigneeFromRecord(record *core.Record) TaskAssigneeSummary {
 	name := record.GetString("name")
 	if name == "" {
 		name = record.GetString("email")

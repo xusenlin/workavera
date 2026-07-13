@@ -27,3 +27,4 @@ dist/
 # Test and coverage output
 coverage.out
 *.test
+/website/

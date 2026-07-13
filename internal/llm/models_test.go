@@ -303,6 +303,19 @@ func TestShareModelRequiresAcceptanceAndCopiesCurrentConfiguration(t *testing.T)
 	}
 }
 
+func TestValidateShareRecipientsRejectsMissingUsersAndSender(t *testing.T) {
+	server := newLLMTestServer(t)
+	if err := validateShareRecipients(server.app, []string{server.targetID}, server.ownerID); err != nil {
+		t.Fatalf("valid recipient was rejected: %v", err)
+	}
+	if err := validateShareRecipients(server.app, []string{"missing-user"}, server.ownerID); err == nil {
+		t.Fatal("missing recipient was accepted")
+	}
+	if err := validateShareRecipients(server.app, []string{server.ownerID}, server.ownerID); err == nil {
+		t.Fatal("sender was accepted as a recipient")
+	}
+}
+
 func TestRejectModelShareDoesNotCreateConfiguration(t *testing.T) {
 	server := newLLMTestServer(t)
 	created := server.request(t, http.MethodPost, "/api/llm/models", server.ownerToken, `{
