@@ -61,6 +61,12 @@ function getInitials(name: string) {
   return name.charAt(0).toUpperCase()
 }
 
+// Pages reachable outside the sidebar navigation still need a breadcrumb title.
+const EXTRA_PAGE_TITLES: Record<string, string> = {
+  "/notifications": "Notifications",
+  "/profile": "Profile",
+}
+
 export function AppHeader() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -95,11 +101,10 @@ export function AppHeader() {
       .catch(() => {})
   }, [setTheme])
 
+  const extraTitle = EXTRA_PAGE_TITLES[location.pathname]
   const currentNav =
     flatNavItems.find((item) => location.pathname === item.url) ??
-    (location.pathname === "/notifications"
-      ? { title: "Notifications" }
-      : undefined)
+    (extraTitle ? { title: extraTitle } : undefined)
 
   const handleLogout = () => {
     logout()
