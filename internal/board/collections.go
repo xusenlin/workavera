@@ -9,4 +9,5 @@ const (
 	boardTasksCollection          = "board_tasks"
 	boardTaskOperationLogs        = "board_task_operation_logs"
 	boardProjectOperationLogs     = "board_project_operation_logs"
+	docsCollection                = "docs"
 )

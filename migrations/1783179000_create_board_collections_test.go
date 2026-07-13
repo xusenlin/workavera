@@ -80,6 +80,11 @@ func TestBoardCollectionsMigration(t *testing.T) {
 	if err := dropReadingItemsCollection(app); err != nil {
 		t.Fatalf("drop reading items: %v", err)
 	}
+	// board_tasks.documents references docs, so its relation must be removed
+	// before docs can be dropped (real rollbacks run 1784002000 down first).
+	if err := dropBoardTaskDocuments(app); err != nil {
+		t.Fatalf("drop board task documents: %v", err)
+	}
 	if err := dropDocsCollections(app); err != nil {
 		t.Fatalf("drop docs collections: %v", err)
 	}

@@ -78,7 +78,32 @@ func buildBoardTaskChanges(app core.App, before, after *core.Record) map[string]
 		changes["assignees"] = map[string]any{"from": beforeAssignees, "to": afterAssignees}
 	}
 
+	beforeDocuments := boardDocumentTitles(app, before.GetStringSlice("documents"))
+	afterDocuments := boardDocumentTitles(app, after.GetStringSlice("documents"))
+	if !reflect.DeepEqual(beforeDocuments, afterDocuments) {
+		changes["documents"] = map[string]any{"from": beforeDocuments, "to": afterDocuments}
+	}
+
 	return changes
+}
+
+// boardDocumentTitles resolves document ids to their titles for activity diffs.
+// Documents are presentable by "title" rather than the "name"/"email" that
+// boardRecordName reads.
+func boardDocumentTitles(app core.App, ids []string) []string {
+	titles := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if id == "" {
+			continue
+		}
+		record, err := app.FindRecordById(docsCollection, id)
+		if err != nil {
+			titles = append(titles, id)
+			continue
+		}
+		titles = append(titles, record.GetString("title"))
+	}
+	return titles
 }
 
 func addTextChange(changes map[string]any, field, before, after string) {

@@ -6,9 +6,29 @@ import (
 	"testing"
 
 	"github.com/pocketbase/dbx"
+	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tests"
 	_ "github.com/xusenlin/workavera/migrations"
 )
+
+func createBoardTestDoc(t *testing.T, app core.App, ownerID, projectID, title string) *core.Record {
+	t.Helper()
+	collection, err := app.FindCollectionByNameOrId(docsCollection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := core.NewRecord(collection)
+	record.Set("title", title)
+	record.Set("owner", ownerID)
+	record.Set("project", projectID)
+	record.Set("status", "draft")
+	record.Set("revision", 1)
+	record.Set("last_edited_by", ownerID)
+	if err := app.Save(record); err != nil {
+		t.Fatal(err)
+	}
+	return record
+}
 
 func TestCreateProjectFromTemplateAndBlank(t *testing.T) {
 	app, err := tests.NewTestApp()
@@ -88,6 +108,90 @@ func TestProjectCapabilitiesAndCommandPermissions(t *testing.T) {
 	created, err := CreateTask(context.Background(), app, member.Id, CreateTaskCommand{ProjectID: project.Id, StateID: state.Id, Title: "Allowed", AssigneeIDs: []string{owner.Id}})
 	if err != nil || created.ID == "" {
 		t.Fatalf("member should create owner-assigned task: %#v, %v", created, err)
+	}
+}
+
+func TestTaskDocumentLinksSameProjectOnly(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(app.Cleanup)
+	owner := createQueryTestUser(t, app, "docs-owner@example.com", "Owner")
+	project := createQueryTestProject(t, app, owner.Id, "Docs", false)
+	state := createQueryTestState(t, app, project.Id)
+	otherProject := createQueryTestProject(t, app, owner.Id, "Other", false)
+
+	projectDoc := createBoardTestDoc(t, app, owner.Id, project.Id, "In project")
+	otherDoc := createBoardTestDoc(t, app, owner.Id, otherProject.Id, "Other project")
+	personalDoc := createBoardTestDoc(t, app, owner.Id, "", "Personal")
+
+	// A doc from another project (or a personal doc) cannot be linked.
+	if _, err := CreateTask(context.Background(), app, owner.Id, CreateTaskCommand{ProjectID: project.Id, StateID: state.Id, Title: "Cross doc", DocIDs: []string{otherDoc.Id}}); err == nil {
+		t.Fatal("cross-project document was accepted")
+	}
+	if _, err := CreateTask(context.Background(), app, owner.Id, CreateTaskCommand{ProjectID: project.Id, StateID: state.Id, Title: "Personal doc", DocIDs: []string{personalDoc.Id}}); err == nil {
+		t.Fatal("personal document was accepted")
+	}
+
+	// A same-project doc links successfully and is persisted.
+	created, err := CreateTask(context.Background(), app, owner.Id, CreateTaskCommand{ProjectID: project.Id, StateID: state.Id, Title: "Linked", DocIDs: []string{projectDoc.Id}})
+	if err != nil {
+		t.Fatalf("same-project document link failed: %v", err)
+	}
+	task, err := app.FindRecordById(boardTasksCollection, created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := task.GetStringSlice("documents"); len(got) != 1 || got[0] != projectDoc.Id {
+		t.Fatalf("expected linked document to be persisted, got %#v", got)
+	}
+
+	// Updating with a cross-project doc is rejected; clearing works.
+	if _, err := UpdateTask(context.Background(), app, owner.Id, UpdateTaskCommand{TaskID: created.ID, DocIDs: &[]string{otherDoc.Id}}); err == nil {
+		t.Fatal("cross-project document accepted on update")
+	}
+	empty := []string{}
+	if _, err := UpdateTask(context.Background(), app, owner.Id, UpdateTaskCommand{TaskID: created.ID, DocIDs: &empty}); err != nil {
+		t.Fatalf("clearing documents failed: %v", err)
+	}
+	task, _ = app.FindRecordById(boardTasksCollection, created.ID)
+	if len(task.GetStringSlice("documents")) != 0 {
+		t.Fatalf("documents were not cleared: %#v", task.GetStringSlice("documents"))
+	}
+}
+
+func TestDeletingLinkedDocumentUnlinksFromTask(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(app.Cleanup)
+	owner := createQueryTestUser(t, app, "unlink-owner@example.com", "Owner")
+	project := createQueryTestProject(t, app, owner.Id, "Unlink", false)
+	state := createQueryTestState(t, app, project.Id)
+	doc := createBoardTestDoc(t, app, owner.Id, project.Id, "Doomed doc")
+
+	created, err := CreateTask(context.Background(), app, owner.Id, CreateTaskCommand{ProjectID: project.Id, StateID: state.Id, Title: "Has doc", DocIDs: []string{doc.Id}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	docRecord, err := app.FindRecordById(docsCollection, doc.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := app.Delete(docRecord); err != nil {
+		t.Fatal(err)
+	}
+
+	// The task must survive; the dangling link is cleared automatically.
+	task, err := app.FindRecordById(boardTasksCollection, created.ID)
+	if err != nil {
+		t.Fatalf("task should still exist after its linked document is deleted: %v", err)
+	}
+	if got := task.GetStringSlice("documents"); len(got) != 0 {
+		t.Fatalf("deleting a document must unlink it from the task, got %#v", got)
 	}
 }
 

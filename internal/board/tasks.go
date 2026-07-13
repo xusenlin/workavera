@@ -30,6 +30,7 @@ func validateBoardTaskRequest(event *core.RecordRequestEvent) error {
 		stateID,
 		event.Record.GetStringSlice("labels"),
 		event.Record.GetStringSlice("assignees"),
+		event.Record.GetStringSlice("documents"),
 	); err != nil {
 		return event.BadRequestError(err.Error(), err)
 	}

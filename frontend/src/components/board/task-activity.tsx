@@ -101,6 +101,11 @@ function describeLog(log: OperationLog) {
       `changed assignees from ${text(changes.assignees.from)} to ${text(changes.assignees.to)}`
     )
   }
+  if (changes.documents) {
+    descriptions.push(
+      `changed linked documents from ${text(changes.documents.from)} to ${text(changes.documents.to)}`
+    )
+  }
   return descriptions.length > 0 ? descriptions : ["updated this task"]
 }
 

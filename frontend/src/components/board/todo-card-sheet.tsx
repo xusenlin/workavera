@@ -1,7 +1,14 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { useNavigate } from "react-router"
 
 import { HugeiconsIcon } from "@hugeicons/react"
-import { Delete02Icon } from "@hugeicons/core-free-icons"
+import {
+  ArrowUpRight01Icon,
+  Cancel01Icon,
+  Delete02Icon,
+  File01Icon,
+  Link02Icon,
+} from "@hugeicons/core-free-icons"
 
 import {
   AlertDialog,
@@ -36,6 +43,8 @@ import {
 } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
+import { pb } from "@/lib/pocketbase"
+import { workspaceRecordUrl } from "@/lib/workspace-navigation"
 import {
   PRIORITY_META,
   projectParticipants,
@@ -44,6 +53,7 @@ import {
   type Project,
   type Todo,
 } from "@/store/board"
+import { DocumentLinkDialog } from "./document-link-dialog"
 import { TaskActivity } from "./task-activity"
 
 type TodoCardSheetProps = {
@@ -62,6 +72,7 @@ type FormState = {
   stateId: string
   labels: string[]
   members: string[]
+  documents: string[]
   dueDate: string
 }
 
@@ -72,6 +83,7 @@ const emptyForm: FormState = {
   stateId: "",
   labels: [],
   members: [],
+  documents: [],
   dueDate: "",
 }
 
@@ -84,6 +96,7 @@ function initialForm(todo: Todo | null, defaultStateId?: string): FormState {
     stateId: todo.stateId,
     labels: [...todo.labels],
     members: [...todo.members],
+    documents: [...todo.documents],
     dueDate: todo.dueDate ?? "",
   }
 }
@@ -104,10 +117,34 @@ export function TodoCardSheet({
   const projects = useBoardStore((s) => s.projects)
   const states = useBoardStore((s) => s.states)
 
+  const navigate = useNavigate()
   const [form, setForm] = useState<FormState>(() =>
     initialForm(todo, defaultStateId)
   )
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [documentDialogOpen, setDocumentDialogOpen] = useState(false)
+  const [docTitles, setDocTitles] = useState<Record<string, string>>({})
+
+  // Resolve titles for any linked documents we don't have a title for yet
+  // (initial load, and after linking more via the picker).
+  useEffect(() => {
+    const missing = form.documents.filter((id) => !(id in docTitles))
+    if (missing.length === 0) return
+    const filter = missing.map((id) => `id = "${id}"`).join(" || ")
+    pb.collection("docs")
+      .getList<{ id: string; title: string }>(1, missing.length, {
+        filter,
+        requestKey: null,
+      })
+      .then((result) =>
+        setDocTitles((prev) => {
+          const next = { ...prev }
+          for (const doc of result.items) next[doc.id] = doc.title
+          return next
+        })
+      )
+      .catch(() => {})
+  }, [form.documents, docTitles])
 
   const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -148,6 +185,7 @@ export function TodoCardSheet({
       stateId: form.stateId,
       labels: form.labels,
       members: form.members,
+      documents: form.documents,
       dueDate: form.dueDate || undefined,
     }
 
@@ -183,7 +221,22 @@ export function TodoCardSheet({
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-lg!">
+      <SheetContent
+        side="right"
+        className="w-full sm:max-w-lg!"
+        onInteractOutside={(event) => {
+          // Interacting with the nested document picker (a portalled dialog)
+          // must not dismiss the task sheet. Check the live DOM rather than a
+          // captured state value, which can be stale by the time this fires.
+          const target = event.target as Element | null
+          if (
+            target?.closest("[data-slot='dialog-content']") ||
+            document.querySelector("[data-slot='dialog-content']")
+          ) {
+            event.preventDefault()
+          }
+        }}
+      >
         <SheetHeader>
           <SheetTitle>{todo ? "Edit task" : "Add task"}</SheetTitle>
           <SheetDescription>
@@ -354,6 +407,70 @@ export function TodoCardSheet({
             </div>
           </div>
 
+          {/* Documents */}
+          <div className="flex flex-col gap-2">
+            <Label>Documents</Label>
+            {form.documents.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                {form.documents.map((id) => (
+                  <div
+                    key={id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => navigate(workspaceRecordUrl("docs", id))}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault()
+                        navigate(workspaceRecordUrl("docs", id))
+                      }
+                    }}
+                    className="group flex cursor-pointer items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm transition-colors hover:border-primary/40 hover:bg-primary/5"
+                  >
+                    <HugeiconsIcon
+                      icon={File01Icon}
+                      strokeWidth={2}
+                      className="size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-primary"
+                    />
+                    <span className="min-w-0 flex-1 truncate font-medium text-primary underline-offset-2 group-hover:underline">
+                      {docTitles[id] ?? "Untitled document"}
+                    </span>
+                    <HugeiconsIcon
+                      icon={ArrowUpRight01Icon}
+                      strokeWidth={2}
+                      className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+                    />
+                    <button
+                      type="button"
+                      aria-label="Remove document"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        setField(
+                          "documents",
+                          form.documents.filter((docId) => docId !== id)
+                        )
+                      }}
+                      className="shrink-0 cursor-pointer rounded p-0.5 text-muted-foreground transition-colors hover:text-destructive"
+                    >
+                      <HugeiconsIcon
+                        icon={Cancel01Icon}
+                        strokeWidth={2}
+                        className="size-4"
+                      />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => setDocumentDialogOpen(true)}
+              className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed py-2 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+            >
+              <HugeiconsIcon icon={Link02Icon} strokeWidth={2} className="size-4" />
+              Link a document
+            </button>
+          </div>
+
           {todo && <TaskActivity taskId={todo.id} />}
         </div>
 
@@ -404,6 +521,14 @@ export function TodoCardSheet({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <DocumentLinkDialog
+        projectId={currentProjectId}
+        selected={form.documents}
+        open={documentDialogOpen}
+        onOpenChange={setDocumentDialogOpen}
+        onConfirm={(ids) => setField("documents", ids)}
+      />
     </Sheet>
   )
 }

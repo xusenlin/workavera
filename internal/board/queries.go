@@ -512,6 +512,13 @@ type TaskAssigneeSummary struct {
 	CollectionID string `json:"collectionId,omitempty"`
 }
 
+// TaskDocSummary is a linked document resolved to its id and title so a tool
+// consumer can decide whether to open it (e.g. via docs_get).
+type TaskDocSummary struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+}
+
 // TaskSummary is a self-contained task representation for tool consumers. All
 // related fields (state, labels, assignees) are resolved server-side so the
 // frontend can render the result without additional requests.
@@ -524,6 +531,7 @@ type TaskSummary struct {
 	StateID     string                `json:"stateId"`
 	Labels      []TaskLabelSummary    `json:"labels"`
 	Assignees   []TaskAssigneeSummary `json:"assignees"`
+	Documents   []TaskDocSummary      `json:"documents"`
 	Rank        float64               `json:"rank"`
 }
 
@@ -655,6 +663,17 @@ func SearchVisibleTasks(ctx context.Context, app core.App, actorID string, optio
 		}
 	}
 
+	// Preload the project's documents so each task's linked doc ids resolve to
+	// titles in one pass.
+	docRecords, err := app.FindRecordsByFilter(docsCollection, "project = {:project}", "", 0, 0, dbx.Params{"project": projectID})
+	if err != nil {
+		return TaskSearchResult{}, err
+	}
+	docsByID := make(map[string]TaskDocSummary, len(docRecords))
+	for _, dr := range docRecords {
+		docsByID[dr.Id] = TaskDocSummary{ID: dr.Id, Title: dr.GetString("title")}
+	}
+
 	result := make([]TaskSummary, 0, len(taskRecords))
 	for _, tr := range taskRecords {
 		assignees := make([]TaskAssigneeSummary, 0)
@@ -669,6 +688,13 @@ func SearchVisibleTasks(ctx context.Context, app core.App, actorID string, optio
 			}
 		}
 
+		taskDocs := make([]TaskDocSummary, 0)
+		for _, did := range tr.GetStringSlice("documents") {
+			if doc, ok := docsByID[did]; ok {
+				taskDocs = append(taskDocs, doc)
+			}
+		}
+
 		result = append(result, TaskSummary{
 			ID:          tr.Id,
 			Title:       tr.GetString("title"),
@@ -678,6 +704,7 @@ func SearchVisibleTasks(ctx context.Context, app core.App, actorID string, optio
 			StateID:     tr.GetString("state"),
 			Labels:      taskLabels,
 			Assignees:   assignees,
+			Documents:   taskDocs,
 			Rank:        tr.GetFloat("rank"),
 		})
 	}

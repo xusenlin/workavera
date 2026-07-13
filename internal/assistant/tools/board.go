@@ -69,6 +69,7 @@ type boardCreateTaskInput struct {
 	DueDate     string   `json:"dueDate,omitempty" description:"Optional due date in YYYY-MM-DD format"`
 	LabelIDs    []string `json:"labelIds,omitempty" description:"Optional label IDs belonging to the project"`
 	AssigneeIDs []string `json:"assigneeIds,omitempty" description:"Optional user IDs; each must be the project owner or a member"`
+	DocumentIDs []string `json:"documentIds,omitempty" description:"Optional document IDs to link; each must belong to the same project"`
 }
 
 type boardUpdateTaskInput struct {
@@ -80,6 +81,7 @@ type boardUpdateTaskInput struct {
 	DueDate     *string   `json:"dueDate,omitempty" description:"Optional due date in YYYY-MM-DD format; pass null to clear it"`
 	LabelIDs    *[]string `json:"labelIds,omitempty" description:"Optional replacement label IDs; pass an empty array to clear"`
 	AssigneeIDs *[]string `json:"assigneeIds,omitempty" description:"Optional replacement assignee user IDs; pass an empty array to clear"`
+	DocumentIDs *[]string `json:"documentIds,omitempty" description:"Optional replacement linked document IDs, each belonging to the same project; pass an empty array to clear"`
 	dueDateSet  bool
 }
 
@@ -125,7 +127,7 @@ func newBoardSearchProjectsTool(app core.App, actorID string) fantasy.AgentTool 
 func newBoardSearchTasksTool(app core.App, actorID string) fantasy.AgentTool {
 	return fantasy.NewAgentTool(
 		"board_search_tasks",
-		"Fetch and display tasks for a board project, optionally filtered by states or assignees.",
+		"Fetch and display tasks for a board project, optionally filtered by states or assignees. Each task includes any linked documents (id and title); call docs_get with a document id to read its content when relevant.",
 		func(ctx context.Context, input boardSearchTasksInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
 			result, err := board.SearchVisibleTasks(ctx, app, actorID, board.TaskSearchOptions{
 				ProjectID: input.ProjectID,
@@ -235,7 +237,7 @@ func newBoardCreateTaskTool(app core.App, actorID string) fantasy.AgentTool {
 		"board_create_task",
 		"Create a task. Call board_get_project first, require capabilities.canEditTasks, and use only returned state, label, and participant IDs. Server authorization permits owner, admin, and member roles but denies viewers.",
 		func(ctx context.Context, input boardCreateTaskInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
-			result, err := board.CreateTask(ctx, app, actorID, board.CreateTaskCommand{ProjectID: input.ProjectID, StateID: input.StateID, Title: input.Title, Description: normalizeEscapedText(input.Description), Priority: input.Priority, DueDate: input.DueDate, LabelIDs: input.LabelIDs, AssigneeIDs: input.AssigneeIDs})
+			result, err := board.CreateTask(ctx, app, actorID, board.CreateTaskCommand{ProjectID: input.ProjectID, StateID: input.StateID, Title: input.Title, Description: normalizeEscapedText(input.Description), Priority: input.Priority, DueDate: input.DueDate, LabelIDs: input.LabelIDs, AssigneeIDs: input.AssigneeIDs, DocIDs: input.DocumentIDs})
 			return boardToolResult(app, actorID, "create task", result, err)
 		},
 	)
@@ -246,7 +248,7 @@ func newBoardUpdateTaskTool(app core.App, actorID string) fantasy.AgentTool {
 		"board_update_task",
 		"Patch an existing task without changing its project. Call board_get_project first, require capabilities.canEditTasks, and use only returned state, label, and participant IDs. Omitted fields stay unchanged; empty arrays clear relations; null dueDate clears it.",
 		func(ctx context.Context, input boardUpdateTaskInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
-			result, err := board.UpdateTask(ctx, app, actorID, board.UpdateTaskCommand{TaskID: input.TaskID, Title: input.Title, Description: normalizeEscapedTextPtr(input.Description), StateID: input.StateID, Priority: input.Priority, DueDate: input.DueDate, DueDateSet: input.dueDateSet, LabelIDs: input.LabelIDs, AssigneeIDs: input.AssigneeIDs})
+			result, err := board.UpdateTask(ctx, app, actorID, board.UpdateTaskCommand{TaskID: input.TaskID, Title: input.Title, Description: normalizeEscapedTextPtr(input.Description), StateID: input.StateID, Priority: input.Priority, DueDate: input.DueDate, DueDateSet: input.dueDateSet, LabelIDs: input.LabelIDs, AssigneeIDs: input.AssigneeIDs, DocIDs: input.DocumentIDs})
 			return boardToolResult(app, actorID, "update task", result, err)
 		},
 	)

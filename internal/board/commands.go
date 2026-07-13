@@ -91,6 +91,7 @@ type CreateTaskCommand struct {
 	DueDate     string
 	LabelIDs    []string
 	AssigneeIDs []string
+	DocIDs      []string
 }
 
 type UpdateTaskCommand struct {
@@ -103,6 +104,7 @@ type UpdateTaskCommand struct {
 	DueDateSet  bool
 	LabelIDs    *[]string
 	AssigneeIDs *[]string
+	DocIDs      *[]string
 }
 
 func ListVisibleTemplates(ctx context.Context, app core.App, actorID string) ([]TemplateSummary, error) {
@@ -478,7 +480,7 @@ func CreateTask(ctx context.Context, app core.App, actorID string, command Creat
 		if command.Priority == "" {
 			command.Priority = "medium"
 		}
-		if err := validateTaskRelations(tx, project, command.StateID, command.LabelIDs, command.AssigneeIDs); err != nil {
+		if err := validateTaskRelations(tx, project, command.StateID, command.LabelIDs, command.AssigneeIDs, command.DocIDs); err != nil {
 			return err
 		}
 		if err := validatePriority(command.Priority); err != nil {
@@ -497,6 +499,7 @@ func CreateTask(ctx context.Context, app core.App, actorID string, command Creat
 		record.Set("due_date", command.DueDate)
 		record.Set("labels", command.LabelIDs)
 		record.Set("assignees", command.AssigneeIDs)
+		record.Set("documents", command.DocIDs)
 		record.Set("created_by", actorID)
 		record.Set("rank", nextTaskRank(tx, project.Id, command.StateID))
 		if err := tx.Save(record); err != nil {
@@ -559,7 +562,10 @@ func UpdateTask(ctx context.Context, app core.App, actorID string, command Updat
 		if command.AssigneeIDs != nil {
 			record.Set("assignees", *command.AssigneeIDs)
 		}
-		if err := validateTaskRelations(tx, project, record.GetString("state"), record.GetStringSlice("labels"), record.GetStringSlice("assignees")); err != nil {
+		if command.DocIDs != nil {
+			record.Set("documents", *command.DocIDs)
+		}
+		if err := validateTaskRelations(tx, project, record.GetString("state"), record.GetStringSlice("labels"), record.GetStringSlice("assignees"), record.GetStringSlice("documents")); err != nil {
 			return err
 		}
 		changes := buildBoardTaskChanges(tx, before, record)
@@ -618,7 +624,7 @@ func requireTaskWriter(app core.App, actorID, projectID string) (*core.Record, e
 	return project, nil
 }
 
-func validateTaskRelations(app core.App, project *core.Record, stateID string, labelIDs, assigneeIDs []string) error {
+func validateTaskRelations(app core.App, project *core.Record, stateID string, labelIDs, assigneeIDs, documentIDs []string) error {
 	state, err := app.FindRecordById(boardProjectStatesCollection, strings.TrimSpace(stateID))
 	if err != nil || state.GetString("project") != project.Id {
 		return errors.New("selected state does not belong to this project")
@@ -633,6 +639,12 @@ func validateTaskRelations(app core.App, project *core.Record, stateID string, l
 		visible, err := projectVisibleTo(app, project, id)
 		if err != nil || !visible {
 			return errors.New("every assignee must be the project owner or a project member")
+		}
+	}
+	for _, id := range documentIDs {
+		doc, err := app.FindRecordById(docsCollection, id)
+		if err != nil || doc.GetString("project") != project.Id {
+			return errors.New("a linked document does not belong to this project")
 		}
 	}
 	return nil

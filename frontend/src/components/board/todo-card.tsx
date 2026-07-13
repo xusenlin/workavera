@@ -2,7 +2,11 @@ import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 
 import { HugeiconsIcon } from "@hugeicons/react"
-import { Calendar03Icon, TextAlignLeftIcon } from "@hugeicons/core-free-icons"
+import {
+  Calendar03Icon,
+  File01Icon,
+  TextAlignLeftIcon,
+} from "@hugeicons/core-free-icons"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -146,6 +150,21 @@ export function TodoCard({ todo, onEdit }: TodoCardProps) {
                 className="size-3"
               />
               {formatDate(todo.dueDate)}
+            </span>
+          )}
+
+          {/* Linked documents */}
+          {todo.documents.length > 0 && (
+            <span
+              className="flex items-center gap-0.5 text-[10px] text-muted-foreground"
+              title={`${todo.documents.length} linked document${todo.documents.length === 1 ? "" : "s"}`}
+            >
+              <HugeiconsIcon
+                icon={File01Icon}
+                strokeWidth={2}
+                className="size-3"
+              />
+              {todo.documents.length}
             </span>
           )}
         </div>
