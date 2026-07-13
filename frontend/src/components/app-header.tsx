@@ -48,14 +48,12 @@ import {
 } from "@/components/ui/popover"
 import { NotificationItem } from "@/components/notifications/notification-item"
 import { ThemeToggle } from "@/components/theme-toggle"
-import { useTheme } from "@/components/theme-provider"
 import { useAuthStore } from "@/store/auth"
 import { useChatRunsStore } from "@/store/chat-runs"
 import { useChatStore } from "@/store/chat"
 import { workspaceRecordUrl } from "@/lib/workspace-navigation"
 import { useNotificationsStore } from "@/store/notifications"
 import { flatNavItems } from "@/lib/navigation"
-import { pb } from "@/lib/pocketbase"
 
 function getInitials(name: string) {
   return name.charAt(0).toUpperCase()
@@ -71,7 +69,6 @@ export function AppHeader() {
   const navigate = useNavigate()
   const location = useLocation()
   const { user, logout } = useAuthStore()
-  const { setTheme } = useTheme()
   const activeRunCount = useChatRunsStore(
     (state) => Object.keys(state.runs).length
   )
@@ -90,16 +87,6 @@ export function AppHeader() {
     void initializeNotifications()
     return disposeNotifications
   }, [disposeNotifications, initializeNotifications])
-
-  useEffect(() => {
-    void pb
-      .send<{ theme: "light" | "dark" | "system" }>("/api/configs/system", {
-        method: "GET",
-        requestKey: null,
-      })
-      .then((config) => setTheme(config.theme))
-      .catch(() => {})
-  }, [setTheme])
 
   const extraTitle = EXTRA_PAGE_TITLES[location.pathname]
   const currentNav =

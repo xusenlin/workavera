@@ -54,7 +54,7 @@ import {
   type LlmModelConfig,
 } from "@/store/llm-settings"
 import { cn } from "@/lib/utils"
-import { pb } from "@/lib/pocketbase"
+import { useAuthStore } from "@/store/auth"
 
 export function SettingsPage() {
   const models = useLlmSettingsStore((state) => state.models)
@@ -333,7 +333,7 @@ export function SettingsPage() {
         </CardContent>
       </Card>
 
-      <SystemSettingsCard />
+      <AppearanceCard />
 
       <ModelSheet
         key={sheetModel?.id ?? "new-model"}
@@ -399,37 +399,18 @@ const THEME_OPTIONS = [
   { value: "system" as const, label: "System", icon: ComputerIcon },
 ]
 
-function SystemSettingsCard() {
+function AppearanceCard() {
   const { theme, setTheme } = useTheme()
+  const persistTheme = useAuthStore((state) => state.updateTheme)
 
-  useEffect(() => {
-    void pb
-      .send<{
-        theme: "light" | "dark" | "system"
-      }>("/api/configs/system", {
-        method: "GET",
-        requestKey: null,
-      })
-      .then((config) => {
-        setTheme(config.theme)
-      })
-      .catch(() => toast.error("Could not load the appearance setting"))
-  }, [setTheme])
-
-  const updateTheme = async (value: "light" | "dark" | "system") => {
+  const changeTheme = async (value: "light" | "dark" | "system") => {
     const previous = theme
     setTheme(value)
     try {
-      const config = await pb.send<{
-        theme: "light" | "dark" | "system"
-      }>("/api/configs/system", {
-        method: "PATCH",
-        body: { theme: value },
-      })
-      setTheme(config.theme)
+      await persistTheme(value)
     } catch {
       setTheme(previous)
-      toast.error("Could not update the system theme")
+      toast.error("Could not update your theme")
     }
   }
 
@@ -445,9 +426,9 @@ function SystemSettingsCard() {
             />
           </div>
           <div>
-            <CardTitle>System</CardTitle>
+            <CardTitle>Appearance</CardTitle>
             <CardDescription>
-              Configure your appearance preference.
+              Your personal theme preference for this account.
             </CardDescription>
           </div>
         </div>
@@ -463,7 +444,7 @@ function SystemSettingsCard() {
                 <button
                   key={option.value}
                   type="button"
-                  onClick={() => void updateTheme(option.value)}
+                  onClick={() => void changeTheme(option.value)}
                   className={cn(
                     "flex cursor-pointer items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors",
                     active

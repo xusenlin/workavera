@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import * as React from "react"
 
-import { pb } from "@/lib/pocketbase"
+import { useAuthStore } from "@/store/auth"
 
 type Theme = "dark" | "light" | "system"
 type ResolvedTheme = "dark" | "light"
@@ -170,12 +170,7 @@ export function ThemeProvider({
                 : "dark"
 
         localStorage.setItem(storageKey, nextTheme)
-        if (pb.authStore.isValid) {
-          void pb.send("/api/configs/system", {
-            method: "PATCH",
-            body: { theme: nextTheme },
-          })
-        }
+        void useAuthStore.getState().updateTheme(nextTheme).catch(() => {})
         return nextTheme
       })
     }

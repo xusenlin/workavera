@@ -55,21 +55,17 @@ func TestSystemConfigAPI(t *testing.T) {
 		t.Fatalf("expected authentication, got %d", unauthorized.Code)
 	}
 
-	request := httptest.NewRequest(http.MethodPatch, "/api/configs/system", strings.NewReader(`{"theme":"dark"}`))
+	request := httptest.NewRequest(http.MethodGet, "/api/configs/system", nil)
 	request.Header.Set("Authorization", token)
-	request.Header.Set("content-type", "application/json")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusOK || SystemLocation(app).String() != "Asia/Shanghai" || SystemTheme(app) != "dark" {
-		t.Fatalf("update theme: %d %s", response.Code, response.Body.String())
+	if response.Code != http.StatusOK {
+		t.Fatalf("get system config: %d %s", response.Code, response.Body.String())
 	}
-
-	timezoneUpdate := httptest.NewRequest(http.MethodPatch, "/api/configs/system", strings.NewReader(`{"timezone":"UTC"}`))
-	timezoneUpdate.Header.Set("Authorization", token)
-	timezoneUpdate.Header.Set("content-type", "application/json")
-	timezoneResponse := httptest.NewRecorder()
-	handler.ServeHTTP(timezoneResponse, timezoneUpdate)
-	if timezoneResponse.Code != http.StatusBadRequest || SystemLocation(app).String() != "Asia/Shanghai" {
-		t.Fatalf("user timezone update should be rejected: %d %s", timezoneResponse.Code, timezoneResponse.Body.String())
+	if !strings.Contains(response.Body.String(), `"timezone":"Asia/Shanghai"`) {
+		t.Fatalf("system config should expose the timezone, got %s", response.Body.String())
+	}
+	if strings.Contains(response.Body.String(), "theme") {
+		t.Fatalf("theme is a per-user preference and must not appear in system config, got %s", response.Body.String())
 	}
 }

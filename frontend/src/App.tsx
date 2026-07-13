@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react"
 
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { Spinner } from "@/components/ui/spinner"
+import { useTheme } from "@/components/theme-provider"
 import { clearChatRuntimes } from "@/lib/chat-runtime"
 import { AppRouter } from "@/router"
 import { useAuthStore } from "@/store/auth"
@@ -11,11 +12,18 @@ export function App() {
   const initialized = useAuthStore((state) => state.initialized)
   const initialize = useAuthStore((state) => state.initialize)
   const userId = useAuthStore((state) => state.user?.id ?? null)
+  const userTheme = useAuthStore((state) => state.user?.theme)
   const previousUserId = useRef(userId)
+  const { setTheme } = useTheme()
 
   useEffect(() => {
     void initialize()
   }, [initialize])
+
+  // Apply the signed-in user's saved theme once we know who they are.
+  useEffect(() => {
+    if (userTheme) setTheme(userTheme)
+  }, [userTheme, setTheme])
 
   useEffect(() => {
     if (previousUserId.current !== userId) {

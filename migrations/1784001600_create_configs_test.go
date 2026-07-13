@@ -33,12 +33,4 @@ func TestConfigsMigration(t *testing.T) {
 	if err := json.Unmarshal([]byte(record.GetString("value")), &timezone); err != nil || timezone != "Asia/Shanghai" {
 		t.Fatalf("unexpected default timezone: %q (%v)", record.GetString("value"), err)
 	}
-	theme, err := app.FindFirstRecordByFilter(configsCollection, `key = "system.theme"`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var themeValue string
-	if err := json.Unmarshal([]byte(theme.GetString("value")), &themeValue); err != nil || themeValue != "system" {
-		t.Fatalf("unexpected default theme: %q (%v)", theme.GetString("value"), err)
-	}
 }

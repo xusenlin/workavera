@@ -8,10 +8,11 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { useTheme } from "@/components/theme-provider"
-import { pb } from "@/lib/pocketbase"
+import { useAuthStore } from "@/store/auth"
 
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme()
+  const updateTheme = useAuthStore((state) => state.updateTheme)
 
   const isDark =
     theme === "dark" ||
@@ -22,12 +23,7 @@ export function ThemeToggle() {
   const toggleTheme = () => {
     const next = isDark ? "light" : "dark"
     setTheme(next)
-    if (pb.authStore.isValid) {
-      void pb.send("/api/configs/system", {
-        method: "PATCH",
-        body: { theme: next },
-      })
-    }
+    void updateTheme(next).catch(() => {})
   }
 
   return (
