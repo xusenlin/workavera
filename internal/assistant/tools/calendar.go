@@ -3,10 +3,14 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"time"
 
 	"charm.land/fantasy"
 	"github.com/pocketbase/pocketbase/core"
 	workcalendar "github.com/xusenlin/workavera/internal/calendar"
+	"github.com/xusenlin/workavera/internal/configs"
 )
 
 type calendarGetScheduleInput struct {
@@ -16,10 +20,9 @@ type calendarGetScheduleInput struct {
 type calendarCreateEventInput struct {
 	Title                 string `json:"title" description:"Event title"`
 	Description           string `json:"description,omitempty" description:"Optional event description"`
-	StartAt               string `json:"startAt" description:"Start date-time in RFC 3339 format with an explicit UTC offset"`
-	EndAt                 string `json:"endAt" description:"End date-time in RFC 3339 format with an explicit UTC offset; must be after startAt"`
+	StartAt               string `json:"startAt" description:"Start local date-time in the configured system timezone, formatted as YYYY-MM-DDTHH:MM:SS"`
+	EndAt                 string `json:"endAt" description:"End local date-time in the configured system timezone, formatted as YYYY-MM-DDTHH:MM:SS; must be after startAt"`
 	AllDay                bool   `json:"allDay,omitempty" description:"Whether this is an all-day event; defaults to false"`
-	Timezone              string `json:"timezone" description:"IANA timezone such as Asia/Shanghai or America/New_York"`
 	Location              string `json:"location,omitempty" description:"Optional physical location or meeting link"`
 	Color                 string `json:"color,omitempty" description:"Optional color: blue, green, amber, red, or purple; defaults to blue"`
 	RecurrenceFrequency   string `json:"recurrenceFrequency,omitempty" description:"Repeat frequency: none, daily, weekly, monthly, or yearly; defaults to none"`
@@ -31,10 +34,9 @@ type calendarUpdateEventInput struct {
 	EventID               string  `json:"eventId" description:"Existing personal event ID returned by calendar_get_schedule or calendar_create_event"`
 	Title                 *string `json:"title,omitempty" description:"Optional replacement event title"`
 	Description           *string `json:"description,omitempty" description:"Optional replacement description; pass an empty string to clear"`
-	StartAt               *string `json:"startAt,omitempty" description:"Optional replacement start date-time in RFC 3339 format with an explicit UTC offset"`
-	EndAt                 *string `json:"endAt,omitempty" description:"Optional replacement end date-time in RFC 3339 format with an explicit UTC offset"`
+	StartAt               *string `json:"startAt,omitempty" description:"Optional replacement start local date-time in the configured system timezone, formatted as YYYY-MM-DDTHH:MM:SS"`
+	EndAt                 *string `json:"endAt,omitempty" description:"Optional replacement end local date-time in the configured system timezone, formatted as YYYY-MM-DDTHH:MM:SS"`
 	AllDay                *bool   `json:"allDay,omitempty" description:"Optional replacement all-day setting"`
-	Timezone              *string `json:"timezone,omitempty" description:"Optional replacement IANA timezone"`
 	Location              *string `json:"location,omitempty" description:"Optional replacement location; pass an empty string to clear"`
 	Color                 *string `json:"color,omitempty" description:"Optional replacement color: blue, green, amber, red, or purple"`
 	RecurrenceFrequency   *string `json:"recurrenceFrequency,omitempty" description:"Optional replacement repeat frequency: none, daily, weekly, monthly, or yearly"`
@@ -56,11 +58,20 @@ func newCalendarGetScheduleTool(app core.App, actorID string) fantasy.AgentTool 
 func newCalendarCreateEventTool(app core.App, actorID string) fantasy.AgentTool {
 	return fantasy.NewAgentTool(
 		"calendar_create_event",
-		"Create a personal Calendar event owned by the current user only when explicitly requested. This creates only calendar_events, never Board tasks. Obtain explicit date, time, and timezone details from the user before calling it.",
+		"Create a personal Calendar event owned by the current user only when explicitly requested. This creates only calendar_events, never Board tasks. Obtain explicit date and time details from the user before calling it. All date-times use the administrator-configured system timezone.",
 		func(ctx context.Context, input calendarCreateEventInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
+			location := configs.SystemLocation(app)
+			startAt, err := calendarLocalDateTime(input.StartAt, location)
+			if err != nil {
+				return calendarToolResult(app, actorID, "create event", nil, fmt.Errorf("invalid startAt: %w", err))
+			}
+			endAt, err := calendarLocalDateTime(input.EndAt, location)
+			if err != nil {
+				return calendarToolResult(app, actorID, "create event", nil, fmt.Errorf("invalid endAt: %w", err))
+			}
 			result, err := workcalendar.CreateEvent(ctx, app, actorID, workcalendar.CreateEventCommand{
-				Title: input.Title, Description: input.Description, StartAt: input.StartAt, EndAt: input.EndAt,
-				AllDay: input.AllDay, Timezone: input.Timezone, Location: input.Location, Color: input.Color,
+				Title: input.Title, Description: input.Description, StartAt: startAt, EndAt: endAt,
+				AllDay: input.AllDay, Location: input.Location, Color: input.Color,
 				RecurrenceFrequency: input.RecurrenceFrequency, RecurrenceInterval: input.RecurrenceInterval,
 				ReminderMinutesBefore: input.ReminderMinutesBefore,
 			})
@@ -72,17 +83,50 @@ func newCalendarCreateEventTool(app core.App, actorID string) fantasy.AgentTool 
 func newCalendarUpdateEventTool(app core.App, actorID string) fantasy.AgentTool {
 	return fantasy.NewAgentTool(
 		"calendar_update_event",
-		"Patch an existing personal Calendar event only when explicitly requested. Call calendar_get_schedule first and use an event ID it returned. Omitted fields remain unchanged; editing a repeating event updates the entire series. This tool cannot edit Board tasks.",
+		"Patch an existing personal Calendar event only when explicitly requested. Call calendar_get_schedule first and use an event ID it returned. Omitted fields remain unchanged; editing a repeating event updates the entire series. All date-times use the administrator-configured system timezone. This tool cannot edit Board tasks.",
 		func(ctx context.Context, input calendarUpdateEventInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
+			location := configs.SystemLocation(app)
+			startAt, err := optionalCalendarLocalDateTime(input.StartAt, location)
+			if err != nil {
+				return calendarToolResult(app, actorID, "update event", nil, fmt.Errorf("invalid startAt: %w", err))
+			}
+			endAt, err := optionalCalendarLocalDateTime(input.EndAt, location)
+			if err != nil {
+				return calendarToolResult(app, actorID, "update event", nil, fmt.Errorf("invalid endAt: %w", err))
+			}
 			result, err := workcalendar.UpdateEvent(ctx, app, actorID, workcalendar.UpdateEventCommand{
-				EventID: input.EventID, Title: input.Title, Description: input.Description, StartAt: input.StartAt,
-				EndAt: input.EndAt, AllDay: input.AllDay, Timezone: input.Timezone, Location: input.Location,
+				EventID: input.EventID, Title: input.Title, Description: input.Description, StartAt: startAt,
+				EndAt: endAt, AllDay: input.AllDay, Location: input.Location,
 				Color: input.Color, RecurrenceFrequency: input.RecurrenceFrequency,
 				RecurrenceInterval: input.RecurrenceInterval, ReminderMinutesBefore: input.ReminderMinutesBefore,
 			})
 			return calendarToolResult(app, actorID, "update event", result, err)
 		},
 	)
+}
+
+const calendarLocalDateTimeLayout = "2006-01-02T15:04:05"
+
+func calendarLocalDateTime(value string, location *time.Location) (string, error) {
+	parsed, err := time.ParseInLocation(calendarLocalDateTimeLayout, value, location)
+	if err != nil {
+		return "", errors.New("must use YYYY-MM-DDTHH:MM:SS format")
+	}
+	if parsed.Format(calendarLocalDateTimeLayout) != value {
+		return "", errors.New("does not exist in the configured system timezone")
+	}
+	return parsed.Format(time.RFC3339), nil
+}
+
+func optionalCalendarLocalDateTime(value *string, location *time.Location) (*string, error) {
+	if value == nil {
+		return nil, nil
+	}
+	parsed, err := calendarLocalDateTime(*value, location)
+	if err != nil {
+		return nil, err
+	}
+	return &parsed, nil
 }
 
 func calendarToolResult(app core.App, actorID, action string, value any, err error) (fantasy.ToolResponse, error) {

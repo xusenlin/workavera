@@ -21,7 +21,7 @@ func TestGetScheduleExpandsOwnedEventsAndFiltersVisibleTasks(t *testing.T) {
 	reminder := 10
 	created, err := CreateEvent(context.Background(), app, actor.Id, CreateEventCommand{
 		Title: "Weekly planning", StartAt: "2026-07-13T09:00:00+08:00", EndAt: "2026-07-13T10:00:00+08:00",
-		Timezone: "Asia/Shanghai", RecurrenceFrequency: "weekly", RecurrenceInterval: 1, ReminderMinutesBefore: &reminder,
+		RecurrenceFrequency: "weekly", RecurrenceInterval: 1, ReminderMinutesBefore: &reminder,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -30,12 +30,12 @@ func TestGetScheduleExpandsOwnedEventsAndFiltersVisibleTasks(t *testing.T) {
 		t.Fatalf("unexpected create result: %#v", created)
 	}
 	if _, err := CreateEvent(context.Background(), app, other.Id, CreateEventCommand{
-		Title: "Private", StartAt: "2026-07-20T12:00:00+08:00", EndAt: "2026-07-20T13:00:00+08:00", Timezone: "Asia/Shanghai",
+		Title: "Private", StartAt: "2026-07-20T12:00:00+08:00", EndAt: "2026-07-20T13:00:00+08:00",
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := CreateEvent(context.Background(), app, actor.Id, CreateEventCommand{
-		Title: "One-off review", StartAt: "2026-07-20T14:00:00+08:00", EndAt: "2026-07-20T15:00:00+08:00", Timezone: "Asia/Shanghai",
+		Title: "One-off review", StartAt: "2026-07-20T14:00:00+08:00", EndAt: "2026-07-20T15:00:00+08:00",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func TestUpdateEventRequiresOwnerAndValidatesPatch(t *testing.T) {
 	owner := createCalendarTestUser(t, app, "event-owner@example.com")
 	other := createCalendarTestUser(t, app, "event-other@example.com")
 	created, err := CreateEvent(context.Background(), app, owner.Id, CreateEventCommand{
-		Title: "Review", StartAt: "2026-07-13T09:00:00Z", EndAt: "2026-07-13T10:00:00Z", Timezone: "UTC",
+		Title: "Review", StartAt: "2026-07-13T09:00:00Z", EndAt: "2026-07-13T10:00:00Z",
 	})
 	if err != nil {
 		t.Fatal(err)

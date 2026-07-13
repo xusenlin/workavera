@@ -12,8 +12,7 @@ import (
 )
 
 type systemConfigRequest struct {
-	Timezone *string `json:"timezone"`
-	Theme    *string `json:"theme"`
+	Theme *string `json:"theme"`
 }
 
 func Register(app core.App) {
@@ -80,16 +79,10 @@ func updateSystemConfig(event *core.RequestEvent) error {
 	if err := event.BindBody(&request); err != nil {
 		return event.BadRequestError("Invalid system configuration.", err)
 	}
-	if request.Timezone == nil && request.Theme == nil {
-		return event.BadRequestError("Provide timezone or theme.", nil)
+	if request.Theme == nil {
+		return event.BadRequestError("Provide theme.", nil)
 	}
-	var timezone, theme string
-	if request.Timezone != nil {
-		timezone = strings.TrimSpace(*request.Timezone)
-		if _, err := time.LoadLocation(timezone); err != nil {
-			return event.BadRequestError("Timezone must be a valid IANA timezone.", err)
-		}
-	}
+	var theme string
 	if request.Theme != nil {
 		theme = strings.TrimSpace(*request.Theme)
 		if theme != "system" && theme != "light" && theme != "dark" {
@@ -97,15 +90,7 @@ func updateSystemConfig(event *core.RequestEvent) error {
 		}
 	}
 	if err := event.App.RunInTransaction(func(tx core.App) error {
-		if request.Timezone != nil {
-			if err := setValue(tx, SystemTimezoneKey, timezone); err != nil {
-				return err
-			}
-		}
-		if request.Theme != nil {
-			return setValue(tx, SystemThemeKey, theme)
-		}
-		return nil
+		return setValue(tx, SystemThemeKey, theme)
 	}); err != nil {
 		return event.BadRequestError("Could not update system configuration.", err)
 	}

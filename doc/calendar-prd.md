@@ -40,7 +40,7 @@ Calendar 在展示层合并两种独立来源：
 | `start_at` | date | 是 | 开始时间 |
 | `end_at` | date | 是 | 结束时间，必须晚于开始时间 |
 | `all_day` | bool | 否 | 是否为全天事件 |
-| `timezone` | text | 是 | 创建事件时的 IANA 时区 |
+| `timezone` | text | 是 | 管理员在 `configs/system.timezone` 中配置的 IANA 时区 |
 | `location` | text | 否 | 地点或会议链接 |
 | `color` | select | 是 | `blue / green / amber / red / purple` |
 | `recurrence_frequency` | select | 是 | `none / daily / weekly / monthly / yearly` |
@@ -107,7 +107,8 @@ Calendar 在展示层合并两种独立来源：
 ### `calendar_create_event`
 
 - 为当前用户创建个人 `calendar_events` 记录。
-- 定时事件必须提供明确的 RFC 3339 开始/结束时间和 IANA 时区。
+- 定时事件提供系统时区下的本地开始/结束时间，不接受 AI 自选时区。
+- 服务端使用管理员配置的 `system.timezone` 解析时间并保存带偏移的时间点。
 - 颜色、重复频率、重复间隔和提醒规则与 Calendar UI 使用相同的校验。
 
 ### `calendar_update_event`

@@ -6,13 +6,17 @@ import { format } from "date-fns"
 
 type MiniCalendarProps = {
   selectedDate: Date
+  displayedMonth: Date
   onSelectDate: (date: Date) => void
+  onMonthChange: (date: Date) => void
   events: CalendarItem[]
 }
 
 export function MiniCalendar({
   selectedDate,
+  displayedMonth,
   onSelectDate,
+  onMonthChange,
   events,
 }: MiniCalendarProps) {
   const eventsByDate = new Map<
@@ -35,6 +39,8 @@ export function MiniCalendar({
     <CalendarPrimitive
       mode="single"
       selected={selectedDate}
+      month={displayedMonth}
+      onMonthChange={onMonthChange}
       onSelect={(date) => {
         if (date) onSelectDate(date)
       }}

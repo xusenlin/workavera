@@ -55,6 +55,7 @@ export function CalendarPage() {
   const clearError = useCalendarStore((state) => state.clearError)
 
   const [selectedDate, setSelectedDate] = useState(new Date())
+  const [displayedMonth, setDisplayedMonth] = useState(new Date())
   const [viewMode, setViewMode] = useState<"day" | "week">("day")
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null)
@@ -82,7 +83,11 @@ export function CalendarPage() {
     openedRequestedEvent.current = requestedEventId
     const occurrence = searchParams.get("occurrence")
     const frame = requestAnimationFrame(() => {
-      if (occurrence) setSelectedDate(new Date(`${occurrence}T00:00:00`))
+      if (occurrence) {
+        const occurrenceDate = new Date(`${occurrence}T00:00:00`)
+        setSelectedDate(occurrenceDate)
+        setDisplayedMonth(occurrenceDate)
+      }
       setEditingEvent(requestedEvent)
       setDialogOpen(true)
     })
@@ -106,11 +111,17 @@ export function CalendarPage() {
   }
 
   const moveSelection = (direction: -1 | 1) => {
-    setSelectedDate((current) =>
+    const nextDate =
       viewMode === "day"
-        ? addDays(current, direction)
-        : addWeeks(current, direction)
-    )
+        ? addDays(selectedDate, direction)
+        : addWeeks(selectedDate, direction)
+    setSelectedDate(nextDate)
+    setDisplayedMonth(nextDate)
+  }
+
+  const selectDate = (date: Date) => {
+    setSelectedDate(date)
+    setDisplayedMonth(date)
   }
 
   if (loading && !initialized) {
@@ -151,7 +162,7 @@ export function CalendarPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setSelectedDate(new Date())}
+            onClick={() => selectDate(new Date())}
           >
             Today
           </Button>
@@ -190,7 +201,9 @@ export function CalendarPage() {
           <div className="rounded-lg border bg-card p-3">
             <MiniCalendar
               selectedDate={selectedDate}
-              onSelectDate={setSelectedDate}
+              displayedMonth={displayedMonth}
+              onSelectDate={selectDate}
+              onMonthChange={setDisplayedMonth}
               events={items}
             />
           </div>

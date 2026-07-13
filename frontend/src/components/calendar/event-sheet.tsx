@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { DatePicker } from "@/components/ui/date-picker"
 import {
   Select,
@@ -337,8 +338,9 @@ export function EventSheet({
 
           <div className="space-y-1.5">
             <Label htmlFor="event-desc">Description (optional)</Label>
-            <Input
+            <Textarea
               id="event-desc"
+              rows={4}
               value={form.description}
               onChange={(e) =>
                 setForm({ ...form, description: e.target.value })

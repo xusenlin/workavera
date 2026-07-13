@@ -31,7 +31,6 @@ type CreateEventCommand struct {
 	StartAt               string
 	EndAt                 string
 	AllDay                bool
-	Timezone              string
 	Location              string
 	Color                 string
 	RecurrenceFrequency   string
@@ -46,7 +45,6 @@ type UpdateEventCommand struct {
 	StartAt               *string
 	EndAt                 *string
 	AllDay                *bool
-	Timezone              *string
 	Location              *string
 	Color                 *string
 	RecurrenceFrequency   *string
@@ -78,7 +76,7 @@ func CreateEvent(ctx context.Context, app core.App, actorID string, command Crea
 	if command.RecurrenceInterval == 0 {
 		command.RecurrenceInterval = 1
 	}
-	command.Timezone = configs.SystemLocation(app).String()
+	timezone := configs.SystemLocation(app).String()
 	reminder := -1
 	if command.ReminderMinutesBefore != nil {
 		reminder = *command.ReminderMinutesBefore
@@ -91,7 +89,7 @@ func CreateEvent(ctx context.Context, app core.App, actorID string, command Crea
 	record.Set("start_at", strings.TrimSpace(command.StartAt))
 	record.Set("end_at", strings.TrimSpace(command.EndAt))
 	record.Set("all_day", command.AllDay)
-	record.Set("timezone", strings.TrimSpace(command.Timezone))
+	record.Set("timezone", timezone)
 	record.Set("location", strings.TrimSpace(command.Location))
 	record.Set("color", strings.TrimSpace(command.Color))
 	record.Set("recurrence_frequency", strings.TrimSpace(command.RecurrenceFrequency))

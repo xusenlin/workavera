@@ -11,7 +11,6 @@ import {
   Pin02Icon,
   Share08Icon,
   Tick02Icon,
-  TimeZoneIcon,
   Sun03Icon,
   Moon02Icon,
   ComputerIcon,
@@ -40,13 +39,6 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table,
@@ -392,26 +384,6 @@ export function SettingsPage() {
   )
 }
 
-const COMMON_TIMEZONES = [
-  { value: "UTC", label: "UTC (Coordinated Universal Time)" },
-  { value: "Asia/Shanghai", label: "Asia/Shanghai (UTC+8)" },
-  { value: "Asia/Tokyo", label: "Asia/Tokyo (UTC+9)" },
-  { value: "Asia/Singapore", label: "Asia/Singapore (UTC+8)" },
-  { value: "Asia/Kolkata", label: "Asia/Kolkata (UTC+5:30)" },
-  { value: "Asia/Dubai", label: "Asia/Dubai (UTC+4)" },
-  { value: "Europe/London", label: "Europe/London (UTC+0/+1)" },
-  { value: "Europe/Paris", label: "Europe/Paris (UTC+1/+2)" },
-  { value: "Europe/Berlin", label: "Europe/Berlin (UTC+1/+2)" },
-  { value: "Europe/Moscow", label: "Europe/Moscow (UTC+3)" },
-  { value: "America/New_York", label: "America/New_York (UTC-5/-4)" },
-  { value: "America/Chicago", label: "America/Chicago (UTC-6/-5)" },
-  { value: "America/Denver", label: "America/Denver (UTC-7/-6)" },
-  { value: "America/Los_Angeles", label: "America/Los_Angeles (UTC-8/-7)" },
-  { value: "America/Sao_Paulo", label: "America/Sao_Paulo (UTC-3)" },
-  { value: "Australia/Sydney", label: "Australia/Sydney (UTC+10/+11)" },
-  { value: "Pacific/Auckland", label: "Pacific/Auckland (UTC+12/+13)" },
-]
-
 const THEME_OPTIONS = [
   { value: "light" as const, label: "Light", icon: Sun03Icon },
   { value: "dark" as const, label: "Dark", icon: Moon02Icon },
@@ -420,55 +392,26 @@ const THEME_OPTIONS = [
 
 function SystemSettingsCard() {
   const { theme, setTheme } = useTheme()
-  const [timezone, setTimezone] = useState("Asia/Shanghai")
-  const [timezoneLoading, setTimezoneLoading] = useState(true)
-  const [timezoneSaving, setTimezoneSaving] = useState(false)
 
   useEffect(() => {
     void pb
       .send<{
-        timezone: string
         theme: "light" | "dark" | "system"
       }>("/api/configs/system", {
         method: "GET",
         requestKey: null,
       })
       .then((config) => {
-        setTimezone(config.timezone)
         setTheme(config.theme)
       })
-      .catch(() => toast.error("Could not load the system timezone"))
-      .finally(() => setTimezoneLoading(false))
+      .catch(() => toast.error("Could not load the appearance setting"))
   }, [setTheme])
-
-  const updateTimezone = async (value: string) => {
-    const previous = timezone
-    setTimezone(value)
-    setTimezoneSaving(true)
-    try {
-      const config = await pb.send<{
-        timezone: string
-        theme: "light" | "dark" | "system"
-      }>("/api/configs/system", {
-        method: "PATCH",
-        body: { timezone: value },
-      })
-      setTimezone(config.timezone)
-      toast.success("System timezone updated")
-    } catch {
-      setTimezone(previous)
-      toast.error("Could not update the system timezone")
-    } finally {
-      setTimezoneSaving(false)
-    }
-  }
 
   const updateTheme = async (value: "light" | "dark" | "system") => {
     const previous = theme
     setTheme(value)
     try {
       const config = await pb.send<{
-        timezone: string
         theme: "light" | "dark" | "system"
       }>("/api/configs/system", {
         method: "PATCH",
@@ -487,7 +430,7 @@ function SystemSettingsCard() {
         <div className="flex items-center gap-3">
           <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <HugeiconsIcon
-              icon={TimeZoneIcon}
+              icon={ComputerIcon}
               strokeWidth={2}
               className="size-4"
             />
@@ -495,37 +438,12 @@ function SystemSettingsCard() {
           <div>
             <CardTitle>System</CardTitle>
             <CardDescription>
-              Configure your timezone and appearance preferences.
+              Configure your appearance preference.
             </CardDescription>
           </div>
         </div>
       </CardHeader>
-      <CardContent className="flex flex-col gap-6">
-        {/* Timezone */}
-        <div className="flex flex-col gap-2">
-          <Label>Timezone</Label>
-          <Select
-            value={timezone}
-            onValueChange={(value) => void updateTimezone(value)}
-            disabled={timezoneLoading || timezoneSaving}
-          >
-            <SelectTrigger className="w-full max-w-md">
-              <SelectValue placeholder="Select timezone" />
-            </SelectTrigger>
-            <SelectContent>
-              {COMMON_TIMEZONES.map((tz) => (
-                <SelectItem key={tz.value} value={tz.value}>
-                  {tz.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground">
-            Used for calendar events, reminders, and AI scheduling.
-          </p>
-        </div>
-
-        {/* Theme */}
+      <CardContent>
         <div className="flex flex-col gap-2">
           <Label>Appearance</Label>
           <div className="flex gap-2">

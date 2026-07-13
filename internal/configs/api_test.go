@@ -55,21 +55,21 @@ func TestSystemConfigAPI(t *testing.T) {
 		t.Fatalf("expected authentication, got %d", unauthorized.Code)
 	}
 
-	request := httptest.NewRequest(http.MethodPatch, "/api/configs/system", strings.NewReader(`{"timezone":"UTC","theme":"dark"}`))
+	request := httptest.NewRequest(http.MethodPatch, "/api/configs/system", strings.NewReader(`{"theme":"dark"}`))
 	request.Header.Set("Authorization", token)
 	request.Header.Set("content-type", "application/json")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusOK || SystemLocation(app).String() != "UTC" || SystemTheme(app) != "dark" {
-		t.Fatalf("update timezone: %d %s", response.Code, response.Body.String())
+	if response.Code != http.StatusOK || SystemLocation(app).String() != "Asia/Shanghai" || SystemTheme(app) != "dark" {
+		t.Fatalf("update theme: %d %s", response.Code, response.Body.String())
 	}
 
-	invalid := httptest.NewRequest(http.MethodPatch, "/api/configs/system", strings.NewReader(`{"timezone":"Invalid/Timezone"}`))
-	invalid.Header.Set("Authorization", token)
-	invalid.Header.Set("content-type", "application/json")
-	invalidResponse := httptest.NewRecorder()
-	handler.ServeHTTP(invalidResponse, invalid)
-	if invalidResponse.Code != http.StatusBadRequest || SystemLocation(app).String() != "UTC" {
-		t.Fatalf("invalid timezone should be rejected: %d %s", invalidResponse.Code, invalidResponse.Body.String())
+	timezoneUpdate := httptest.NewRequest(http.MethodPatch, "/api/configs/system", strings.NewReader(`{"timezone":"UTC"}`))
+	timezoneUpdate.Header.Set("Authorization", token)
+	timezoneUpdate.Header.Set("content-type", "application/json")
+	timezoneResponse := httptest.NewRecorder()
+	handler.ServeHTTP(timezoneResponse, timezoneUpdate)
+	if timezoneResponse.Code != http.StatusBadRequest || SystemLocation(app).String() != "Asia/Shanghai" {
+		t.Fatalf("user timezone update should be rejected: %d %s", timezoneResponse.Code, timezoneResponse.Body.String())
 	}
 }
