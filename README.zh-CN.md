@@ -1,5 +1,7 @@
 # Workavera
 
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE)
+
 [English](./README.md)
 
 Workavera 是一个可自托管的 AI 团队工作台，在同一个应用中连接对话、知识、关系、项目、任务和时间承诺。
@@ -192,3 +194,9 @@ docker run --rm \
 | Calendar | [Calendar PRD](./doc/calendar-prd.md) | [Calendar PRD](./doc/calendar-prd.zh-CN.md) |
 | Chat | [Chat PRD and Fantasy architecture](./doc/chat-fantasy-plan.md) | [Chat PRD 与 Fantasy 架构](./doc/chat-fantasy-plan.zh-CN.md) |
 | Docs | [Docs PRD](./doc/docs-prd.md) | [Docs PRD](./doc/docs-prd.zh-CN.md) |
+
+## 许可证
+
+基于 [Apache License 2.0](./LICENSE) 授权。
+
+Copyright 2026 xusenlin

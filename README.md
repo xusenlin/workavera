@@ -1,5 +1,7 @@
 # Workavera
 
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE)
+
 [简体中文](./README.zh-CN.md)
 
 Workavera is a self-hosted AI team workspace that connects conversations, knowledge, relationships, projects, tasks, and time commitments in one application.
@@ -192,3 +194,9 @@ The container runs as a non-root user, includes CA certificates and timezone dat
 | Calendar | [Calendar PRD](./doc/calendar-prd.md) | [Calendar PRD](./doc/calendar-prd.zh-CN.md) |
 | Chat | [Chat PRD and Fantasy architecture](./doc/chat-fantasy-plan.md) | [Chat PRD 与 Fantasy 架构](./doc/chat-fantasy-plan.zh-CN.md) |
 | Docs | [Docs PRD](./doc/docs-prd.md) | [Docs PRD](./doc/docs-prd.zh-CN.md) |
+
+## License
+
+Licensed under the [Apache License 2.0](./LICENSE).
+
+Copyright 2026 xusenlin
