@@ -20,11 +20,12 @@ type ProjectSearchOptions struct {
 }
 
 type ProjectStateSummary struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Color     string `json:"color"`
-	Category  string `json:"category"`
-	TaskCount int    `json:"taskCount"`
+	ID        string  `json:"id"`
+	Name      string  `json:"name"`
+	Color     string  `json:"color"`
+	Category  string  `json:"category"`
+	SortOrder float64 `json:"sortOrder"`
+	TaskCount int     `json:"taskCount"`
 }
 
 type ProjectCapabilities struct {
@@ -435,6 +436,7 @@ func loadProjectStatesWithCountsBulk(ctx context.Context, app core.App, projects
 			Name:      state.GetString("name"),
 			Color:     state.GetString("color"),
 			Category:  state.GetString("category"),
+			SortOrder: state.GetFloat("sort_order"),
 			TaskCount: taskCounts[state.Id],
 		})
 	}
@@ -475,6 +477,7 @@ func loadProjectStatesWithCounts(ctx context.Context, app core.App, projectID st
 			Name:      sr.GetString("name"),
 			Color:     sr.GetString("color"),
 			Category:  sr.GetString("category"),
+			SortOrder: sr.GetFloat("sort_order"),
 			TaskCount: taskCounts[sr.Id],
 		})
 	}

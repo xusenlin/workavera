@@ -44,7 +44,7 @@ type boardUpsertStateInput struct {
 	Name      *string  `json:"name,omitempty" description:"State name; required when creating"`
 	Color     *string  `json:"color,omitempty" description:"State color such as #3b82f6; required when creating"`
 	Category  *string  `json:"category,omitempty" description:"State category: pending, active, or completed; required when creating"`
-	SortOrder *float64 `json:"sortOrder,omitempty" description:"Optional numeric ordering value"`
+	SortOrder *float64 `json:"sortOrder,omitempty" description:"Optional ordering value. Omit it to append the state to the end automatically (recommended). Only set it to place the state at a specific position, using the sortOrder values from board_get_project as reference (e.g. a value between two existing states); never guess small numbers like 1 or negatives."`
 }
 
 type boardUpsertLabelInput struct {
