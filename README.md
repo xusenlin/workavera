@@ -35,6 +35,10 @@ Workavera combines both halves and adds the part neither has:
 
 ![Workavera Chat using Board tools to pick a template and create a project with tasks](./screenShot/en-chat-task.png)
 
+### Board
+
+![Workavera Board Kanban with workflow columns, labels, priorities, and due dates](./screenShot/en-board.png)
+
 ### Chat creating Calendar events
 
 ![Workavera Chat creating recurring calendar events with reminders](./screenShot/en-chat-calendar.png)
