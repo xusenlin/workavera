@@ -4,21 +4,70 @@
 
 [简体中文](./README.zh-CN.md)
 
+**One self-contained binary. A full team workspace. An AI that can only do what you can do—every AI action is re-authorized by the server against your own permissions.**
+
 Workavera is a self-hosted AI team workspace that connects conversations, knowledge, relationships, projects, tasks, and time commitments in one application.
 
 **Use Chat to put your workspace in motion.** AI can use the workspace capabilities you already have permission to use—finding context and creating or updating supported records—without receiving access beyond your own. Every action is authorized again by the server before it is applied.
 
 It uses Go and PocketBase for the backend and Vite, React, and TypeScript for the frontend. The compiled frontend is embedded into the Go binary (`go:embed`) and served by the same PocketBase process, so a release ships as a single self-contained executable.
 
+## Why Workavera
+
+Self-hosted AI tools are a crowded space, but most of them fall on one of two sides:
+
+- **Chat front-ends** (Open WebUI, LibreChat, and similar) put a UI over model APIs. The conversation is the whole product—there is no workspace behind it for the AI to act on.
+- **Knowledge workspaces** (AFFiNE, AppFlowy, and similar) manage notes and projects and bolt AI on as a writing assistant. The AI suggests text; it doesn't operate the workspace.
+
+Workavera combines both halves and adds the part neither has:
+
+- **Permission-aware AI tool calling.** Chat can search your context and operate Board, Calendar, Docs, Reading, Contacts, and AI Micro Apps—but only within the permissions your account already has, and the server re-authorizes every tool call (identity, role, ownership, revision). The AI is never a privileged service account.
+- **One self-contained binary.** The frontend is embedded via `go:embed` and data lives in PocketBase/SQLite—no Postgres, Redis, or vector-database stack. Deploy with a single `docker run` or a single downloaded binary.
+- **Built for freelancers and small teams.** Bring your own model API keys, run it on a cheap VPS or a NAS, and own all of your data. Open source under Apache-2.0.
+
 ## Screenshots
 
-### Chat and workspace tools
+### Dashboard
 
-![Workavera Chat using Board tools to create a project](./screenShot/workavera_chat.png)
+![Workavera Dashboard with workspace overview, due tasks, and upcoming events](./screenShot/en-home.png)
 
-### Board task details
+### Chat creating a Board project
 
-![Workavera Board task detail](./screenShot/workavera_task.png)
+![Workavera Chat using Board tools to pick a template and create a project with tasks](./screenShot/en-chat-task.png)
+
+### Chat creating Calendar events
+
+![Workavera Chat creating recurring calendar events with reminders](./screenShot/en-chat-calendar.png)
+
+### Calendar
+
+![Workavera Calendar combining personal events and Board task deadlines](./screenShot/en-calendar-events.png)
+
+## Quick start
+
+No toolchain needed—run the prebuilt image or binary.
+
+### Docker
+
+```bash
+docker run -p 8090:8090 -v workavera-data:/app/pb_data ghcr.io/xusenlin/workavera:latest
+```
+
+### Prebuilt binary
+
+Download the archive for your platform from [GitHub Releases](https://github.com/xusenlin/workavera/releases), extract it, and start the server from a terminal (it is a server process, so double-clicking the binary is not enough):
+
+```bash
+./workavera serve            # workavera.exe serve on Windows
+```
+
+By default it listens on <http://127.0.0.1:8090>. Pass `--http=0.0.0.0:8090` to accept connections from other machines.
+
+### First-run setup
+
+1. **Create the superuser.** On the first start, PocketBase prints a one-time link containing a token, e.g. `http://127.0.0.1:8090/_/#/pbinstal/<token>`. Find it in the terminal output (or in `docker logs` for a detached container), open it in a browser, and create the superuser account.
+2. **Create an application user.** In the Admin UI at <http://127.0.0.1:8090/_/>, add a record to the `users` collection. Workavera's login page only accepts these admin-created accounts—the superuser itself cannot sign in to the app.
+3. **Sign in and add a model.** Open <http://127.0.0.1:8090>, sign in with that user, and add at least one model configuration in Settings before using Chat or AI summaries.
 
 ## Product areas
 
@@ -48,14 +97,27 @@ Chat connects these layers as a permission-aware AI control surface. It can sear
 - Zustand and the PocketBase JavaScript SDK
 - Milkdown Crepe for Markdown editing
 
-## Requirements
+## Data and security notes
+
+- Runtime data lives in `pb_data/` and is not committed.
+- Model API keys stay in the hidden `llm_models.api_key` field and are accessed through authenticated server endpoints.
+- User-facing records are protected by PocketBase rules and server-side domain validation.
+- Chat history is loaded by the server; browsers do not provide authoritative prior messages.
+- Active Chat runs are process-local. Stream reconnection works while the same server process is alive; production multi-instance execution requires shared durable run infrastructure.
+- Calendar scheduling and reminders use `configs/system.timezone`.
+
+## Development
+
+Everything below is only needed when contributing or building from source—see [Quick start](#quick-start) if you just want to run Workavera.
+
+### Requirements
 
 - Go 1.26.4 or newer
 - Node.js and [pnpm](https://pnpm.io/)
 - [Task](https://taskfile.dev/) 3 or newer
 - Docker with Buildx only when building or publishing containers
 
-## Local development
+### Local development
 
 Install frontend dependencies once:
 
@@ -82,11 +144,11 @@ PocketBase also exposes:
 - Admin UI: <http://127.0.0.1:8090/_/>
 - Health endpoint: <http://127.0.0.1:8090/api/health>
 
-Create the first PocketBase superuser and application users through the Admin UI. Workavera's login page accepts administrator-created accounts. After signing in, add at least one model configuration in Settings before using Chat or AI summaries.
+On the first start the server prints the same one-time superuser setup link described in [First-run setup](#first-run-setup); create the superuser and application users the same way. After signing in, add at least one model configuration in Settings before using Chat or AI summaries.
 
 When `task dev:go` runs through `go run`, PocketBase automigration is enabled and schema changes are written to `migrations/`.
 
-## Build and run
+### Build and run
 
 Build the frontend and backend:
 
@@ -109,7 +171,7 @@ The version comes from [`VERSION`](./VERSION) and is injected into the binary. C
 ./workavera --version
 ```
 
-## Commands
+### Commands
 
 | Command | Purpose |
 | --- | --- |
@@ -127,7 +189,7 @@ The version comes from [`VERSION`](./VERSION) and is injected into the binary. C
 
 Frontend-only commands are documented in [`frontend/README.md`](./frontend/README.md).
 
-## Binary releases
+### Binary releases
 
 Cross-compile self-contained binaries for GitHub releases:
 
@@ -143,7 +205,7 @@ This builds the frontend, embeds it, and cross-compiles for three platforms into
 
 Each archive contains a single self-contained `workavera` binary (`workavera.exe` on Windows)—no separate frontend assets are required at runtime. A `dist/SHA256SUMS.txt` checksum file is generated alongside the archives. The `dist/` directory is git-ignored.
 
-## Docker
+### Docker image
 
 Build the local image:
 
@@ -151,27 +213,9 @@ Build the local image:
 task build:docker
 ```
 
-Run it with a persistent PocketBase volume:
-
-```bash
-docker run --rm \
-  -p 8090:8090 \
-  -v workavera-data:/app/pb_data \
-  ghcr.io/xusenlin/workavera:latest
-```
-
-The container runs as a non-root user, includes CA certificates and timezone data, exposes a health check, stores data in `/app/pb_data`, and ships as a single self-contained binary with the frontend assets embedded.
+The container runs as a non-root user, includes CA certificates and timezone data, exposes a health check, stores data in `/app/pb_data`, and ships as a single self-contained binary with the frontend assets embedded. See [Quick start](#quick-start) for the run command.
 
 `task push` uses the value in `VERSION` to publish both `:<version>` and `:latest` for `linux/amd64`.
-
-## Data and security notes
-
-- Runtime data lives in `pb_data/` and is not committed.
-- Model API keys stay in the hidden `llm_models.api_key` field and are accessed through authenticated server endpoints.
-- User-facing records are protected by PocketBase rules and server-side domain validation.
-- Chat history is loaded by the server; browsers do not provide authoritative prior messages.
-- Active Chat runs are process-local. Stream reconnection works while the same server process is alive; production multi-instance execution requires shared durable run infrastructure.
-- Calendar scheduling and reminders use `configs/system.timezone`.
 
 ## Repository structure
 
@@ -212,6 +256,10 @@ The container runs as a non-root user, includes CA certificates and timezone dat
 | Calendar | [Calendar PRD](./doc/calendar-prd.md) | [Calendar PRD](./doc/calendar-prd.zh-CN.md) |
 | Chat | [Chat PRD and Fantasy architecture](./doc/chat-fantasy-plan.md) | [Chat PRD 与 Fantasy 架构](./doc/chat-fantasy-plan.zh-CN.md) |
 | Docs | [Docs PRD](./doc/docs-prd.md) | [Docs PRD](./doc/docs-prd.zh-CN.md) |
+
+## Changelog
+
+Release history is documented in [CHANGELOG.md](./CHANGELOG.md).
 
 ## License
 
