@@ -2,7 +2,7 @@
 
 [English](./README.md) · [仓库说明](../README.zh-CN.md)
 
-本目录包含 Workavera 的 Vite、React 与 TypeScript 应用。生产构建输出到 `frontend/dist`，并由 Go/PocketBase 应用提供服务。
+本目录包含 Workavera 的 Vite、React 与 TypeScript 应用。生产构建输出到 `frontend/dist`，通过 `frontend/embed.go`（`go:embed`）内嵌进 Go 二进制，由 Go/PocketBase 应用提供服务。
 
 ## 技术栈
 

@@ -2,11 +2,11 @@
 
 ## Project Overview
 
-Workavera is a self-hosted AI team workspace. The backend is a Go 1.26.4 + PocketBase application, and the frontend is a Vite + React + TypeScript application. Frontend build output lives in `frontend/dist` and is served by PocketBase.
+Workavera is a self-hosted AI team workspace. The backend is a Go 1.26.4 + PocketBase application, and the frontend is a Vite + React + TypeScript application. Frontend build output lives in `frontend/dist` and is embedded into the Go binary via `frontend/embed.go` (`go:embed`), so a built binary is self-contained.
 
 Key backend entry points:
 
-- `workavera.go` creates the PocketBase app, registers feature packages, enables migrations during `go run`, and serves `frontend/dist`.
+- `workavera.go` creates the PocketBase app, registers feature packages, enables migrations during `go run`, and serves the embedded `frontend/dist` assets.
 - `internal/board/` contains board routes, domain validation hooks, project/task logic, and activity logging.
 - `internal/chat/` contains chat persistence, SSE streaming, conversation rules, and run cancellation.
 - `internal/agent/` wraps Fantasy runner behavior and AI SDK UI-compatible streams.
@@ -29,8 +29,10 @@ Use the task names in `Taskfile.yml` as the source of truth:
 
 - `task dev:go` starts the Go/PocketBase development server.
 - `task dev:ui` starts the Vite frontend development server from `frontend/`.
-- `task build:ui` builds frontend assets into `frontend/dist`.
+- `task build:ui` builds frontend assets into `frontend/dist` (embedded at Go compile time).
 - `task build:go` builds the `workavera` binary with the version from `VERSION`.
+- `task build` builds the frontend and then the self-contained binary.
+- `task release` cross-compiles self-contained binaries for Linux/macOS/Windows into the git-ignored `dist/` directory, named `workavera_<version>_<os>_<arch>`.
 - `task run` builds and runs the Go binary.
 - `task build:docker` builds frontend assets and the local Docker image.
 - `task test` runs `go test ./...`.

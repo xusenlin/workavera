@@ -9,7 +9,8 @@
 # Frontend dependencies and generated files
 frontend/node_modules/
 .pnpm-store/
-frontend/dist/
+frontend/dist/*
+!frontend/dist/.gitkeep
 frontend/coverage/
 frontend/.vite/
 frontend/*.tsbuildinfo
@@ -22,7 +23,9 @@ pb_data/
 workavera
 workavera.exe
 bin/
-dist/
+
+# Cross-platform release binaries produced by `task release`
+/dist/
 
 # Test and coverage output
 coverage.out

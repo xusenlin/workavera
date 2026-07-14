@@ -2,7 +2,7 @@
 
 [简体中文](./README.zh-CN.md) · [Repository README](../README.md)
 
-This directory contains the Workavera Vite, React, and TypeScript application. Production output is written to `frontend/dist` and served by the Go/PocketBase application.
+This directory contains the Workavera Vite, React, and TypeScript application. Production output is written to `frontend/dist`, embedded into the Go binary via `frontend/embed.go` (`go:embed`), and served by the Go/PocketBase application.
 
 ## Stack
 

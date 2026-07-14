@@ -8,7 +8,7 @@ Workavera 是一个可自托管的 AI 团队工作台，在同一个应用中连
 
 **通过 Chat，让 AI 推动整个工作区。** AI 可以在你已有权限范围内调用工作区能力，查找上下文，并创建或更新受支持的记录；它不会获得超出你本人权限的访问能力。每项操作在真正执行前都会由服务端重新鉴权。
 
-后端使用 Go 与 PocketBase，前端使用 Vite、React 与 TypeScript。打包部署时，PocketBase 进程直接提供编译后的前端资源。
+后端使用 Go 与 PocketBase，前端使用 Vite、React 与 TypeScript。编译后的前端资源通过 `go:embed` 内嵌进 Go 二进制，由同一个 PocketBase 进程提供，因此发布产物是单个自包含的可执行文件。
 
 ## 产品截图
 
@@ -101,7 +101,7 @@ task build:go
 task run
 ```
 
-打开 <http://127.0.0.1:8090>。`task run` 会重新构建 Go 二进制，并提供现有的 `frontend/dist`。
+打开 <http://127.0.0.1:8090>。`task run` 会重新构建 Go 二进制，并将当前的 `frontend/dist` 内嵌进去，产出完全自包含的可执行文件。
 
 版本来自 [`VERSION`](./VERSION)，并在构建时注入二进制。查看版本：
 
@@ -116,7 +116,9 @@ task run
 | `task dev:go` | 启动 Go/PocketBase 开发服务器 |
 | `task dev:ui` | 启动 Vite 开发服务器 |
 | `task build:ui` | 类型检查并构建 `frontend/dist` |
-| `task build:go` | 构建 `workavera` 二进制 |
+| `task build:go` | 构建 `workavera` 二进制（内嵌 `frontend/dist`） |
+| `task build` | 构建前端并打包自包含二进制 |
+| `task release` | 交叉编译 Linux/macOS/Windows 三平台自包含二进制到 `dist/` |
 | `task run` | 构建并运行 Go 二进制 |
 | `task build:docker` | 构建前端和本地 `ghcr.io/xusenlin/workavera:latest` 镜像 |
 | `task push` | 构建并推送 `linux/amd64` 版本镜像与 `latest` 镜像 |
@@ -124,6 +126,22 @@ task run
 | `task tidy` | 运行 `go mod tidy` |
 
 前端专用命令见 [`frontend/README.zh-CN.md`](./frontend/README.zh-CN.md)。
+
+## 二进制发布
+
+为 GitHub 发布交叉编译自包含二进制：
+
+```bash
+task release
+```
+
+该命令会构建并内嵌前端，然后交叉编译三个平台的产物到 `dist/`，命名包含版本、操作系统与架构：
+
+- `dist/workavera_<版本>_linux_amd64`
+- `dist/workavera_<版本>_darwin_arm64`
+- `dist/workavera_<版本>_windows_amd64.exe`
+
+同时会生成 `dist/SHA256SUMS.txt` 校验文件。每个文件都完全自包含——运行时无需额外的前端资源。`dist/` 目录已加入 git 忽略。
 
 ## Docker
 
@@ -142,7 +160,7 @@ docker run --rm \
   ghcr.io/xusenlin/workavera:latest
 ```
 
-容器使用非 root 用户运行，包含 CA 证书和时区数据，提供健康检查，将数据保存在 `/app/pb_data`，并由 Workavera 二进制提供 `/app/frontend/dist`。
+容器使用非 root 用户运行，包含 CA 证书和时区数据，提供健康检查，将数据保存在 `/app/pb_data`，前端资源已内嵌于单个自包含二进制中。
 
 `task push` 使用 `VERSION` 中的值，为 `linux/amd64` 同时发布 `:<version>` 和 `:latest`。
 

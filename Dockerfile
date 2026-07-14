@@ -12,6 +12,8 @@ RUN go mod download
 COPY *.go ./
 COPY internal ./internal
 COPY migrations ./migrations
+COPY frontend/embed.go ./frontend/embed.go
+COPY frontend/dist ./frontend/dist
 RUN test -n "${VERSION}" \
     && CGO_ENABLED=0 GOOS=linux go build \
     -trimpath \
@@ -37,7 +39,6 @@ RUN apk add --no-cache ca-certificates tzdata \
 WORKDIR /app
 
 COPY --chown=workavera:workavera --from=builder /out/workavera ./workavera
-COPY --chown=workavera:workavera frontend/dist ./frontend/dist
 
 USER workavera
 

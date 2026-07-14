@@ -1,8 +1,8 @@
 package main
 
 import (
+	"io/fs"
 	"log"
-	"os"
 
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/apis"
@@ -10,6 +10,7 @@ import (
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
 	"github.com/pocketbase/pocketbase/tools/osutils"
 
+	"github.com/xusenlin/workavera/frontend"
 	"github.com/xusenlin/workavera/internal/board"
 	calendarfeature "github.com/xusenlin/workavera/internal/calendar"
 	"github.com/xusenlin/workavera/internal/chat"
@@ -44,8 +45,13 @@ func main() {
 		Automigrate: osutils.IsProbablyGoRun(),
 	})
 
+	distFS, err := fs.Sub(frontend.DistFS, "dist")
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	app.OnServe().BindFunc(func(event *core.ServeEvent) error {
-		event.Router.GET("/{path...}", apis.Static(os.DirFS("./frontend/dist"), true))
+		event.Router.GET("/{path...}", apis.Static(distFS, true))
 
 		return event.Next()
 	})

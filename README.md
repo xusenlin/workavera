@@ -8,7 +8,7 @@ Workavera is a self-hosted AI team workspace that connects conversations, knowle
 
 **Use Chat to put your workspace in motion.** AI can use the workspace capabilities you already have permission to use—finding context and creating or updating supported records—without receiving access beyond your own. Every action is authorized again by the server before it is applied.
 
-It uses Go and PocketBase for the backend and Vite, React, and TypeScript for the frontend. The compiled frontend is served by the same PocketBase process in packaged deployments.
+It uses Go and PocketBase for the backend and Vite, React, and TypeScript for the frontend. The compiled frontend is embedded into the Go binary (`go:embed`) and served by the same PocketBase process, so a release ships as a single self-contained executable.
 
 ## Screenshots
 
@@ -101,7 +101,7 @@ Run the packaged application after the frontend has been built:
 task run
 ```
 
-Open <http://127.0.0.1:8090>. `task run` rebuilds the Go binary and serves the existing `frontend/dist` directory.
+Open <http://127.0.0.1:8090>. `task run` rebuilds the Go binary with the current `frontend/dist` embedded, so the resulting binary is fully self-contained.
 
 The version comes from [`VERSION`](./VERSION) and is injected into the binary. Check it with:
 
@@ -116,7 +116,9 @@ The version comes from [`VERSION`](./VERSION) and is injected into the binary. C
 | `task dev:go` | Run the Go/PocketBase development server |
 | `task dev:ui` | Run the Vite development server |
 | `task build:ui` | Type-check and build `frontend/dist` |
-| `task build:go` | Build the `workavera` binary |
+| `task build:go` | Build the `workavera` binary (embeds `frontend/dist`) |
+| `task build` | Build the frontend and the self-contained binary |
+| `task release` | Cross-compile self-contained binaries for Linux/macOS/Windows into `dist/` |
 | `task run` | Build and run the Go binary |
 | `task build:docker` | Build the frontend and local `ghcr.io/xusenlin/workavera:latest` image |
 | `task push` | Build and push `linux/amd64` version and `latest` images |
@@ -124,6 +126,22 @@ The version comes from [`VERSION`](./VERSION) and is injected into the binary. C
 | `task tidy` | Run `go mod tidy` |
 
 Frontend-only commands are documented in [`frontend/README.md`](./frontend/README.md).
+
+## Binary releases
+
+Cross-compile self-contained binaries for GitHub releases:
+
+```bash
+task release
+```
+
+This builds the frontend, embeds it, and cross-compiles for three platforms into `dist/`, named by version, OS, and architecture:
+
+- `dist/workavera_<version>_linux_amd64`
+- `dist/workavera_<version>_darwin_arm64`
+- `dist/workavera_<version>_windows_amd64.exe`
+
+A `dist/SHA256SUMS.txt` checksum file is generated alongside the binaries. Each file is fully self-contained—no separate frontend assets are required at runtime. The `dist/` directory is git-ignored.
 
 ## Docker
 
@@ -142,7 +160,7 @@ docker run --rm \
   ghcr.io/xusenlin/workavera:latest
 ```
 
-The container runs as a non-root user, includes CA certificates and timezone data, exposes a health check, stores data in `/app/pb_data`, and serves `/app/frontend/dist` from the Workavera binary.
+The container runs as a non-root user, includes CA certificates and timezone data, exposes a health check, stores data in `/app/pb_data`, and ships as a single self-contained binary with the frontend assets embedded.
 
 `task push` uses the value in `VERSION` to publish both `:<version>` and `:latest` for `linux/amd64`.
 
