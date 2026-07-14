@@ -32,7 +32,7 @@ Use the task names in `Taskfile.yml` as the source of truth:
 - `task build:ui` builds frontend assets into `frontend/dist` (embedded at Go compile time).
 - `task build:go` builds the `workavera` binary with the version from `VERSION`.
 - `task build` builds the frontend and then the self-contained binary.
-- `task release` cross-compiles self-contained binaries for Linux/macOS/Windows into the git-ignored `dist/` directory, named `workavera_<version>_<os>_<arch>`.
+- `task release` cross-compiles self-contained binaries for Linux/macOS/Windows and packages them as `workavera_<version>_<os>_<arch>.tar.gz`/`.zip` archives in the git-ignored `dist/` directory.
 - `task run` builds and runs the Go binary.
 - `task build:docker` builds frontend assets and the local Docker image.
 - `task test` runs `go test ./...`.

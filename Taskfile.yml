@@ -41,7 +41,7 @@ tasks:
       - task: build:go
 
   release:
-    desc: Cross-compile self-contained binaries for Linux/macOS/Windows into dist/
+    desc: Cross-compile and package self-contained release archives for Linux/macOS/Windows into dist/
     deps:
       - build:ui
     cmds:
@@ -50,19 +50,26 @@ tasks:
         for platform in "linux/amd64" "darwin/arm64" "windows/amd64"; do
           GOOS="${platform%/*}"
           GOARCH="${platform#*/}"
-          out="dist/workavera_{{.VERSION}}_${GOOS}_${GOARCH}"
-          [ "$GOOS" = "windows" ] && out="${out}.exe"
-          echo "==> building ${out}"
+          bin="workavera"
+          [ "$GOOS" = "windows" ] && bin="workavera.exe"
+          name="workavera_{{.VERSION}}_${GOOS}_${GOARCH}"
+          echo "==> building ${name}"
           CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build \
             -trimpath \
             -ldflags="-s -w -X main.version={{.VERSION}}" \
-            -o "$out" .
+            -o "dist/$bin" .
+          if [ "$GOOS" = "windows" ]; then
+            (cd dist && zip -q "${name}.zip" "$bin")
+          else
+            tar -czf "dist/${name}.tar.gz" -C dist "$bin"
+          fi
+          rm "dist/$bin"
         done
       - |
         cd dist && { command -v sha256sum >/dev/null 2>&1 \
           && sha256sum workavera_* \
           || shasum -a 256 workavera_*; } > SHA256SUMS.txt
-      - echo "Release artifacts generated in dist/ (version {{.VERSION}})"
+      - echo "Release archives generated in dist/ (version {{.VERSION}})"
 
   run:
     desc: Build and run the Go binary

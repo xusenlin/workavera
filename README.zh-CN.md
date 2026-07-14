@@ -118,7 +118,7 @@ task run
 | `task build:ui` | 类型检查并构建 `frontend/dist` |
 | `task build:go` | 构建 `workavera` 二进制（内嵌 `frontend/dist`） |
 | `task build` | 构建前端并打包自包含二进制 |
-| `task release` | 交叉编译 Linux/macOS/Windows 三平台自包含二进制到 `dist/` |
+| `task release` | 交叉编译并打包 Linux/macOS/Windows 三平台发布压缩包到 `dist/` |
 | `task run` | 构建并运行 Go 二进制 |
 | `task build:docker` | 构建前端和本地 `ghcr.io/xusenlin/workavera:latest` 镜像 |
 | `task push` | 构建并推送 `linux/amd64` 版本镜像与 `latest` 镜像 |
@@ -135,13 +135,13 @@ task run
 task release
 ```
 
-该命令会构建并内嵌前端，然后交叉编译三个平台的产物到 `dist/`，命名包含版本、操作系统与架构：
+该命令会构建并内嵌前端，然后交叉编译三个平台的产物到 `dist/`，打包为压缩包，命名包含版本、操作系统与架构：
 
-- `dist/workavera_<版本>_linux_amd64`
-- `dist/workavera_<版本>_darwin_arm64`
-- `dist/workavera_<版本>_windows_amd64.exe`
+- `dist/workavera_<版本>_linux_amd64.tar.gz`
+- `dist/workavera_<版本>_darwin_arm64.tar.gz`
+- `dist/workavera_<版本>_windows_amd64.zip`
 
-同时会生成 `dist/SHA256SUMS.txt` 校验文件。每个文件都完全自包含——运行时无需额外的前端资源。`dist/` 目录已加入 git 忽略。
+每个压缩包内是单个自包含的 `workavera` 二进制（Windows 为 `workavera.exe`）——运行时无需额外的前端资源。同时会生成 `dist/SHA256SUMS.txt` 校验文件。`dist/` 目录已加入 git 忽略。
 
 ## Docker
 

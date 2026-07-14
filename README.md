@@ -118,7 +118,7 @@ The version comes from [`VERSION`](./VERSION) and is injected into the binary. C
 | `task build:ui` | Type-check and build `frontend/dist` |
 | `task build:go` | Build the `workavera` binary (embeds `frontend/dist`) |
 | `task build` | Build the frontend and the self-contained binary |
-| `task release` | Cross-compile self-contained binaries for Linux/macOS/Windows into `dist/` |
+| `task release` | Cross-compile and package release archives for Linux/macOS/Windows into `dist/` |
 | `task run` | Build and run the Go binary |
 | `task build:docker` | Build the frontend and local `ghcr.io/xusenlin/workavera:latest` image |
 | `task push` | Build and push `linux/amd64` version and `latest` images |
@@ -135,13 +135,13 @@ Cross-compile self-contained binaries for GitHub releases:
 task release
 ```
 
-This builds the frontend, embeds it, and cross-compiles for three platforms into `dist/`, named by version, OS, and architecture:
+This builds the frontend, embeds it, and cross-compiles for three platforms into `dist/`, packaged as compressed archives named by version, OS, and architecture:
 
-- `dist/workavera_<version>_linux_amd64`
-- `dist/workavera_<version>_darwin_arm64`
-- `dist/workavera_<version>_windows_amd64.exe`
+- `dist/workavera_<version>_linux_amd64.tar.gz`
+- `dist/workavera_<version>_darwin_arm64.tar.gz`
+- `dist/workavera_<version>_windows_amd64.zip`
 
-A `dist/SHA256SUMS.txt` checksum file is generated alongside the binaries. Each file is fully self-contained—no separate frontend assets are required at runtime. The `dist/` directory is git-ignored.
+Each archive contains a single self-contained `workavera` binary (`workavera.exe` on Windows)—no separate frontend assets are required at runtime. A `dist/SHA256SUMS.txt` checksum file is generated alongside the archives. The `dist/` directory is git-ignored.
 
 ## Docker
 
