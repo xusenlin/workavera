@@ -177,7 +177,7 @@ func CreateProject(ctx context.Context, app core.App, actorID string, command Cr
 			return err
 		}
 		projectID = project.Id
-		if err := ensureBoardProjectOrder(tx, actorID, projectID); err != nil {
+		if err := ensureBoardProjectPreference(tx, actorID, projectID); err != nil {
 			return err
 		}
 		if err := createProjectStates(tx, projectID, command.States); err != nil {
@@ -454,7 +454,7 @@ func upsertMember(app core.App, actorID string, command UpsertMemberCommand, log
 		return MutationResult{}, err
 	}
 	if before == nil {
-		if err := ensureBoardProjectOrder(app, command.UserID, project.Id); err != nil {
+		if err := ensureBoardProjectPreference(app, command.UserID, project.Id); err != nil {
 			return MutationResult{}, err
 		}
 	}

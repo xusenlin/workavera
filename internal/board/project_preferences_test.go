@@ -9,7 +9,7 @@ import (
 	_ "github.com/xusenlin/workavera/migrations"
 )
 
-func TestProjectOrdersFollowProjectAndMembershipCreation(t *testing.T) {
+func TestProjectPreferencesFollowProjectAndMembershipCreation(t *testing.T) {
 	app, err := tests.NewTestApp()
 	if err != nil {
 		t.Fatal(err)
@@ -27,7 +27,7 @@ func TestProjectOrdersFollowProjectAndMembershipCreation(t *testing.T) {
 		t.Fatal(err)
 	}
 	ownerOrders, err := app.FindRecordsByFilter(
-		boardProjectOrdersCollection,
+		boardProjectPreferencesCollection,
 		"user = {:user}",
 		"sort_order",
 		0,
@@ -49,7 +49,7 @@ func TestProjectOrdersFollowProjectAndMembershipCreation(t *testing.T) {
 		t.Fatal(err)
 	}
 	memberOrders, err := app.FindRecordsByFilter(
-		boardProjectOrdersCollection,
+		boardProjectPreferencesCollection,
 		"user = {:user} && project = {:project}",
 		"",
 		0,
@@ -74,11 +74,11 @@ func TestProjectOrdersFollowProjectAndMembershipCreation(t *testing.T) {
 	if err := app.Delete(memberships[0]); err != nil {
 		t.Fatal(err)
 	}
-	if err := removeBoardProjectOrderIfInvisible(app, member.Id, first.ID); err != nil {
+	if err := removeBoardProjectPreferenceIfInvisible(app, member.Id, first.ID); err != nil {
 		t.Fatal(err)
 	}
 	memberOrders, err = app.FindRecordsByFilter(
-		boardProjectOrdersCollection,
+		boardProjectPreferencesCollection,
 		"user = {:user} && project = {:project}",
 		"",
 		0,

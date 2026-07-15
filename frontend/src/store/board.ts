@@ -34,7 +34,7 @@ export type BoardTemplate = {
 
 export type Project = {
   id: string
-  orderId?: string
+  preferenceId?: string
   sortOrder?: number
   name: string
   description?: string
@@ -136,7 +136,7 @@ type BoardState = {
   removeProject: (id: string) => Promise<void>
   moveProject: (id: string, direction: -1 | 1) => Promise<void>
   transferProjectOwner: (id: string, ownerId: string) => Promise<void>
-  toggleProjectCollapse: (id: string) => void
+  toggleProjectCollapse: (id: string) => Promise<void>
   addState: (projectId: string, input: StateInput) => Promise<void>
   updateState: (id: string, patch: Partial<StateInput>) => Promise<void>
   removeState: (id: string) => Promise<void>
@@ -172,10 +172,11 @@ type ProjectRecord = RecordModel & {
   expand?: { owner?: UserRecord }
 }
 
-type ProjectOrderRecord = RecordModel & {
+type ProjectPreferenceRecord = RecordModel & {
   user: string
   project: string
   sort_order: number
+  collapsed: boolean
   expand?: { project?: ProjectRecord }
 }
 
@@ -222,15 +223,13 @@ type TodoRecord = RecordModel & {
 const COLLECTIONS = {
   templates: "board_templates",
   projects: "board_projects",
-  projectOrders: "board_project_orders",
+  projectPreferences: "board_project_preferences",
   states: "board_project_states",
   members: "board_project_members",
   labels: "board_project_labels",
   tasks: "board_tasks",
 } as const
 
-// Accordion mode: only one project expanded at a time. null means all collapsed.
-let expandedProjectId: string | null = null
 let realtimeUnsubscribers: Array<() => void> = []
 let connectionWanted = false
 
@@ -247,13 +246,13 @@ function toTemplate(record: TemplateRecord): BoardTemplate {
 
 function toProject(
   record: ProjectRecord,
-  order?: ProjectOrderRecord
+  preference?: ProjectPreferenceRecord
 ): Project {
   const owner = record.expand?.owner
   return {
     id: record.id,
-    orderId: order?.id,
-    sortOrder: order?.sort_order,
+    preferenceId: preference?.id,
+    sortOrder: preference?.sort_order,
     name: record.name,
     description: record.description || undefined,
     ownerId: record.owner,
@@ -261,7 +260,7 @@ function toProject(
     ownerAvatar:
       owner?.avatar && owner ? pb.files.getURL(owner, owner.avatar) : undefined,
     archived: record.archived,
-    collapsed: expandedProjectId !== record.id,
+    collapsed: preference?.collapsed ?? false,
   }
 }
 
@@ -443,8 +442,8 @@ async function loadBoardPage(
           sort: "name",
         }).then((records) => records.map(toTemplate)),
     pb
-      .collection(COLLECTIONS.projectOrders)
-      .getList<ProjectOrderRecord>(page + 1, PROJECTS_PER_PAGE, {
+      .collection(COLLECTIONS.projectPreferences)
+      .getList<ProjectPreferenceRecord>(page + 1, PROJECTS_PER_PAGE, {
         filter: orderFilter,
         sort: "sort_order,id",
         expand: "project,project.owner",
@@ -469,14 +468,14 @@ async function loadBoardPage(
   }
 }
 
-async function normalizeProjectOrders(userId: string) {
+async function normalizeProjectPreferences(userId: string) {
   const filter = pb.filter(
     "user = {:user} && project.archived = false",
     { user: userId }
   )
   const orders = await pb
-    .collection(COLLECTIONS.projectOrders)
-    .getFullList<ProjectOrderRecord>({
+    .collection(COLLECTIONS.projectPreferences)
+    .getFullList<ProjectPreferenceRecord>({
       filter,
       sort: "sort_order,id",
       requestKey: null,
@@ -487,7 +486,7 @@ async function normalizeProjectOrders(userId: string) {
         PROJECT_ORDER_BASE + (index + 1) * PROJECT_ORDER_STEP
       if (order.sort_order === sortOrder) return Promise.resolve()
       return pb
-        .collection(COLLECTIONS.projectOrders)
+        .collection(COLLECTIONS.projectPreferences)
         .update(order.id, { sort_order: sortOrder }, { requestKey: null })
     })
   )
@@ -541,8 +540,9 @@ async function connectRealtime(
               return {
                 projects: upsertById(current as Project[], {
                   ...project,
-                  orderId: previous?.orderId,
+                  preferenceId: previous?.preferenceId,
                   sortOrder: previous?.sortOrder,
+                  collapsed: previous?.collapsed ?? project.collapsed,
                 }),
               }
             }
@@ -592,15 +592,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     set({ loading: true, error: null })
     try {
       const snapshot = await loadBoardPage(0)
-      expandedProjectId = snapshot.projects[0]?.id ?? null
-      set({
-        ...snapshot,
-        projects: snapshot.projects.map((p) => ({
-          ...p,
-          collapsed: p.id !== expandedProjectId,
-        })),
-        initialized: true,
-      })
+      set({ ...snapshot, initialized: true })
       if (connectionWanted) {
         await connectRealtime(
           set,
@@ -620,14 +612,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     set({ loading: true, error: null })
     try {
       const snapshot = await loadBoardPage(page, get().templates)
-      expandedProjectId = snapshot.projects[0]?.id ?? null
-      set({
-        ...snapshot,
-        projects: snapshot.projects.map((p) => ({
-          ...p,
-          collapsed: p.id !== expandedProjectId,
-        })),
-      })
+      set(snapshot)
       if (connectionWanted) {
         await connectRealtime(
           set,
@@ -781,10 +766,14 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         projects: state.projects.some((project) => project.id === id)
           ? upsertById(state.projects, {
               ...updated,
-              orderId: state.projects.find((project) => project.id === id)
-                ?.orderId,
+              preferenceId: state.projects.find(
+                (project) => project.id === id
+              )?.preferenceId,
               sortOrder: state.projects.find((project) => project.id === id)
                 ?.sortOrder,
+              collapsed:
+                state.projects.find((project) => project.id === id)
+                  ?.collapsed ?? false,
             })
           : state.projects,
         openedProject:
@@ -829,7 +818,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     const localIndex = state.projects.findIndex((project) => project.id === id)
     const project = state.projects[localIndex]
     if (
-      !project?.orderId ||
+      !project?.preferenceId ||
       project.sortOrder === undefined ||
       localIndex < 0
     ) {
@@ -849,8 +838,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         { user: userId, sortOrder: project.sortOrder }
       )
       let neighbors = await pb
-        .collection(COLLECTIONS.projectOrders)
-        .getList<ProjectOrderRecord>(1, 2, {
+        .collection(COLLECTIONS.projectPreferences)
+        .getList<ProjectPreferenceRecord>(1, 2, {
           filter,
           sort: direction < 0 ? "-sort_order,-id" : "sort_order,id",
           requestKey: null,
@@ -860,17 +849,19 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       let adjacent = neighbors.items[0].sort_order
       let outer = neighbors.items[1]?.sort_order
       if (outer !== undefined && Math.abs(outer - adjacent) < 0.001) {
-        await normalizeProjectOrders(userId)
+        await normalizeProjectPreferences(userId)
         const refreshed = await pb
-          .collection(COLLECTIONS.projectOrders)
-          .getOne<ProjectOrderRecord>(project.orderId, { requestKey: null })
+          .collection(COLLECTIONS.projectPreferences)
+          .getOne<ProjectPreferenceRecord>(project.preferenceId, {
+            requestKey: null,
+          })
         const refreshedFilter = pb.filter(
           `user = {:user} && project.archived = false && sort_order ${comparison} {:sortOrder}`,
           { user: userId, sortOrder: refreshed.sort_order }
         )
         neighbors = await pb
-          .collection(COLLECTIONS.projectOrders)
-          .getList<ProjectOrderRecord>(1, 2, {
+          .collection(COLLECTIONS.projectPreferences)
+          .getList<ProjectPreferenceRecord>(1, 2, {
             filter: refreshedFilter,
             sort: direction < 0 ? "-sort_order,-id" : "sort_order,id",
             requestKey: null,
@@ -891,23 +882,16 @@ export const useBoardStore = create<BoardState>((set, get) => ({
             : adjacent + (outer - adjacent) / 3
       }
       await pb
-        .collection(COLLECTIONS.projectOrders)
+        .collection(COLLECTIONS.projectPreferences)
         .update(
-          project.orderId,
+          project.preferenceId,
           { sort_order: nextSortOrder },
           { requestKey: null }
         )
 
       const targetPage = Math.floor(targetIndex / PROJECTS_PER_PAGE)
-      expandedProjectId = id
       const snapshot = await loadBoardPage(targetPage, get().templates)
-      set({
-        ...snapshot,
-        projects: snapshot.projects.map((item) => ({
-          ...item,
-          collapsed: item.id !== expandedProjectId,
-        })),
-      })
+      set(snapshot)
       if (connectionWanted) {
         await connectRealtime(
           set,
@@ -950,20 +934,37 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     }
   },
 
-  toggleProjectCollapse: (id) =>
-    set((state) => {
-      const project = state.projects.find((item) => item.id === id)
-      // Accordion mode: expanding one project collapses all others.
-      // Clicking an already-expanded project collapses it.
-      const willExpand = project?.collapsed ?? true
-      expandedProjectId = willExpand ? id : null
-      return {
-        projects: state.projects.map((item) => ({
-          ...item,
-          collapsed: item.id !== expandedProjectId,
-        })),
-      }
-    }),
+  toggleProjectCollapse: async (id) => {
+    const project = get().projects.find((item) => item.id === id)
+    if (!project?.preferenceId) return
+    const collapsed = !project.collapsed
+    set((state) => ({
+      projects: state.projects.map((item) =>
+        item.id === id ? { ...item, collapsed } : item
+      ),
+    }))
+    try {
+      await pb
+        .collection(COLLECTIONS.projectPreferences)
+        .update(project.preferenceId, { collapsed })
+    } catch (error) {
+      if (error instanceof ClientResponseError && error.isAbort) return
+      set((state) => ({
+        projects: state.projects.map((item) =>
+          item.id === id && item.collapsed === collapsed
+            ? { ...item, collapsed: project.collapsed }
+            : item
+        ),
+      }))
+      const message = messageFromError(
+        error,
+        "Could not save the project display state"
+      )
+      set({ error: message })
+      toast.error(message)
+      throw new Error(message, { cause: error })
+    }
+  },
 
   addState: async (projectId, input) => {
     const sameProject = get().states.filter(

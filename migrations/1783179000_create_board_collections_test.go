@@ -95,8 +95,8 @@ func TestBoardCollectionsMigration(t *testing.T) {
 	if err := dropBoardProjectOperationLogs(app); err != nil {
 		t.Fatalf("drop project operation logs: %v", err)
 	}
-	if err := dropBoardProjectOrdersCollection(app); err != nil {
-		t.Fatalf("drop project orders: %v", err)
+	if err := dropBoardProjectPreferencesCollection(app); err != nil {
+		t.Fatalf("drop project preferences: %v", err)
 	}
 	if err := dropBoardTaskOperationLogs(app); err != nil {
 		t.Fatalf("drop task operation logs: %v", err)

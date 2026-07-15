@@ -205,7 +205,7 @@ func transferBoardProjectOwner(app core.App, actorID, projectID, targetOwnerID s
 		if err := txApp.Save(project); err != nil {
 			return err
 		}
-		if err := ensureBoardProjectOrder(txApp, targetOwnerID, projectID); err != nil {
+		if err := ensureBoardProjectPreference(txApp, targetOwnerID, projectID); err != nil {
 			return err
 		}
 

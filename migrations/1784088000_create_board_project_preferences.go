@@ -7,16 +7,16 @@ import (
 )
 
 const (
-	boardProjectOrdersCollection = "board_project_orders"
-	boardProjectOrderStep        = 1024
-	boardProjectOrderBase        = 1024 * 1024 * 1024
+	boardProjectPreferencesCollection = "board_project_preferences"
+	boardProjectPreferenceStep        = 1024
+	boardProjectPreferenceBase        = 1024 * 1024 * 1024
 )
 
 func init() {
-	m.Register(createBoardProjectOrdersCollection, dropBoardProjectOrdersCollection)
+	m.Register(createBoardProjectPreferencesCollection, dropBoardProjectPreferencesCollection)
 }
 
-func createBoardProjectOrdersCollection(app core.App) error {
+func createBoardProjectPreferencesCollection(app core.App) error {
 	users, err := app.FindCollectionByNameOrId(usersCollectionName)
 	if err != nil {
 		return err
@@ -26,30 +26,31 @@ func createBoardProjectOrdersCollection(app core.App) error {
 		return err
 	}
 
-	orders := core.NewBaseCollection(boardProjectOrdersCollection)
+	preferences := core.NewBaseCollection(boardProjectPreferencesCollection)
 	orderRead := `@request.auth.id != "" && user = @request.auth.id && (project.owner = @request.auth.id || project.board_project_members_via_project.user ?= @request.auth.id)`
-	orders.ListRule = types.Pointer(orderRead)
-	orders.ViewRule = orders.ListRule
-	orders.CreateRule = types.Pointer(`@request.auth.id != "" && @request.body.user = @request.auth.id && (project.owner = @request.auth.id || project.board_project_members_via_project.user ?= @request.auth.id)`)
-	orders.UpdateRule = types.Pointer(orderRead + ` && @request.body.user:changed = false && @request.body.project:changed = false`)
-	orders.DeleteRule = types.Pointer(orderRead)
-	orders.Fields.Add(
+	preferences.ListRule = types.Pointer(orderRead)
+	preferences.ViewRule = preferences.ListRule
+	preferences.CreateRule = types.Pointer(`@request.auth.id != "" && @request.body.user = @request.auth.id && (project.owner = @request.auth.id || project.board_project_members_via_project.user ?= @request.auth.id)`)
+	preferences.UpdateRule = types.Pointer(orderRead + ` && @request.body.user:changed = false && @request.body.project:changed = false`)
+	preferences.DeleteRule = types.Pointer(orderRead)
+	preferences.Fields.Add(
 		&core.RelationField{Name: "user", CollectionId: users.Id, MaxSelect: 1, Required: true, CascadeDelete: true},
 		&core.RelationField{Name: "project", CollectionId: projects.Id, MaxSelect: 1, Required: true, CascadeDelete: true},
 		&core.NumberField{Name: "sort_order", Required: true},
+		&core.BoolField{Name: "collapsed"},
 		&core.AutodateField{Name: "created", OnCreate: true},
 		&core.AutodateField{Name: "updated", OnCreate: true, OnUpdate: true},
 	)
-	orders.AddIndex("idx_board_project_orders_user_project", true, "user, project", "")
-	orders.AddIndex("idx_board_project_orders_user_sort", false, "user, sort_order", "")
-	if err := app.Save(orders); err != nil {
+	preferences.AddIndex("idx_board_project_preferences_user_project", true, "user, project", "")
+	preferences.AddIndex("idx_board_project_preferences_user_sort", false, "user, sort_order", "")
+	if err := app.Save(preferences); err != nil {
 		return err
 	}
 
-	return backfillBoardProjectOrders(app, orders)
+	return backfillBoardProjectPreferences(app, preferences)
 }
 
-func backfillBoardProjectOrders(app core.App, orders *core.Collection) error {
+func backfillBoardProjectPreferences(app core.App, preferences *core.Collection) error {
 	projects, err := app.FindRecordsByFilter(boardProjectsCollection, "", "-created,-id", 0, 0)
 	if err != nil {
 		return err
@@ -74,10 +75,10 @@ func backfillBoardProjectOrders(app core.App, orders *core.Collection) error {
 			}
 			seen[userID] = true
 			positions[userID]++
-			record := core.NewRecord(orders)
+			record := core.NewRecord(preferences)
 			record.Set("user", userID)
 			record.Set("project", project.Id)
-			record.Set("sort_order", boardProjectOrderBase+positions[userID]*boardProjectOrderStep)
+			record.Set("sort_order", boardProjectPreferenceBase+positions[userID]*boardProjectPreferenceStep)
 			if err := app.Save(record); err != nil {
 				return err
 			}
@@ -86,8 +87,8 @@ func backfillBoardProjectOrders(app core.App, orders *core.Collection) error {
 	return nil
 }
 
-func dropBoardProjectOrdersCollection(app core.App) error {
-	collection, err := app.FindCollectionByNameOrId(boardProjectOrdersCollection)
+func dropBoardProjectPreferencesCollection(app core.App) error {
+	collection, err := app.FindCollectionByNameOrId(boardProjectPreferencesCollection)
 	if err != nil {
 		return err
 	}

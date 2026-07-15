@@ -90,7 +90,7 @@ export function ProjectColumn({
     <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-card/50 p-4">
       <div className="flex items-center gap-2">
         <button
-          onClick={() => toggleCollapse(project.id)}
+          onClick={() => void toggleCollapse(project.id).catch(() => {})}
           className="flex items-center gap-1.5 rounded-md px-1 py-1 transition-colors hover:bg-muted"
         >
           <HugeiconsIcon
@@ -138,7 +138,7 @@ export function ProjectColumn({
           <Button
             variant="ghost"
             size="icon-xs"
-            disabled={!canMoveUp || loading || !project.orderId}
+            disabled={!canMoveUp || loading || !project.preferenceId}
             onClick={() => void moveProject(project.id, -1).catch(() => {})}
             aria-label={`Move ${project.name} up`}
           >
@@ -147,7 +147,7 @@ export function ProjectColumn({
           <Button
             variant="ghost"
             size="icon-xs"
-            disabled={!canMoveDown || loading || !project.orderId}
+            disabled={!canMoveDown || loading || !project.preferenceId}
             onClick={() => void moveProject(project.id, 1).catch(() => {})}
             aria-label={`Move ${project.name} down`}
           >

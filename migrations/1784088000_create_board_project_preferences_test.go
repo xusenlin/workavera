@@ -9,36 +9,39 @@ import (
 	"github.com/pocketbase/pocketbase/tests"
 )
 
-func TestBoardProjectOrdersCollectionMigration(t *testing.T) {
+func TestBoardProjectPreferencesCollectionMigration(t *testing.T) {
 	app, err := tests.NewTestApp()
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer app.Cleanup()
 
-	orders, err := app.FindCollectionByNameOrId(boardProjectOrdersCollection)
+	preferences, err := app.FindCollectionByNameOrId(boardProjectPreferencesCollection)
 	if err != nil {
 		t.Fatal(err)
 	}
-	user, ok := orders.Fields.GetByName("user").(*core.RelationField)
+	user, ok := preferences.Fields.GetByName("user").(*core.RelationField)
 	if !ok || !user.Required || !user.CascadeDelete || user.MaxSelect != 1 {
 		t.Fatalf("unexpected project order user relation: %#v", user)
 	}
-	project, ok := orders.Fields.GetByName("project").(*core.RelationField)
+	project, ok := preferences.Fields.GetByName("project").(*core.RelationField)
 	if !ok || !project.Required || !project.CascadeDelete || project.MaxSelect != 1 {
 		t.Fatalf("unexpected project order project relation: %#v", project)
 	}
-	if _, ok := orders.Fields.GetByName("sort_order").(*core.NumberField); !ok {
-		t.Fatal("project orders must expose sort_order")
+	if _, ok := preferences.Fields.GetByName("sort_order").(*core.NumberField); !ok {
+		t.Fatal("project preferences must expose sort_order")
 	}
-	if orders.ListRule == nil || orders.ViewRule == nil || *orders.ListRule != *orders.ViewRule {
+	if _, ok := preferences.Fields.GetByName("collapsed").(*core.BoolField); !ok {
+		t.Fatal("project preferences must expose collapsed")
+	}
+	if preferences.ListRule == nil || preferences.ViewRule == nil || *preferences.ListRule != *preferences.ViewRule {
 		t.Fatal("project order list and view rules must match")
 	}
-	if orders.CreateRule == nil || orders.UpdateRule == nil || orders.DeleteRule == nil {
+	if preferences.CreateRule == nil || preferences.UpdateRule == nil || preferences.DeleteRule == nil {
 		t.Fatal("users must be able to manage their own visible project orders")
 	}
 	foundUnique := false
-	for _, index := range orders.Indexes {
+	for _, index := range preferences.Indexes {
 		lower := strings.ToLower(index)
 		if strings.Contains(lower, "unique") && strings.Contains(lower, "user") && strings.Contains(lower, "project") {
 			foundUnique = true
@@ -46,18 +49,18 @@ func TestBoardProjectOrdersCollectionMigration(t *testing.T) {
 		}
 	}
 	if !foundUnique {
-		t.Fatalf("expected unique user/project index, got %v", orders.Indexes)
+		t.Fatalf("expected unique user/project index, got %v", preferences.Indexes)
 	}
 }
 
-func TestBoardProjectOrdersBackfillAndRollback(t *testing.T) {
+func TestBoardProjectPreferencesBackfillAndRollback(t *testing.T) {
 	app, err := tests.NewTestApp()
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer app.Cleanup()
 
-	if err := dropBoardProjectOrdersCollection(app); err != nil {
+	if err := dropBoardProjectPreferencesCollection(app); err != nil {
 		t.Fatal(err)
 	}
 	users, err := app.FindCollectionByNameOrId(usersCollectionName)
@@ -99,26 +102,26 @@ func TestBoardProjectOrdersBackfillAndRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := createBoardProjectOrdersCollection(app); err != nil {
+	if err := createBoardProjectPreferencesCollection(app); err != nil {
 		t.Fatal(err)
 	}
 	for _, userID := range []string{owner.Id, member.Id} {
 		records, err := app.FindRecordsByFilter(
-			boardProjectOrdersCollection,
+			boardProjectPreferencesCollection,
 			"user = {:user} && project = {:project}",
 			"",
 			0,
 			0,
 			dbx.Params{"user": userID, "project": project.Id},
 		)
-		if err != nil || len(records) != 1 || records[0].GetFloat("sort_order") != boardProjectOrderBase+boardProjectOrderStep {
+		if err != nil || len(records) != 1 || records[0].GetFloat("sort_order") != boardProjectPreferenceBase+boardProjectPreferenceStep || records[0].GetBool("collapsed") {
 			t.Fatalf("unexpected backfilled order for %s: %#v, %v", userID, records, err)
 		}
 	}
-	if err := dropBoardProjectOrdersCollection(app); err != nil {
+	if err := dropBoardProjectPreferencesCollection(app); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := app.FindCollectionByNameOrId(boardProjectOrdersCollection); err == nil {
-		t.Fatal("expected board project orders collection to be removed")
+	if _, err := app.FindCollectionByNameOrId(boardProjectPreferencesCollection); err == nil {
+		t.Fatal("expected board project preferences collection to be removed")
 	}
 }

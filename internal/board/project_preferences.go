@@ -8,17 +8,17 @@ import (
 )
 
 const (
-	boardProjectOrdersCollection = "board_project_orders"
-	projectOrderStep             = 1024
-	projectOrderBase             = 1024 * 1024 * 1024
+	boardProjectPreferencesCollection = "board_project_preferences"
+	projectPreferenceStep             = 1024
+	projectPreferenceBase             = 1024 * 1024 * 1024
 )
 
-func ensureBoardProjectOrder(app core.App, userID, projectID string) error {
+func ensureBoardProjectPreference(app core.App, userID, projectID string) error {
 	if userID == "" || projectID == "" {
 		return errors.New("project order requires a user and project")
 	}
 	existing, err := app.FindRecordsByFilter(
-		boardProjectOrdersCollection,
+		boardProjectPreferencesCollection,
 		"user = {:user} && project = {:project}",
 		"",
 		1,
@@ -33,7 +33,7 @@ func ensureBoardProjectOrder(app core.App, userID, projectID string) error {
 	}
 
 	first, err := app.FindRecordsByFilter(
-		boardProjectOrdersCollection,
+		boardProjectPreferencesCollection,
 		"user = {:user}",
 		"sort_order",
 		1,
@@ -43,14 +43,14 @@ func ensureBoardProjectOrder(app core.App, userID, projectID string) error {
 	if err != nil {
 		return err
 	}
-	sortOrder := float64(projectOrderBase + projectOrderStep)
+	sortOrder := float64(projectPreferenceBase + projectPreferenceStep)
 	if len(first) > 0 {
-		sortOrder = first[0].GetFloat("sort_order") - projectOrderStep
+		sortOrder = first[0].GetFloat("sort_order") - projectPreferenceStep
 		if sortOrder == 0 {
-			sortOrder = -projectOrderStep
+			sortOrder = -projectPreferenceStep
 		}
 	}
-	collection, err := app.FindCollectionByNameOrId(boardProjectOrdersCollection)
+	collection, err := app.FindCollectionByNameOrId(boardProjectPreferencesCollection)
 	if err != nil {
 		return err
 	}
@@ -61,7 +61,7 @@ func ensureBoardProjectOrder(app core.App, userID, projectID string) error {
 	if err := app.Save(record); err != nil {
 		// The unique user/project index makes concurrent repair attempts safe.
 		if found, findErr := app.FindRecordsByFilter(
-			boardProjectOrdersCollection,
+			boardProjectPreferencesCollection,
 			"user = {:user} && project = {:project}",
 			"",
 			1,
@@ -75,7 +75,7 @@ func ensureBoardProjectOrder(app core.App, userID, projectID string) error {
 	return nil
 }
 
-func removeBoardProjectOrderIfInvisible(app core.App, userID, projectID string) error {
+func removeBoardProjectPreferenceIfInvisible(app core.App, userID, projectID string) error {
 	project, err := app.FindRecordById(boardProjectsCollection, projectID)
 	if err != nil {
 		// Project deletion cascades to its order records.
@@ -96,7 +96,7 @@ func removeBoardProjectOrderIfInvisible(app core.App, userID, projectID string) 
 		return err
 	}
 	orders, err := app.FindRecordsByFilter(
-		boardProjectOrdersCollection,
+		boardProjectPreferencesCollection,
 		"user = {:user} && project = {:project}",
 		"",
 		0,
@@ -114,23 +114,23 @@ func removeBoardProjectOrderIfInvisible(app core.App, userID, projectID string) 
 	return nil
 }
 
-func maintainBoardProjectOrderAfterProjectCreate(event *core.RecordEvent) error {
-	if err := ensureBoardProjectOrder(event.App, event.Record.GetString("owner"), event.Record.Id); err != nil {
-		event.App.Logger().Error("failed to create project order", "projectId", event.Record.Id, "error", err)
+func maintainBoardProjectPreferenceAfterProjectCreate(event *core.RecordEvent) error {
+	if err := ensureBoardProjectPreference(event.App, event.Record.GetString("owner"), event.Record.Id); err != nil {
+		event.App.Logger().Error("failed to create project preference", "projectId", event.Record.Id, "error", err)
 	}
 	return event.Next()
 }
 
-func maintainBoardProjectOrderAfterMemberCreate(event *core.RecordEvent) error {
-	if err := ensureBoardProjectOrder(event.App, event.Record.GetString("user"), event.Record.GetString("project")); err != nil {
-		event.App.Logger().Error("failed to create member project order", "membershipId", event.Record.Id, "error", err)
+func maintainBoardProjectPreferenceAfterMemberCreate(event *core.RecordEvent) error {
+	if err := ensureBoardProjectPreference(event.App, event.Record.GetString("user"), event.Record.GetString("project")); err != nil {
+		event.App.Logger().Error("failed to create member project preference", "membershipId", event.Record.Id, "error", err)
 	}
 	return event.Next()
 }
 
-func maintainBoardProjectOrderAfterMemberDelete(event *core.RecordEvent) error {
-	if err := removeBoardProjectOrderIfInvisible(event.App, event.Record.GetString("user"), event.Record.GetString("project")); err != nil {
-		event.App.Logger().Error("failed to remove member project order", "membershipId", event.Record.Id, "error", err)
+func maintainBoardProjectPreferenceAfterMemberDelete(event *core.RecordEvent) error {
+	if err := removeBoardProjectPreferenceIfInvisible(event.App, event.Record.GetString("user"), event.Record.GetString("project")); err != nil {
+		event.App.Logger().Error("failed to remove member project preference", "membershipId", event.Record.Id, "error", err)
 	}
 	return event.Next()
 }
