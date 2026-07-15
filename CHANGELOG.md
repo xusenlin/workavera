@@ -7,6 +7,19 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.0.4] - 2026-07-15
+
+### Added
+
+- Notion-style document editing: slash commands, drag handles with a "Turn into" menu, and a floating formatting toolbar.
+- Documents can be exported as Markdown or standalone HTML files.
+
+### Changed
+
+- The document editor is now BlockNote-based (replacing Milkdown); documents are still stored and versioned as Markdown.
+- Document header actions (source view, fullscreen, export, history, save, move to project) are now icon buttons; the draft diff view was removed.
+- Code blocks in documents follow the app light/dark theme.
+
 ## [0.0.3] - 2026-07-14
 
 ### Added

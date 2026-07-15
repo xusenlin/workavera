@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router"
 
 import { HugeiconsIcon } from "@hugeicons/react"
@@ -8,17 +8,25 @@ import {
   ArchiveRestoreIcon,
   Delete02Icon,
   DocumentAttachmentIcon,
+  Download01Icon,
+  FloppyDiskIcon,
+  FolderTransferIcon,
+  HistoryIcon,
+  Maximize01Icon,
+  Minimize01Icon,
   MoreHorizontalIcon,
   Pin02Icon,
   Search02Icon,
+  SourceCodeIcon,
 } from "@hugeicons/core-free-icons"
 import { ClientResponseError, type RecordModel } from "pocketbase"
 import { toast } from "sonner"
 
 import {
-  MilkdownDocumentEditor,
+  BlockNoteDocumentEditor,
   type DocumentEditorMode,
-} from "@/components/docs/milkdown-document-editor"
+} from "@/components/docs/blocknote-document-editor"
+import { documentMarkdownToStandaloneHtml } from "@/components/docs/doc-export"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -62,6 +70,11 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { extractErrorMessage } from "@/lib/error"
 import { pb } from "@/lib/pocketbase"
 import { cn } from "@/lib/utils"
@@ -132,6 +145,25 @@ export function DocsPage() {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [archivedOpen, setArchivedOpen] = useState(false)
   const [editorMode, setEditorMode] = useState<DocumentEditorMode>("rich-text")
+  const [fullscreen, setFullscreen] = useState(false)
+  const editorAreaRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    const updateFullscreen = () => {
+      setFullscreen(document.fullscreenElement === editorAreaRef.current)
+    }
+    document.addEventListener("fullscreenchange", updateFullscreen)
+    return () =>
+      document.removeEventListener("fullscreenchange", updateFullscreen)
+  }, [])
+
+  const toggleFullscreen = async () => {
+    if (document.fullscreenElement === editorAreaRef.current) {
+      await document.exitFullscreen()
+      return
+    }
+    await editorAreaRef.current?.requestFullscreen()
+  }
 
   const dirty = Boolean(
     persisted &&
@@ -339,6 +371,30 @@ export function DocsPage() {
     }
   }
 
+  const exportMarkdown = () => {
+    downloadFile(
+      `${exportFileName(draftTitle)}.md`,
+      draftContent,
+      "text/markdown;charset=utf-8"
+    )
+  }
+
+  const exportHtml = async () => {
+    try {
+      const html = await documentMarkdownToStandaloneHtml(
+        draftContent,
+        draftTitle.trim() || "Untitled document"
+      )
+      downloadFile(
+        `${exportFileName(draftTitle)}.html`,
+        html,
+        "text/html;charset=utf-8"
+      )
+    } catch (error) {
+      toast.error(extractErrorMessage(error, "Could not export the document."))
+    }
+  }
+
   const togglePin = async (id: string, pinned: boolean) => {
     try {
       await pb.send(`/api/docs/${id}/pin`, {
@@ -516,7 +572,10 @@ export function DocsPage() {
         )}
       </aside>
 
-      <main className="flex min-w-0 flex-1 flex-col bg-background">
+      <main
+        ref={editorAreaRef}
+        className="flex min-w-0 flex-1 flex-col bg-background"
+      >
         {persisted ? (
           <>
             <div className="flex h-14 shrink-0 items-center gap-3 border-b bg-background px-5">
@@ -539,7 +598,7 @@ export function DocsPage() {
                     ? `Unsaved · v${persisted.revision}`
                     : `v${persisted.revision}`}
               </span>
-              <div className="ml-auto flex items-center gap-2">
+              <div className="ml-auto flex items-center gap-1">
                 {!persisted.projectId && (
                   <MoveToProjectButton
                     document={persisted}
@@ -550,13 +609,6 @@ export function DocsPage() {
                     }}
                   />
                 )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setHistoryOpen(true)}
-                >
-                  History
-                </Button>
                 {serverHasNewVersion && (
                   <Button
                     variant="outline"
@@ -566,21 +618,67 @@ export function DocsPage() {
                     Load latest
                   </Button>
                 )}
-                <Button
-                  size="sm"
+                <HeaderIconButton
+                  label={
+                    editorMode === "source"
+                      ? "Switch to rich text"
+                      : "Edit Markdown source"
+                  }
+                  icon={SourceCodeIcon}
+                  active={editorMode === "source"}
+                  onClick={() =>
+                    setEditorMode((current) =>
+                      current === "source" ? "rich-text" : "source"
+                    )
+                  }
+                />
+                <HeaderIconButton
+                  label={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+                  icon={fullscreen ? Minimize01Icon : Maximize01Icon}
+                  onClick={() => void toggleFullscreen()}
+                />
+                <DropdownMenu>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label="Export"
+                        >
+                          <HugeiconsIcon icon={Download01Icon} strokeWidth={2} />
+                        </Button>
+                      </DropdownMenuTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">Export</TooltipContent>
+                  </Tooltip>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={exportMarkdown}>
+                      Markdown (.md)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => void exportHtml()}>
+                      HTML (.html)
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <HeaderIconButton
+                  label="Version history"
+                  icon={HistoryIcon}
+                  onClick={() => setHistoryOpen(true)}
+                />
+                <HeaderIconButton
+                  label={saving ? "Saving…" : "Save"}
+                  icon={FloppyDiskIcon}
+                  loading={saving}
                   disabled={!dirty || saving || !draftTitle.trim()}
                   onClick={() => void save()}
-                >
-                  {saving ? "Saving…" : "Save"}
-                </Button>
+                />
               </div>
             </div>
-            <MilkdownDocumentEditor
+            <BlockNoteDocumentEditor
               key={persisted.id}
               value={draftContent}
-              savedValue={persisted.content}
               mode={editorMode}
-              onModeChange={setEditorMode}
               onChange={setDraftContent}
             />
           </>
@@ -627,6 +725,43 @@ export function DocsPage() {
         />
       )}
     </div>
+  )
+}
+
+function HeaderIconButton({
+  label,
+  icon,
+  active = false,
+  loading = false,
+  disabled = false,
+  onClick,
+}: {
+  label: string
+  icon: typeof FloppyDiskIcon
+  active?: boolean
+  loading?: boolean
+  disabled?: boolean
+  onClick: () => void
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant={active ? "secondary" : "ghost"}
+          size="icon-sm"
+          aria-label={label}
+          disabled={disabled}
+          onClick={onClick}
+        >
+          {loading ? (
+            <Spinner className="size-4" />
+          ) : (
+            <HugeiconsIcon icon={icon} strokeWidth={2} />
+          )}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{label}</TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -1139,9 +1274,11 @@ function MoveToProjectButton({
   }
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        Move to project
-      </Button>
+      <HeaderIconButton
+        label="Move to project"
+        icon={FolderTransferIcon}
+        onClick={() => setOpen(true)}
+      />
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Move to project</DialogTitle>
@@ -1271,4 +1408,16 @@ function projectName(projects: Project[], id: string) {
 }
 function formatDate(value: string) {
   return value ? new Date(value).toLocaleString() : ""
+}
+function exportFileName(title: string) {
+  return title.trim().replace(/[\\/:*?"<>|]/g, "-") || "document"
+}
+function downloadFile(filename: string, content: string, type: string) {
+  const blob = new Blob([content], { type })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement("a")
+  anchor.href = url
+  anchor.download = filename
+  anchor.click()
+  URL.revokeObjectURL(url)
 }

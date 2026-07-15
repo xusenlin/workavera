@@ -188,7 +188,7 @@
   grid-row: 2;
 }
 
-.workavera-milkdown-editor {
+.workavera-doc-editor {
   display: flex;
   min-height: 0;
   flex: 1;
@@ -198,125 +198,35 @@
   font-family: var(--font-sans);
 }
 
-.workavera-milkdown-editor:fullscreen {
-  width: 100vw;
-  height: 100vh;
-  background: var(--background);
-}
-
-.milkdown-system-toolbar {
-  z-index: 10;
-  min-height: 2.75rem;
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 0.125rem;
-  overflow: visible;
-  width: 100%;
-  padding: 0.4rem 1.25rem;
-  border-bottom: 1px solid var(--border);
-  background: var(--background);
-}
-
-.milkdown-rich-area {
+.doc-rich-area {
   min-height: 0;
   flex: 1;
   overflow: auto;
 }
 
-.workavera-milkdown-editor .milkdown {
-  --crepe-color-background: var(--background);
-  --crepe-color-on-background: var(--foreground);
-  --crepe-color-surface: var(--popover);
-  --crepe-color-surface-low: var(--muted);
-  --crepe-color-on-surface: var(--popover-foreground);
-  --crepe-color-on-surface-variant: var(--muted-foreground);
-  --crepe-color-outline: var(--border);
-  --crepe-color-primary: var(--primary);
-  --crepe-color-secondary: var(--secondary);
-  --crepe-color-on-secondary: var(--secondary-foreground);
-  --crepe-color-inverse: var(--foreground);
-  --crepe-color-on-inverse: var(--background);
-  --crepe-color-inline-code: var(--destructive);
-  --crepe-color-error: var(--destructive);
-  --crepe-color-hover: var(--accent);
-  --crepe-color-selected: var(--accent);
-  --crepe-color-inline-area: var(--muted);
-  --crepe-font-title: var(--font-sans);
-  --crepe-font-default: var(--font-sans);
-  --crepe-font-code:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
-    monospace;
-  --crepe-shadow-1: 0 1px 3px rgb(0 0 0 / 8%);
-  --crepe-shadow-2: 0 4px 12px rgb(0 0 0 / 12%);
+/* Layout only — visual theming stays on BlockNote's own defaults. */
+.doc-rich-area .bn-editor {
   min-height: 100%;
-  color: var(--foreground);
-  background: var(--background);
-  font-family: var(--font-sans);
+  padding-block: 2.5rem 5rem;
 }
 
-.workavera-milkdown-editor .milkdown .milkdown-table-block {
-  margin: 1.25rem 0;
-  overflow-x: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--background);
+/* BlockNote hardcodes a near-black code block. Retheme the container to the
+   app palette; token colors are shiki dual-theme inline styles (github-light
+   by default, --shiki-dark variables flipped on below in dark mode). */
+.doc-rich-area [data-content-type="codeBlock"] {
+  background-color: var(--muted) !important;
+  color: var(--foreground) !important;
 }
 
-.workavera-milkdown-editor .milkdown .milkdown-table-block table {
-  width: 100%;
-  margin: 0;
-  border-collapse: collapse;
-  table-layout: auto;
+.dark .doc-rich-area [data-content-type="codeBlock"] span.shiki {
+  color: var(--shiki-dark) !important;
 }
 
-.workavera-milkdown-editor .milkdown .milkdown-table-block th,
-.workavera-milkdown-editor .milkdown .milkdown-table-block td {
-  min-width: 6rem;
-  padding: 0.4rem 0.6rem;
-  border: 1px solid var(--border);
-  color: var(--foreground);
-  text-align: left;
-  vertical-align: top;
-  font-size: 0.95rem;
-  line-height: 1.5;
+.doc-rich-area [data-content-type="codeBlock"] > div > select {
+  color: inherit;
 }
 
-.workavera-milkdown-editor .milkdown .milkdown-table-block th {
-  background: var(--muted);
-  font-weight: 600;
-}
-
-.workavera-milkdown-editor .milkdown .milkdown-table-block tbody tr:hover td {
-  background: color-mix(in oklab, var(--muted) 45%, transparent);
-}
-
-.workavera-milkdown-editor .milkdown .milkdown-table-block th p,
-.workavera-milkdown-editor .milkdown .milkdown-table-block td p {
-  margin: 0;
-}
-
-.workavera-milkdown-editor
-  .milkdown
-  .milkdown-table-block
-  .selectedCell::after {
-  background: var(--accent);
-  opacity: 0.65;
-}
-
-.workavera-milkdown-editor .milkdown .milkdown-table-block .cell-handle,
-.workavera-milkdown-editor
-  .milkdown
-  .milkdown-table-block
-  .line-handle
-  .add-button {
-  border: 1px solid var(--border);
-  background: var(--popover);
-  color: var(--popover-foreground);
-}
-
-.milkdown-source-area,
-.milkdown-diff-area {
+.doc-source-area {
   min-height: 0;
   flex: 1;
   overflow: auto;
@@ -336,23 +246,13 @@
   resize: none;
 }
 
-.milkdown-source-area:focus-visible {
+.doc-source-area:focus-visible {
   box-shadow: none;
   outline: none;
 }
 
-.milkdown-diff-area {
-  white-space: pre-wrap;
-}
-
 @media (max-width: 768px) {
-  .milkdown-system-toolbar {
-    overflow-x: auto;
-    padding-inline: 0.75rem;
-  }
-
-  .milkdown-source-area,
-  .milkdown-diff-area {
+  .doc-source-area {
     padding: 2rem 1.5rem 4rem;
   }
 }
