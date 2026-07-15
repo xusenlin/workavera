@@ -47,7 +47,7 @@ tasks:
     cmds:
       - rm -rf dist && mkdir -p dist
       - |
-        for platform in "linux/amd64" "darwin/arm64" "windows/amd64"; do
+        for platform in "linux/amd64" "darwin/amd64" "darwin/arm64" "windows/amd64"; do
           GOOS="${platform%/*}"
           GOARCH="${platform#*/}"
           bin="workavera"

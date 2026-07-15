@@ -19,6 +19,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `task release` now includes an Intel macOS (`darwin/amd64`) archive.
 - The document editor is now BlockNote-based (replacing Milkdown); documents are still stored and versioned as Markdown.
 - Document header actions (source view, fullscreen, export, history, save, move to project) are now icon buttons; the draft diff view was removed.
 - Code blocks in documents follow the app light/dark theme.
