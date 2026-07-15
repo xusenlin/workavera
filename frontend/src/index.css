@@ -202,12 +202,22 @@
   min-height: 0;
   flex: 1;
   overflow: auto;
+  background-color: var(--bn-colors-editor-background);
 }
 
 /* Layout only — visual theming stays on BlockNote's own defaults. */
 .doc-rich-area .bn-editor {
   min-height: 100%;
+  max-width: 56rem;
+  margin-inline: auto;
   padding-block: 2.5rem 5rem;
+  padding-inline: 2rem;
+}
+
+@media (max-width: 768px) {
+  .doc-rich-area .bn-editor {
+    padding-inline: 1.25rem;
+  }
 }
 
 /* BlockNote hardcodes a near-black code block. Retheme the container to the
@@ -216,6 +226,30 @@
 .doc-rich-area [data-content-type="codeBlock"] {
   background-color: var(--muted) !important;
   color: var(--foreground) !important;
+}
+
+/* BlockNote's divider uses a hardcoded mid-gray that reads too heavy in
+   light mode; soften it to the app border token. */
+.doc-rich-area [data-content-type="divider"] hr {
+  border-top-color: var(--border);
+  margin-block: 1.25em;
+}
+
+/* Same hardcoded mid-gray on the quote border; soften to match. */
+.doc-rich-area [data-content-type="quote"] blockquote {
+  border-left-color: var(--border);
+}
+
+/* Use the app font stack instead of BlockNote's own Inter variant list. */
+.doc-rich-area .bn-editor,
+.doc-rich-area .bn-default-styles {
+  font-family: var(--font-sans);
+}
+
+/* BlockNote only pads headings on top; add breathing room below so the
+   following paragraph isn't flush against it. */
+.doc-rich-area [data-content-type="heading"] {
+  padding-bottom: 0.4em !important;
 }
 
 .dark .doc-rich-area [data-content-type="codeBlock"] span.shiki {
