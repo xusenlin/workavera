@@ -85,6 +85,10 @@ func TestBoardCollectionsMigration(t *testing.T) {
 	if err := dropBoardTaskDocuments(app); err != nil {
 		t.Fatalf("drop board task documents: %v", err)
 	}
+	// doc_assets references docs and is normally rolled back first.
+	if err := dropDocAssetsCollection(app); err != nil {
+		t.Fatalf("drop doc assets: %v", err)
+	}
 	if err := dropDocsCollections(app); err != nil {
 		t.Fatalf("drop docs collections: %v", err)
 	}

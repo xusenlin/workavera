@@ -1,5 +1,7 @@
 import { BlockNoteEditor } from "@blocknote/core"
 
+import { docAssetImageDataURL, isDocAssetURL } from "@/lib/doc-assets"
+
 import { docEditorSchema } from "./doc-editor-schema"
 
 function escapeHtml(text: string): string {
@@ -17,7 +19,23 @@ export async function documentMarkdownToStandaloneHtml(
 ): Promise<string> {
   const editor = BlockNoteEditor.create({ schema: docEditorSchema })
   const blocks = await editor.tryParseMarkdownToBlocks(markdown)
-  const body = editor.blocksToHTMLLossy(blocks)
+  type DocBlock = (typeof blocks)[number]
+  async function embedUploadedImages(block: DocBlock): Promise<DocBlock> {
+    const children = await Promise.all(block.children.map(embedUploadedImages))
+    if (block.type === "image" && isDocAssetURL(block.props.url)) {
+      return {
+        ...block,
+        props: {
+          ...block.props,
+          url: await docAssetImageDataURL(block.props.url),
+        },
+        children,
+      }
+    }
+    return { ...block, children }
+  }
+  const exportBlocks = await Promise.all(blocks.map(embedUploadedImages))
+  const body = editor.blocksToHTMLLossy(exportBlocks)
   return `<!doctype html>
 <html>
 <head>

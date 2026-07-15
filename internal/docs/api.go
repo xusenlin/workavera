@@ -15,6 +15,7 @@ func Register(app core.App) {
 		router.POST("/api/docs", createRequest).Bind(apis.RequireAuth("users"))
 		router.PUT("/api/docs/{id}", updateRequest).Bind(apis.RequireAuth("users"))
 		router.POST("/api/docs/{id}/move-to-project", moveRequest).Bind(apis.RequireAuth("users"))
+		router.POST("/api/docs/{id}/assets", uploadAssetRequest).Bind(apis.RequireAuth("users"))
 		router.GET("/api/docs-pinned", pinnedRequest).Bind(apis.RequireAuth("users"))
 		router.POST("/api/docs/{id}/pin", pinRequest).Bind(apis.RequireAuth("users"))
 		router.POST("/api/docs/{id}/archive", archiveRequest).Bind(apis.RequireAuth("users"))
@@ -25,6 +26,18 @@ func Register(app core.App) {
 		router.POST("/api/docs/{id}/restore/{revision}", restoreRequest).Bind(apis.RequireAuth("users"))
 		return event.Next()
 	})
+}
+
+func uploadAssetRequest(event *core.RequestEvent) error {
+	files, err := event.FindUploadedFiles("file")
+	if err != nil || len(files) != 1 {
+		return event.BadRequestError("Exactly one file is required.", err)
+	}
+	asset, err := UploadAsset(event.Request.Context(), event.App, event.Auth.Id, event.Request.PathValue("id"), files[0])
+	if err != nil {
+		return requestError(event, err)
+	}
+	return event.JSON(http.StatusCreated, asset)
 }
 
 func pinnedRequest(event *core.RequestEvent) error {

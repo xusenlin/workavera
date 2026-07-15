@@ -246,6 +246,126 @@
   font-family: var(--font-sans);
 }
 
+/* BlockNote's shadcn theme reverts links to the browser default blue. Keep
+   links recognizable without leaving the app's neutral color palette. */
+.doc-rich-area .bn-editor a {
+  color: var(--primary) !important;
+  text-decoration-color: var(--muted-foreground);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.15em;
+}
+
+.doc-attachment-card {
+  display: inline-grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+  margin: 0.35rem 0;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--card);
+  box-shadow: 0 1px 2px color-mix(in oklch, var(--foreground) 8%, transparent);
+  cursor: pointer;
+  user-select: none;
+  vertical-align: middle;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.doc-rich-area .bn-inline-content:has(.node-docAttachment),
+.doc-rich-area .node-docAttachment,
+.doc-rich-area [data-inline-content-type="docAttachment"] {
+  display: block;
+  width: 100%;
+}
+
+.doc-attachment-card:hover {
+  border-color: color-mix(in oklch, var(--border), var(--foreground) 18%);
+  background: var(--accent);
+  box-shadow: 0 3px 8px color-mix(in oklch, var(--foreground) 10%, transparent);
+}
+
+.doc-attachment-card:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.doc-attachment-icon,
+.doc-attachment-download {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  color: var(--foreground);
+}
+
+.doc-attachment-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.625rem;
+  background: var(--muted);
+}
+
+.doc-attachment-icon svg {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+
+.doc-attachment-details {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.doc-attachment-name {
+  overflow: hidden;
+  color: var(--foreground);
+  font-size: 0.875rem;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-attachment-meta {
+  margin-top: 0.2rem;
+  color: var(--muted-foreground);
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+}
+
+.doc-attachment-download {
+  gap: 0.4rem;
+  height: 2.125rem;
+  padding-inline: 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: 0.55rem;
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.doc-attachment-download svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+@media (max-width: 640px) {
+  .doc-attachment-download {
+    width: 2.125rem;
+    padding-inline: 0;
+  }
+
+  .doc-attachment-download-label {
+    display: none;
+  }
+}
+
 /* BlockNote only pads headings on top; add breathing room below so the
    following paragraph isn't flush against it. */
 .doc-rich-area [data-content-type="heading"] {
@@ -258,6 +378,19 @@
 
 .doc-rich-area [data-content-type="codeBlock"] > div > select {
   color: inherit;
+}
+
+/* BlockNote renders both a block-type icon and a checkbox indicator in these
+   items. Keep the icon/label columns stable and give the check its own column. */
+.doc-turn-into-item {
+  gap: 0.5rem !important;
+  padding-right: 2rem !important;
+  padding-left: 0.5rem !important;
+}
+
+.doc-turn-into-item > span:first-child {
+  right: 0.5rem;
+  left: auto !important;
 }
 
 .doc-source-area {

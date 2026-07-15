@@ -677,6 +677,7 @@ export function DocsPage() {
             </div>
             <BlockNoteDocumentEditor
               key={persisted.id}
+              docId={persisted.id}
               value={draftContent}
               mode={editorMode}
               onChange={setDraftContent}

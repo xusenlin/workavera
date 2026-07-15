@@ -55,7 +55,7 @@ function TurnIntoItem() {
           return (
             <Components.Generic.Menu.Item
               key={item.name}
-              className="bn-menu-item"
+              className="bn-menu-item doc-turn-into-item"
               icon={<Icon size={16} />}
               checked={selected}
               onClick={() => {

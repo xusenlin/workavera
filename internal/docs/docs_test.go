@@ -2,12 +2,16 @@ package docs
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
+	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tests"
+	"github.com/pocketbase/pocketbase/tools/filesystem"
 	_ "github.com/xusenlin/workavera/migrations"
 )
 
@@ -155,6 +159,149 @@ func TestArchiveAndDeleteRequireDocumentManager(t *testing.T) {
 	if _, err := app.FindRecordById(CollectionName, doc.ID); err == nil {
 		t.Fatal("document was not deleted")
 	}
+}
+
+func TestDocumentAssetUploadPermissionsValidationAndCascadeDelete(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(app.Cleanup)
+	owner := createTestUser(t, app, "asset-owner@example.com")
+	member := createTestUser(t, app, "asset-member@example.com")
+	viewer := createTestUser(t, app, "asset-viewer@example.com")
+	outsider := createTestUser(t, app, "asset-outsider@example.com")
+	project := createTestProject(t, app, owner.Id)
+	createTestMembership(t, app, project.Id, member.Id, "member")
+	createTestMembership(t, app, project.Id, viewer.Id, "viewer")
+
+	privateDoc, err := Create(context.Background(), app, owner.Id, CreateInput{Title: "Private asset"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	asset, err := UploadAsset(context.Background(), app, owner.Id, privateDoc.ID, testPNG(t, "diagram.png"))
+	if err != nil || asset.Kind != "image" || asset.Name != "diagram.png" || !strings.HasPrefix(asset.URL, "/api/files/doc_assets/") {
+		t.Fatalf("upload private image: %#v, %v", asset, err)
+	}
+	if strings.Contains(asset.URL, "://") {
+		t.Fatalf("asset URL must remain relative: %q", asset.URL)
+	}
+	if _, err := UploadAsset(context.Background(), app, outsider.Id, privateDoc.ID, testPNG(t, "diagram.png")); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("outsider uploaded private asset: %v", err)
+	}
+	if _, err := UploadAsset(context.Background(), app, owner.Id, privateDoc.ID, testFile(t, []byte("<html>unsafe</html>"), "unsafe.html")); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("HTML upload was accepted: %v", err)
+	}
+	oversized := testFile(t, []byte("plain text"), "large.txt")
+	oversized.Size = maxAssetSize + 1
+	if _, err := UploadAsset(context.Background(), app, owner.Id, privateDoc.ID, oversized); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("oversized upload was accepted: %v", err)
+	}
+
+	projectDoc, err := Create(context.Background(), app, owner.Id, CreateInput{Title: "Project asset", ProjectID: project.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := UploadAsset(context.Background(), app, member.Id, projectDoc.ID, testFile(t, []byte("%PDF-1.4\n%%EOF"), "spec.pdf")); err != nil {
+		t.Fatalf("member could not upload project asset: %v", err)
+	}
+	if _, err := UploadAsset(context.Background(), app, viewer.Id, projectDoc.ID, testFile(t, []byte("%PDF-1.4\n%%EOF"), "spec.pdf")); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("viewer uploaded project asset: %v", err)
+	}
+	if _, err := SetArchived(context.Background(), app, owner.Id, projectDoc.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := UploadAsset(context.Background(), app, member.Id, projectDoc.ID, testPNG(t, "archived.png")); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("asset uploaded to archived document: %v", err)
+	}
+
+	if err := Delete(context.Background(), app, owner.Id, privateDoc.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.FindRecordById(AssetsCollectionName, asset.ID); err == nil {
+		t.Fatal("document asset record survived document deletion")
+	}
+}
+
+func TestDocumentAssetUploadDeduplicatesWithinDocument(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(app.Cleanup)
+	owner := createTestUser(t, app, "dedupe-owner@example.com")
+	member := createTestUser(t, app, "dedupe-member@example.com")
+	project := createTestProject(t, app, owner.Id)
+	createTestMembership(t, app, project.Id, member.Id, "member")
+
+	doc, err := Create(context.Background(), app, owner.Id, CreateInput{Title: "Dedupe", ProjectID: project.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := UploadAsset(context.Background(), app, owner.Id, doc.ID, testPNG(t, "diagram.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reused, err := UploadAsset(context.Background(), app, member.Id, doc.ID, testPNG(t, "diagram.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reused.ID != first.ID || reused.URL != first.URL {
+		t.Fatalf("duplicate upload did not reuse asset: first=%#v reused=%#v", first, reused)
+	}
+
+	stored, err := app.FindRecordById(AssetsCollectionName, first.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.GetString("uploaded_by") != owner.Id {
+		t.Fatalf("duplicate upload changed original uploader: %q", stored.GetString("uploaded_by"))
+	}
+	if contentHash := stored.GetString("sha256"); len(contentHash) != 64 {
+		t.Fatalf("unexpected stored content hash: %q", contentHash)
+	}
+	records, err := app.FindRecordsByFilter(AssetsCollectionName, "doc = {:doc}", "", 0, 0, dbx.Params{"doc": doc.ID})
+	if err != nil || len(records) != 1 {
+		t.Fatalf("duplicate upload created extra records: %d, %v", len(records), err)
+	}
+
+	renamed, err := UploadAsset(context.Background(), app, member.Id, doc.ID, testPNG(t, "renamed.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if renamed.ID == first.ID {
+		t.Fatal("same content with a different name was incorrectly deduplicated")
+	}
+
+	otherDoc, err := Create(context.Background(), app, owner.Id, CreateInput{Title: "Other", ProjectID: project.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := UploadAsset(context.Background(), app, member.Id, otherDoc.ID, testPNG(t, "diagram.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if other.ID == first.ID {
+		t.Fatal("assets were deduplicated across documents")
+	}
+}
+
+func testPNG(t *testing.T, name string) *filesystem.File {
+	t.Helper()
+	data, err := base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return testFile(t, data, name)
+}
+
+func testFile(t *testing.T, data []byte, name string) *filesystem.File {
+	t.Helper()
+	file, err := filesystem.NewFileFromBytes(data, name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return file
 }
 
 func createTestUser(t *testing.T, app core.App, email string) *core.Record {

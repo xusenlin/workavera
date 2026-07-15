@@ -2,12 +2,14 @@ import {
   BlockNoteSchema,
   createCodeBlockSpec,
   defaultBlockSpecs,
+  defaultInlineContentSpecs,
   defaultStyleSpecs,
   type CodeBlockOptions,
 } from "@blocknote/core"
 import { createParser } from "prosemirror-highlight/shiki"
 
 import { bundledLanguagesInfo, createHighlighter } from "@/lib/shiki-lite"
+import { docAttachmentInlineSpec } from "@/components/docs/doc-attachment-inline"
 
 // Highlighting reuses the curated shiki bundle shared with the chat
 // renderer, so doc code blocks add no new grammar chunks to the build.
@@ -70,6 +72,10 @@ export const docEditorSchema = BlockNoteSchema.create({
     image: defaultBlockSpecs.image,
     divider: defaultBlockSpecs.divider,
     codeBlock: createCodeBlockSpec(codeBlockOptions),
+  },
+  inlineContentSpecs: {
+    ...defaultInlineContentSpecs,
+    docAttachment: docAttachmentInlineSpec,
   },
   styleSpecs: {
     bold: defaultStyleSpecs.bold,
