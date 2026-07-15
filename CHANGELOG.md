@@ -7,17 +7,15 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Added
-
-- Board projects can be reordered with per-user up/down controls; ordering is preserved across pagination and does not affect other members.
-- Each user's expanded or collapsed Board project state is persisted independently, with multiple projects allowed to remain open.
-
 ## [0.0.4] - 2026-07-15
 
 ### Added
 
 - Notion-style document editing: slash commands, drag handles with a "Turn into" menu, and a floating formatting toolbar.
+- Documents support access-controlled image and file uploads, duplicate reuse, and persistent attachment cards; uploaded images are embedded in HTML exports.
 - Documents can be exported as Markdown or standalone HTML files.
+- Board projects can be reordered with per-user up/down controls; ordering is preserved across pagination and does not affect other members.
+- Each user's expanded or collapsed Board project state is persisted independently, with multiple projects allowed to remain open.
 
 ### Changed
 
