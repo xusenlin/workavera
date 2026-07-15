@@ -17,12 +17,15 @@ func Register(app *pocketbase.PocketBase) {
 	})
 
 	app.OnRecordUpdateRequest(boardProjectsCollection).BindFunc(logBoardProjectUpdate)
+	app.OnRecordAfterCreateSuccess(boardProjectsCollection).BindFunc(maintainBoardProjectOrderAfterProjectCreate)
 
 	app.OnRecordCreateRequest(boardProjectMembersCollection).BindFunc(validateBoardProjectMemberRequest)
 	app.OnRecordUpdateRequest(boardProjectMembersCollection).BindFunc(validateBoardProjectMemberRequest)
 	app.OnRecordCreateRequest(boardProjectMembersCollection).BindFunc(logBoardProjectMemberCreate)
 	app.OnRecordUpdateRequest(boardProjectMembersCollection).BindFunc(logBoardProjectMemberUpdate)
 	app.OnRecordDeleteRequest(boardProjectMembersCollection).BindFunc(logBoardProjectMemberDelete)
+	app.OnRecordAfterCreateSuccess(boardProjectMembersCollection).BindFunc(maintainBoardProjectOrderAfterMemberCreate)
+	app.OnRecordAfterDeleteSuccess(boardProjectMembersCollection).BindFunc(maintainBoardProjectOrderAfterMemberDelete)
 
 	app.OnRecordCreateRequest(boardProjectStatesCollection).BindFunc(logBoardProjectStateCreate)
 	app.OnRecordUpdateRequest(boardProjectStatesCollection).BindFunc(logBoardProjectStateUpdate)

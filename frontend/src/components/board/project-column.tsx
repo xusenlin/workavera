@@ -2,6 +2,8 @@ import { useState } from "react"
 
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
+  ArrowDown01Icon,
+  ArrowUp01Icon,
   ChevronDownIcon,
   ChevronRightIcon,
   Delete02Icon,
@@ -32,6 +34,7 @@ import {
 import { cn } from "@/lib/utils"
 import { useAuthStore } from "@/store/auth"
 import {
+  PROJECTS_PER_PAGE,
   useBoardStore,
   type Project,
   type ProjectState,
@@ -58,6 +61,11 @@ export function ProjectColumn({
 }: ProjectColumnProps) {
   const toggleCollapse = useBoardStore((store) => store.toggleProjectCollapse)
   const removeProject = useBoardStore((store) => store.removeProject)
+  const moveProject = useBoardStore((store) => store.moveProject)
+  const projects = useBoardStore((store) => store.projects)
+  const projectPage = useBoardStore((store) => store.projectPage)
+  const projectTotalItems = useBoardStore((store) => store.projectTotalItems)
+  const loading = useBoardStore((store) => store.loading)
   const labels = useBoardStore((store) => store.labels)
   const members = useBoardStore((store) => store.members)
   const currentUser = useAuthStore((store) => store.user)
@@ -72,6 +80,11 @@ export function ProjectColumn({
     (member) => member.projectId === project.id
   )
   const isOwner = currentUser?.id === project.ownerId
+  const projectIndex = projects.findIndex((item) => item.id === project.id)
+  const globalProjectIndex = projectPage * PROJECTS_PER_PAGE + projectIndex
+  const canMoveUp = projectIndex >= 0 && globalProjectIndex > 0
+  const canMoveDown =
+    projectIndex >= 0 && globalProjectIndex < projectTotalItems - 1
 
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-card/50 p-4">
@@ -121,8 +134,26 @@ export function ProjectColumn({
           </span>
         </button>
 
-        {isOwner && (
-          <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-0.5">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            disabled={!canMoveUp || loading || !project.orderId}
+            onClick={() => void moveProject(project.id, -1).catch(() => {})}
+            aria-label={`Move ${project.name} up`}
+          >
+            <HugeiconsIcon icon={ArrowUp01Icon} strokeWidth={2} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            disabled={!canMoveDown || loading || !project.orderId}
+            onClick={() => void moveProject(project.id, 1).catch(() => {})}
+            aria-label={`Move ${project.name} down`}
+          >
+            <HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} />
+          </Button>
+          {isOwner && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -147,8 +178,8 @@ export function ProjectColumn({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {project.description && !project.collapsed && (

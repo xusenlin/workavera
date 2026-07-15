@@ -177,6 +177,9 @@ func CreateProject(ctx context.Context, app core.App, actorID string, command Cr
 			return err
 		}
 		projectID = project.Id
+		if err := ensureBoardProjectOrder(tx, actorID, projectID); err != nil {
+			return err
+		}
 		if err := createProjectStates(tx, projectID, command.States); err != nil {
 			return err
 		}
@@ -449,6 +452,11 @@ func upsertMember(app core.App, actorID string, command UpsertMemberCommand, log
 	}
 	if err := app.Save(record); err != nil {
 		return MutationResult{}, err
+	}
+	if before == nil {
+		if err := ensureBoardProjectOrder(app, command.UserID, project.Id); err != nil {
+			return MutationResult{}, err
+		}
 	}
 	if log && (before == nil || before.GetString("role") != record.GetString("role")) {
 		actor, _ := app.FindRecordById("users", actorID)

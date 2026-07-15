@@ -34,6 +34,8 @@ export type BoardTemplate = {
 
 export type Project = {
   id: string
+  orderId?: string
+  sortOrder?: number
   name: string
   description?: string
   ownerId: string
@@ -93,8 +95,10 @@ type TodoInput = Omit<Todo, "id" | "rank">
 type StateInput = Pick<ProjectState, "name" | "color" | "category">
 type LabelInput = Pick<Label, "name" | "color">
 
-const PROJECTS_PER_PAGE = 4
+export const PROJECTS_PER_PAGE = 4
 const RECORDS_PER_REQUEST = 200
+const PROJECT_ORDER_STEP = 1024
+const PROJECT_ORDER_BASE = 1024 * 1024 * 1024
 
 type BoardState = {
   templates: BoardTemplate[]
@@ -130,6 +134,7 @@ type BoardState = {
     patch: { name?: string; description?: string }
   ) => Promise<void>
   removeProject: (id: string) => Promise<void>
+  moveProject: (id: string, direction: -1 | 1) => Promise<void>
   transferProjectOwner: (id: string, ownerId: string) => Promise<void>
   toggleProjectCollapse: (id: string) => void
   addState: (projectId: string, input: StateInput) => Promise<void>
@@ -165,6 +170,13 @@ type ProjectRecord = RecordModel & {
   owner: string
   archived: boolean
   expand?: { owner?: UserRecord }
+}
+
+type ProjectOrderRecord = RecordModel & {
+  user: string
+  project: string
+  sort_order: number
+  expand?: { project?: ProjectRecord }
 }
 
 type StateRecord = RecordModel & {
@@ -210,6 +222,7 @@ type TodoRecord = RecordModel & {
 const COLLECTIONS = {
   templates: "board_templates",
   projects: "board_projects",
+  projectOrders: "board_project_orders",
   states: "board_project_states",
   members: "board_project_members",
   labels: "board_project_labels",
@@ -232,10 +245,15 @@ function toTemplate(record: TemplateRecord): BoardTemplate {
   }
 }
 
-function toProject(record: ProjectRecord): Project {
+function toProject(
+  record: ProjectRecord,
+  order?: ProjectOrderRecord
+): Project {
   const owner = record.expand?.owner
   return {
     id: record.id,
+    orderId: order?.id,
+    sortOrder: order?.sort_order,
     name: record.name,
     description: record.description || undefined,
     ownerId: record.owner,
@@ -412,33 +430,67 @@ async function loadBoardPage(
   page: number,
   existingTemplates?: BoardTemplate[]
 ) {
-  const [templates, projectResult] = await Promise.all([
+  const userId = pb.authStore.record?.id
+  if (!userId) throw new Error("Authentication is required")
+  const orderFilter = pb.filter(
+    "user = {:user} && project.archived = false",
+    { user: userId }
+  )
+  const [templates, orderResult] = await Promise.all([
     existingTemplates
       ? Promise.resolve(existingTemplates)
       : listAllPages<TemplateRecord>(COLLECTIONS.templates, {
           sort: "name",
         }).then((records) => records.map(toTemplate)),
     pb
-      .collection(COLLECTIONS.projects)
-      .getList<ProjectRecord>(page + 1, PROJECTS_PER_PAGE, {
-        filter: "archived = false",
-        sort: "-created",
-        expand: "owner",
+      .collection(COLLECTIONS.projectOrders)
+      .getList<ProjectOrderRecord>(page + 1, PROJECTS_PER_PAGE, {
+        filter: orderFilter,
+        sort: "sort_order,id",
+        expand: "project,project.owner",
         requestKey: null,
       }),
   ])
+  const orderedProjects = orderResult.items.flatMap((order) => {
+    const project = order.expand?.project
+    return project ? [toProject(project, order)] : []
+  })
   const relations = await loadProjectRelations(
-    projectResult.items.map((project) => project.id)
+    orderedProjects.map((project) => project.id)
   )
 
   return {
     templates,
-    projects: projectResult.items.map(toProject),
+    projects: orderedProjects,
     projectPage: page,
-    projectTotalPages: projectResult.totalPages,
-    projectTotalItems: projectResult.totalItems,
+    projectTotalPages: orderResult.totalPages,
+    projectTotalItems: orderResult.totalItems,
     ...relations,
   }
+}
+
+async function normalizeProjectOrders(userId: string) {
+  const filter = pb.filter(
+    "user = {:user} && project.archived = false",
+    { user: userId }
+  )
+  const orders = await pb
+    .collection(COLLECTIONS.projectOrders)
+    .getFullList<ProjectOrderRecord>({
+      filter,
+      sort: "sort_order,id",
+      requestKey: null,
+    })
+  await Promise.all(
+    orders.map((order, index) => {
+      const sortOrder =
+        PROJECT_ORDER_BASE + (index + 1) * PROJECT_ORDER_STEP
+      if (order.sort_order === sortOrder) return Promise.resolve()
+      return pb
+        .collection(COLLECTIONS.projectOrders)
+        .update(order.id, { sort_order: sortOrder }, { requestKey: null })
+    })
+  )
 }
 
 async function connectRealtime(
@@ -480,8 +532,22 @@ async function connectRealtime(
                 [key]: current.filter((item) => item.id !== event.record.id),
               } as Partial<BoardState>
             }
+            const mapped = mapRecord(event.record)
+            if (key === "projects") {
+              const previous = (current as Project[]).find(
+                (item) => item.id === event.record.id
+              )
+              const project = mapped as Project
+              return {
+                projects: upsertById(current as Project[], {
+                  ...project,
+                  orderId: previous?.orderId,
+                  sortOrder: previous?.sortOrder,
+                }),
+              }
+            }
             return {
-              [key]: upsertById(current, mapRecord(event.record)),
+              [key]: upsertById(current, mapped),
             } as Partial<BoardState>
           })
         },
@@ -710,13 +776,20 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           },
           { expand: "owner", requestKey: null }
         )
+      const updated = toProject(record)
       set((state) => ({
         projects: state.projects.some((project) => project.id === id)
-          ? upsertById(state.projects, toProject(record))
+          ? upsertById(state.projects, {
+              ...updated,
+              orderId: state.projects.find((project) => project.id === id)
+                ?.orderId,
+              sortOrder: state.projects.find((project) => project.id === id)
+                ?.sortOrder,
+            })
           : state.projects,
         openedProject:
           state.openedProject?.id === id
-            ? toProject(record)
+            ? updated
             : state.openedProject,
       }))
     } catch (error) {
@@ -748,6 +821,106 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       set({ error: message })
       toast.error(message)
       throw new Error(message, { cause: error })
+    }
+  },
+
+  moveProject: async (id, direction) => {
+    const state = get()
+    const localIndex = state.projects.findIndex((project) => project.id === id)
+    const project = state.projects[localIndex]
+    if (
+      !project?.orderId ||
+      project.sortOrder === undefined ||
+      localIndex < 0
+    ) {
+      return
+    }
+    const globalIndex = state.projectPage * PROJECTS_PER_PAGE + localIndex
+    const targetIndex = globalIndex + direction
+    if (targetIndex < 0 || targetIndex >= state.projectTotalItems) return
+
+    const userId = pb.authStore.record?.id
+    if (!userId) return
+    set({ loading: true, error: null })
+    try {
+      const comparison = direction < 0 ? "<" : ">"
+      const filter = pb.filter(
+        `user = {:user} && project.archived = false && sort_order ${comparison} {:sortOrder}`,
+        { user: userId, sortOrder: project.sortOrder }
+      )
+      let neighbors = await pb
+        .collection(COLLECTIONS.projectOrders)
+        .getList<ProjectOrderRecord>(1, 2, {
+          filter,
+          sort: direction < 0 ? "-sort_order,-id" : "sort_order,id",
+          requestKey: null,
+        })
+      if (neighbors.items.length === 0) return
+
+      let adjacent = neighbors.items[0].sort_order
+      let outer = neighbors.items[1]?.sort_order
+      if (outer !== undefined && Math.abs(outer - adjacent) < 0.001) {
+        await normalizeProjectOrders(userId)
+        const refreshed = await pb
+          .collection(COLLECTIONS.projectOrders)
+          .getOne<ProjectOrderRecord>(project.orderId, { requestKey: null })
+        const refreshedFilter = pb.filter(
+          `user = {:user} && project.archived = false && sort_order ${comparison} {:sortOrder}`,
+          { user: userId, sortOrder: refreshed.sort_order }
+        )
+        neighbors = await pb
+          .collection(COLLECTIONS.projectOrders)
+          .getList<ProjectOrderRecord>(1, 2, {
+            filter: refreshedFilter,
+            sort: direction < 0 ? "-sort_order,-id" : "sort_order,id",
+            requestKey: null,
+          })
+        if (neighbors.items.length === 0) return
+        adjacent = neighbors.items[0].sort_order
+        outer = neighbors.items[1]?.sort_order
+      }
+
+      let nextSortOrder =
+        outer === undefined
+          ? adjacent + direction * PROJECT_ORDER_STEP
+          : (adjacent + outer) / 2
+      if (nextSortOrder === 0) {
+        nextSortOrder =
+          outer === undefined
+            ? adjacent + direction * PROJECT_ORDER_STEP * 2
+            : adjacent + (outer - adjacent) / 3
+      }
+      await pb
+        .collection(COLLECTIONS.projectOrders)
+        .update(
+          project.orderId,
+          { sort_order: nextSortOrder },
+          { requestKey: null }
+        )
+
+      const targetPage = Math.floor(targetIndex / PROJECTS_PER_PAGE)
+      expandedProjectId = id
+      const snapshot = await loadBoardPage(targetPage, get().templates)
+      set({
+        ...snapshot,
+        projects: snapshot.projects.map((item) => ({
+          ...item,
+          collapsed: item.id !== expandedProjectId,
+        })),
+      })
+      if (connectionWanted) {
+        await connectRealtime(
+          set,
+          snapshot.projects.map((item) => item.id)
+        )
+      }
+    } catch (error) {
+      const message = messageFromError(error, "Could not reorder projects")
+      set({ error: message })
+      toast.error(message)
+      throw new Error(message, { cause: error })
+    } finally {
+      set({ loading: false })
     }
   },
 

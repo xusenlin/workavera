@@ -205,6 +205,9 @@ func transferBoardProjectOwner(app core.App, actorID, projectID, targetOwnerID s
 		if err := txApp.Save(project); err != nil {
 			return err
 		}
+		if err := ensureBoardProjectOrder(txApp, targetOwnerID, projectID); err != nil {
+			return err
+		}
 
 		return saveBoardProjectOperationLog(txApp, actor, projectID, "transfer_owner", map[string]any{
 			"owner": map[string]any{
