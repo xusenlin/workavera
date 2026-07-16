@@ -1,6 +1,9 @@
 package agent
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"strings"
+)
 
 // Message is the provider-neutral, AI SDK UI compatible message shape used by
 // the chat package and persisted by the application.
@@ -44,6 +47,8 @@ type StreamChunk struct {
 	FinishReason     string         `json:"finishReason,omitempty"`
 	MessageMetadata  map[string]any `json:"messageMetadata,omitempty"`
 	ProviderMetadata map[string]any `json:"providerMetadata,omitempty"`
+
+	Data any `json:"data,omitempty"`
 }
 
 // MarshalJSON guarantees that nil metadata is omitted while arbitrary input
@@ -128,6 +133,11 @@ func (c StreamChunk) ValidForWire() bool {
 		return c.URL != "" && c.MediaType != ""
 
 	default:
+		// Data parts ("data-<name>") carry an arbitrary payload; the AI SDK
+		// client requires the data field to be present.
+		if strings.HasPrefix(c.Type, "data-") {
+			return c.Data != nil
+		}
 		// Unknown / unsupported part types are dropped rather than risk
 		// triggering unrecognized_keys or invalid_value on the client.
 		return false
@@ -135,13 +145,14 @@ func (c StreamChunk) ValidForWire() bool {
 }
 
 type ModelConfig struct {
-	ID              string
-	Name            string
-	ModelID         string
-	BaseURL         string
-	APIKey          string
-	Protocol        string
-	MaxOutputTokens int
+	ID               string
+	Name             string
+	ModelID          string
+	BaseURL          string
+	APIKey           string
+	Protocol         string
+	MaxOutputTokens  int
+	MaxContextTokens int
 }
 
 type Usage struct {
@@ -157,4 +168,21 @@ type Result struct {
 	Usage        Usage
 	FinishReason string
 	StepCount    int
+	// LastStepUsage is the usage of the final step only. Unlike Usage (which
+	// sums input tokens across every step of a multi-step tool run), the last
+	// step saw the complete prompt exactly once, so it reflects the current
+	// context-window occupancy.
+	LastStepUsage Usage
+}
+
+// ContextSize estimates how many context-window tokens a step occupied, from
+// that step's usage. Fantasy normalizes OpenAI and Anthropic usage so
+// InputTokens excludes cached tokens (cache reads/creations are reported
+// separately), while Google's prompt token count already includes cached
+// content.
+func ContextSize(protocol string, usage Usage) int64 {
+	if protocol == "google" {
+		return usage.InputTokens + usage.OutputTokens
+	}
+	return usage.InputTokens + usage.CacheCreationTokens + usage.CacheReadTokens + usage.OutputTokens
 }

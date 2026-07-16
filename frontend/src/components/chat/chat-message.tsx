@@ -8,6 +8,7 @@ import {
   ReasoningContent,
   ReasoningTrigger,
 } from "@/components/ai-elements/reasoning"
+import { Shimmer } from "@/components/ai-elements/shimmer"
 import {
   Tool,
   ToolContent,
@@ -31,10 +32,7 @@ import {
   ReadingSearchToolCard,
   ReadingItemToolCard,
 } from "./reading-tool-output"
-import {
-  DocsSearchToolCard,
-  DocsItemToolCard,
-} from "./docs-tool-output"
+import { DocsSearchToolCard, DocsItemToolCard } from "./docs-tool-output"
 import {
   CalendarScheduleToolCard,
   CalendarMutationToolCard,
@@ -66,11 +64,7 @@ const readingItemToolNames = new Set([
   "reading_summarize",
 ])
 
-const docItemToolNames = new Set([
-  "docs_get",
-  "docs_upsert",
-  "docs_replace",
-])
+const docItemToolNames = new Set(["docs_get", "docs_upsert", "docs_replace"])
 
 const calendarMutationToolNames = new Set([
   "calendar_create_event",
@@ -107,7 +101,9 @@ function MessageParts({ message }: { message: ChatUIMessage }) {
           return <BoardProjectsToolCard key={part.toolCallId} part={part} />
         }
         if (part.toolName === "board_get_project") {
-          return <BoardProjectDetailToolCard key={part.toolCallId} part={part} />
+          return (
+            <BoardProjectDetailToolCard key={part.toolCallId} part={part} />
+          )
         }
         if (part.toolName === "board_search_tasks") {
           return <TasksToolCard key={part.toolCallId} part={part} />
@@ -176,6 +172,24 @@ function MessageParts({ message }: { message: ChatUIMessage }) {
           >
             {part.title || part.url}
           </a>
+        )
+      case "data-compaction":
+        if (part.data.state === "started") {
+          return (
+            <Shimmer key={`compaction-${index}`} className="text-xs">
+              Compacting context…
+            </Shimmer>
+          )
+        }
+        return (
+          <div
+            key={`compaction-${index}`}
+            className="text-xs text-muted-foreground/70"
+          >
+            {part.data.state === "failed"
+              ? "Context compaction failed — continued with full history"
+              : "Older messages were compacted into a summary"}
+          </div>
         )
       default:
         return null

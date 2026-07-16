@@ -26,6 +26,23 @@ func (r *messageReducer) Apply(chunk workagent.StreamChunk) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	// Data parts are upserted by id: repeated chunks with the same id replace
+	// the payload in place, mirroring the AI SDK client behavior.
+	if strings.HasPrefix(chunk.Type, "data-") {
+		key := chunk.Type + ":" + chunk.ID
+		if index, ok := r.active[key]; ok && index < len(r.message.Parts) {
+			r.message.Parts[index]["data"] = chunk.Data
+			return
+		}
+		part := workagent.Part{"type": chunk.Type, "data": chunk.Data}
+		if chunk.ID != "" {
+			part["id"] = chunk.ID
+		}
+		r.active[key] = len(r.message.Parts)
+		r.message.Parts = append(r.message.Parts, part)
+		return
+	}
+
 	switch chunk.Type {
 	case "start-step":
 		r.message.Parts = append(r.message.Parts, workagent.Part{"type": "step-start"})

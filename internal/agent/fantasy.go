@@ -211,21 +211,29 @@ func (r *FantasyRunner) Stream(ctx context.Context, request Request, emit EmitFu
 		return Result{}, err
 	}
 	finishReason := ""
+	lastStepUsage := Usage{}
 	if len(result.Steps) > 0 {
-		finishReason = string(result.Steps[len(result.Steps)-1].FinishReason)
+		lastStep := result.Steps[len(result.Steps)-1]
+		finishReason = string(lastStep.FinishReason)
+		lastStepUsage = toUsage(lastStep.Usage)
 	}
 	return Result{
-		Usage: Usage{
-			InputTokens:         result.TotalUsage.InputTokens,
-			OutputTokens:        result.TotalUsage.OutputTokens,
-			TotalTokens:         result.TotalUsage.TotalTokens,
-			ReasoningTokens:     result.TotalUsage.ReasoningTokens,
-			CacheCreationTokens: result.TotalUsage.CacheCreationTokens,
-			CacheReadTokens:     result.TotalUsage.CacheReadTokens,
-		},
-		FinishReason: finishReason,
-		StepCount:    len(result.Steps),
+		Usage:         toUsage(result.TotalUsage),
+		FinishReason:  finishReason,
+		StepCount:     len(result.Steps),
+		LastStepUsage: lastStepUsage,
 	}, nil
+}
+
+func toUsage(usage fantasy.Usage) Usage {
+	return Usage{
+		InputTokens:         usage.InputTokens,
+		OutputTokens:        usage.OutputTokens,
+		TotalTokens:         usage.TotalTokens,
+		ReasoningTokens:     usage.ReasoningTokens,
+		CacheCreationTokens: usage.CacheCreationTokens,
+		CacheReadTokens:     usage.CacheReadTokens,
+	}
 }
 
 func languageModel(ctx context.Context, config ModelConfig) (fantasy.LanguageModel, error) {

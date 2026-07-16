@@ -13,6 +13,7 @@ export type Conversation = {
   total_tokens: number
   input_tokens: number
   output_tokens: number
+  context_tokens: number
   last_message_at: string
   created: string
   updated: string
@@ -36,6 +37,8 @@ export type ChatMessageMetadata = {
     cacheCreationTokens: number
     cacheReadTokens: number
   }
+  /** Context-window tokens occupied after this run (last-step usage). */
+  contextTokens?: number
   finishReason?: string
   stepCount?: number
   createdAt?: string
@@ -46,4 +49,13 @@ export type ChatMessageMetadata = {
   }
 }
 
-export type ChatUIMessage = UIMessage<ChatMessageMetadata>
+export type CompactionData = {
+  state: "started" | "done" | "failed"
+  untilSequence?: number
+}
+
+export type ChatDataParts = {
+  compaction: CompactionData
+}
+
+export type ChatUIMessage = UIMessage<ChatMessageMetadata, ChatDataParts>

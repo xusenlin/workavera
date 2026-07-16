@@ -131,16 +131,22 @@ func TestModelsCRUDAndDefaultLifecycle(t *testing.T) {
 	if !first.IsDefault || !first.HasAPIKey {
 		t.Fatalf("first model should be default with a configured key: %#v", first)
 	}
+	if first.MaxContextTokens != defaultMaxContextTokens {
+		t.Fatalf("omitted maxContextTokens should default to %d, got %d", defaultMaxContextTokens, first.MaxContextTokens)
+	}
 
 	updated := server.request(
 		t,
 		http.MethodPatch,
 		"/api/llm/models/"+first.ID,
 		server.ownerToken,
-		`{"name":"Renamed"}`,
+		`{"name":"Renamed","maxContextTokens":1000000}`,
 	)
 	if updated.Code != http.StatusOK {
 		t.Fatalf("update: expected 200, got %d: %s", updated.Code, updated.Body.String())
+	}
+	if renamed := decodeModelResponse(t, updated); renamed.MaxContextTokens != 1000000 {
+		t.Fatalf("update should store maxContextTokens, got %d", renamed.MaxContextTokens)
 	}
 	storedFirst, err := server.app.FindRecordById(modelsCollection, first.ID)
 	if err != nil {

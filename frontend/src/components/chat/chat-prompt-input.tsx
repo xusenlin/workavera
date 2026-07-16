@@ -4,6 +4,19 @@ import type { UseChatHelpers } from "@ai-sdk/react"
 import type { ChatStatus } from "ai"
 
 import {
+  Context,
+  ContextCacheCreationUsage,
+  ContextCacheUsage,
+  ContextContent,
+  ContextContentBody,
+  ContextContentHeader,
+  ContextInputUsage,
+  ContextOutputUsage,
+  ContextReasoningUsage,
+  ContextTrigger,
+  type ContextUsage,
+} from "@/components/ai-elements/context"
+import {
   PromptInput,
   PromptInputBody,
   PromptInputFooter,
@@ -21,6 +34,11 @@ import { pb } from "@/lib/pocketbase"
 import { useLlmSettingsStore } from "@/store/llm-settings"
 import type { ChatUIMessage } from "@/types/chat"
 
+export type ChatContextInfo = {
+  usedTokens: number
+  usage?: ContextUsage
+}
+
 type Props = {
   conversationId: string
   modelConfigId?: string
@@ -31,6 +49,7 @@ type Props = {
   onMessageSubmitted?: (content: string) => void
   activeRunId?: string | null
   onRunStarted?: (runId: string) => void
+  contextInfo?: ChatContextInfo
 }
 
 export function ChatPromptInput({
@@ -43,6 +62,7 @@ export function ChatPromptInput({
   onMessageSubmitted,
   activeRunId,
   onRunStarted,
+  contextInfo,
 }: Props) {
   const models = useLlmSettingsStore((state) => state.models)
   const defaultModelId = useMemo(
@@ -105,6 +125,7 @@ export function ChatPromptInput({
   const generating = status === "submitted" || status === "streaming"
   const canSend =
     !disabled && !!text.trim() && !!modelConfigId && models.length > 0
+  const selectedModel = models.find((model) => model.id === modelConfigId)
 
   return (
     <div className="p-3 px-4 md:px-16 lg:px-24">
@@ -138,6 +159,29 @@ export function ChatPromptInput({
                 ))}
               </PromptInputSelectContent>
             </PromptInputSelect>
+            {selectedModel && contextInfo && (
+              <Context
+                maxTokens={selectedModel.maxContextTokens}
+                usedTokens={contextInfo.usedTokens}
+                usage={contextInfo.usage}
+              >
+                <ContextTrigger
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 gap-1 px-2 text-xs"
+                />
+                <ContextContent>
+                  <ContextContentHeader />
+                  <ContextContentBody className="space-y-1">
+                    <ContextInputUsage />
+                    <ContextOutputUsage />
+                    <ContextReasoningUsage />
+                    <ContextCacheUsage />
+                    <ContextCacheCreationUsage />
+                  </ContextContentBody>
+                </ContextContent>
+              </Context>
+            )}
           </PromptInputTools>
           <PromptInputSubmit
             disabled={!generating && !canSend}

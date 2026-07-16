@@ -20,7 +20,32 @@ import type {
 
 import { ChatHeader } from "./chat-header"
 import { ChatMessageItem } from "./chat-message"
-import { ChatPromptInput } from "./chat-prompt-input"
+import { ChatPromptInput, type ChatContextInfo } from "./chat-prompt-input"
+
+/**
+ * Derives the current context-window occupancy from the newest assistant
+ * message that reported usage, falling back to the conversation's persisted
+ * snapshot (e.g. while history is still hydrating).
+ */
+function deriveContextInfo(
+  messages: ChatUIMessage[],
+  conversation: ChatConversation
+): ChatContextInfo {
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index]
+    if (message.role !== "assistant") continue
+    const metadata = message.metadata
+    if (!metadata?.usage && metadata?.contextTokens === undefined) continue
+    const usage = metadata.usage
+    return {
+      usedTokens:
+        metadata.contextTokens ??
+        (usage ? usage.inputTokens + usage.outputTokens : 0),
+      usage,
+    }
+  }
+  return { usedTokens: conversation.context_tokens ?? 0 }
+}
 
 function ChatEmptyState({ onCreate }: { onCreate: () => void }) {
   return (
@@ -105,6 +130,7 @@ function ActiveChat({ conversation }: { conversation: ChatConversation }) {
         stop={stop}
         activeRunId={runtimeState.activeRunId}
         onRunStarted={runtime.setActiveRunId}
+        contextInfo={deriveContextInfo(messages, conversation)}
         onMessageSubmitted={(content) => {
           if (conversation.title !== "New conversation") return
           void renameConversation(conversation.id, content.slice(0, 16)).catch(
@@ -123,9 +149,13 @@ export function ChatArea() {
     (state) => state.activeConversationId
   )
   const createConversation = useChatStore((state) => state.createConversation)
-  const activeConversation = conversations.find(
-    (conversation) => conversation.id === activeConversationId
-  ) ?? (openedConversation?.id === activeConversationId ? openedConversation : null)
+  const activeConversation =
+    conversations.find(
+      (conversation) => conversation.id === activeConversationId
+    ) ??
+    (openedConversation?.id === activeConversationId
+      ? openedConversation
+      : null)
 
   if (!activeConversation) {
     return (

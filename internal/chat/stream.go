@@ -98,15 +98,9 @@ func (s *service) stream(event *core.RequestEvent) error {
 	if err != nil {
 		return event.BadRequestError("Could not create chat messages.", err)
 	}
-	history, err := loadConversationMessages(event.App, conversation.Id, assistantMessage.Id)
-	if err != nil {
-		metadata := runErrorMetadata(modelConfig(modelRecord), request.RunID, "history_load_failed", "The chat run could not be started.")
-		_ = saveMessageSnapshot(event.App, assistantMessage.Id, "error", nil, metadata)
-		return event.InternalServerError("Could not load conversation history.", err)
-	}
 
 	requestModel := modelConfig(modelRecord)
-	go s.executeRun(runCtx, run, conversation.Id, assistantMessage.Id, requestModel, history, event.Auth)
+	go s.executeRun(runCtx, run, conversation, assistantMessage.Id, requestModel, event.Auth)
 	cleanupRun = false
 
 	return streamRun(event, run)
@@ -150,7 +144,8 @@ func (s *service) stopRun(event *core.RequestEvent) error {
 	return event.NoContent(http.StatusAccepted)
 }
 
-func (s *service) executeRun(ctx context.Context, run *activeRun, conversationID, assistantMessageID string, model workagent.ModelConfig, history []workagent.Message, user *core.Record) {
+func (s *service) executeRun(ctx context.Context, run *activeRun, conversation *core.Record, assistantMessageID string, model workagent.ModelConfig, user *core.Record) {
+	conversationID := conversation.Id
 	reducer := newMessageReducer(assistantMessageID)
 	defer func() {
 		if r := recover(); r != nil {
@@ -173,6 +168,35 @@ func (s *service) executeRun(ctx context.Context, run *activeRun, conversationID
 	}()
 
 	run.publish(workagent.StreamChunk{Type: "start", MessageID: assistantMessageID, MessageMetadata: map[string]any{"runId": run.id}})
+
+	// Compact synchronously before assembling history: the active-run guard
+	// already blocks concurrent sends for this conversation, and the emitted
+	// data part tells the user why the response is taking longer. A failed
+	// compaction degrades to running with the uncompacted history.
+	if needsCompaction(conversation, model) {
+		if plan, err := planCompaction(s.app, conversation, assistantMessageID); err != nil {
+			s.app.Logger().Error("context compaction planning failed", "runId", run.id, "conversationId", conversationID, "error", err)
+		} else if plan != nil {
+			s.publishAndPersist(run, reducer, compactionChunk(map[string]any{"state": "started"}))
+			if compacted, err := executeCompaction(ctx, s.app, model, conversationID, plan); err != nil {
+				s.app.Logger().Error("context compaction failed", "runId", run.id, "conversationId", conversationID, "error", err)
+				s.publishAndPersist(run, reducer, compactionChunk(map[string]any{"state": "failed"}))
+			} else {
+				conversation = compacted
+				s.publishAndPersist(run, reducer, compactionChunk(map[string]any{"state": "done", "untilSequence": plan.boundary}))
+			}
+		}
+	}
+
+	history, err := loadConversationMessages(s.app, conversation, assistantMessageID)
+	if err != nil {
+		s.app.Logger().Error("chat history load failed", "runId", run.id, "conversationId", conversationID, "error", err)
+		metadata := runErrorMetadata(model, run.id, "history_load_failed", "The conversation history could not be loaded.")
+		run.publish(workagent.StreamChunk{Type: "error", ErrorText: "The conversation history could not be loaded."})
+		_ = saveMessageSnapshot(s.app, assistantMessageID, "error", reducer.Snapshot().Parts, metadata)
+		return
+	}
+
 	lastCheckpoint := time.Now()
 	result, err := s.runner.Stream(ctx, workagent.Request{
 		SystemPrompt: buildSystemPrompt(user),
@@ -212,16 +236,34 @@ func (s *service) executeRun(ctx context.Context, run *activeRun, conversationID
 	}
 
 	result.FinishReason = normalizeFinishReason(result.FinishReason)
+	contextTokens := workagent.ContextSize(model.Protocol, result.LastStepUsage)
 	metadata := runMetadata(model, run.id)
 	metadata["usage"] = result.Usage
+	metadata["contextTokens"] = contextTokens
 	metadata["finishReason"] = result.FinishReason
 	metadata["stepCount"] = result.StepCount
 	run.publish(workagent.StreamChunk{Type: "message-metadata", MessageMetadata: metadata})
 	run.publish(workagent.StreamChunk{Type: "finish", FinishReason: result.FinishReason, MessageMetadata: metadata})
 	parts := reducer.Snapshot().Parts
 	if err := saveMessageSnapshot(s.app, assistantMessageID, "complete", parts, metadata); err == nil {
-		_ = updateConversationStats(s.app, conversationID, parts, result.Usage)
+		_ = updateConversationStats(s.app, conversationID, parts, result.Usage, contextTokens)
 	}
+}
+
+// publishAndPersist applies a chunk to the reducer, streams it, and
+// checkpoints the message snapshot so out-of-band parts (like compaction
+// markers) survive a reconnect or server restart.
+func (s *service) publishAndPersist(run *activeRun, reducer *messageReducer, chunk workagent.StreamChunk) {
+	reducer.Apply(chunk)
+	run.publish(chunk)
+	snapshot := reducer.Snapshot()
+	_ = saveMessageSnapshot(s.app, snapshot.ID, "streaming", snapshot.Parts, nil)
+}
+
+// compactionChunk builds a "data-compaction" stream part. The fixed part id
+// makes the AI SDK client replace the part in place as the state advances.
+func compactionChunk(data map[string]any) workagent.StreamChunk {
+	return workagent.StreamChunk{Type: "data-compaction", ID: "compaction", Data: data}
 }
 
 func runErrorMetadata(model workagent.ModelConfig, runID, code, message string) map[string]any {
@@ -295,7 +337,7 @@ func createTurnRecords(app core.App, conversation, model *core.Record, runID str
 	return user, assistant, err
 }
 
-func updateConversationStats(app core.App, conversationID string, parts []workagent.Part, usage workagent.Usage) error {
+func updateConversationStats(app core.App, conversationID string, parts []workagent.Part, usage workagent.Usage, contextTokens int64) error {
 	record, err := app.FindRecordById(conversationsCollection, conversationID)
 	if err != nil {
 		return err
@@ -310,6 +352,9 @@ func updateConversationStats(app core.App, conversationID string, parts []workag
 	record.Set("input_tokens+", usage.InputTokens)
 	record.Set("output_tokens+", usage.OutputTokens)
 	record.Set("total_tokens+", usage.TotalTokens)
+	// Snapshot (not accumulate): the latest run's context-window occupancy,
+	// compared against the compaction threshold on the next run.
+	record.Set("context_tokens", contextTokens)
 	return app.Save(record)
 }
 

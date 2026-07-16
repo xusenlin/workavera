@@ -3,7 +3,6 @@ package chat
 import (
 	"encoding/json"
 	"errors"
-	"slices"
 
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
@@ -15,8 +14,6 @@ const (
 	conversationsCollection = "chat_conversations"
 	messagesCollection      = "chat_messages"
 	modelsCollection        = "llm_models"
-	maxHistoryMessages      = 30
-	maxHistoryUserTurns     = 15
 )
 
 func findOwnedConversation(app core.App, id, ownerID string) (*core.Record, error) {
@@ -37,48 +34,75 @@ func modelConfig(record *core.Record) workagent.ModelConfig {
 	return workagent.ModelConfig{
 		ID: record.Id, Name: record.GetString("name"), ModelID: record.GetString("model_id"),
 		BaseURL: record.GetString("base_url"), APIKey: record.GetString("api_key"), Protocol: record.GetString("protocol"),
-		MaxOutputTokens: int(record.GetInt("max_output_tokens")),
+		MaxOutputTokens:  int(record.GetInt("max_output_tokens")),
+		MaxContextTokens: int(record.GetInt("max_context_tokens")),
 	}
 }
 
-func loadConversationMessages(app core.App, conversationID, excludeID string) ([]workagent.Message, error) {
-	records, err := app.FindRecordsByFilter(messagesCollection, "conversation = {:conversation} && id != {:exclude} && status = 'complete'", "-sequence", maxHistoryMessages, 0, dbx.Params{"conversation": conversationID, "exclude": excludeID})
+// loadConversationMessages assembles the model-facing history: the active
+// context summary (when present) followed by every complete message after the
+// summary boundary. Persisted messages are never modified; compaction only
+// moves the boundary forward and rewrites the summary.
+func loadConversationMessages(app core.App, conversation *core.Record, excludeID string) ([]workagent.Message, error) {
+	records, err := findMessagesAfter(app, conversation.Id, excludeID, summaryBoundary(conversation))
 	if err != nil {
 		return nil, err
 	}
-	records = trimHistoryRecords(records)
-	slices.Reverse(records)
-	result := make([]workagent.Message, 0, len(records))
+	result := make([]workagent.Message, 0, len(records)+1)
+	if summary := conversation.GetString("context_summary"); summary != "" {
+		result = append(result, summaryMessage(summary))
+	}
 	for _, record := range records {
-		parts := []workagent.Part{}
-		if raw, ok := record.Get("parts").(types.JSONRaw); ok && len(raw) > 0 {
-			if err := json.Unmarshal(raw, &parts); err != nil {
-				return nil, err
-			}
+		message, err := decodeMessageRecord(record)
+		if err != nil {
+			return nil, err
 		}
-		result = append(result, workagent.Message{ID: record.Id, Role: record.GetString("role"), Parts: parts})
+		result = append(result, message)
 	}
 	return result, nil
 }
 
-func trimHistoryRecords(records []*core.Record) []*core.Record {
-	userTurns := 0
-	end := len(records)
-	for index, record := range records {
-		if record.GetString("role") != "user" {
-			continue
-		}
-		userTurns++
-		if userTurns == maxHistoryUserTurns {
-			end = index + 1
-			break
+// findMessagesAfter returns the complete messages with a sequence strictly
+// greater than the boundary, in ascending sequence order.
+func findMessagesAfter(app core.App, conversationID, excludeID string, boundary int) ([]*core.Record, error) {
+	return app.FindRecordsByFilter(
+		messagesCollection,
+		"conversation = {:conversation} && id != {:exclude} && status = 'complete' && sequence > {:boundary}",
+		"sequence",
+		0,
+		0,
+		dbx.Params{"conversation": conversationID, "exclude": excludeID, "boundary": boundary},
+	)
+}
+
+// summaryBoundary is the last message sequence covered by the active summary,
+// or -1 when the conversation has never been compacted (sequences start at 0).
+func summaryBoundary(conversation *core.Record) int {
+	if conversation.GetString("context_summary") == "" {
+		return -1
+	}
+	return conversation.GetInt("summary_until_sequence")
+}
+
+func summaryMessage(summary string) workagent.Message {
+	return workagent.Message{
+		ID:   "context-summary",
+		Role: "user",
+		Parts: []workagent.Part{{
+			"type": "text",
+			"text": "Summary of the earlier part of this conversation (older messages were compacted to fit the context window):\n\n" + summary,
+		}},
+	}
+}
+
+func decodeMessageRecord(record *core.Record) (workagent.Message, error) {
+	parts := []workagent.Part{}
+	if raw, ok := record.Get("parts").(types.JSONRaw); ok && len(raw) > 0 {
+		if err := json.Unmarshal(raw, &parts); err != nil {
+			return workagent.Message{}, err
 		}
 	}
-	records = records[:end]
-	for len(records) > 0 && records[len(records)-1].GetString("role") != "user" {
-		records = records[:len(records)-1]
-	}
-	return records
+	return workagent.Message{ID: record.Id, Role: record.GetString("role"), Parts: parts}, nil
 }
 
 func saveMessageSnapshot(app core.App, messageID, status string, parts []workagent.Part, metadata map[string]any) error {

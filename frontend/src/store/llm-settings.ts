@@ -8,6 +8,7 @@ export type LlmProtocol =
   "openai" | "openai-compatible" | "anthropic" | "google"
 
 export const DEFAULT_MAX_OUTPUT_TOKENS = 16384
+export const DEFAULT_MAX_CONTEXT_TOKENS = 256000
 
 export type LlmModelConfig = {
   id: string
@@ -16,6 +17,7 @@ export type LlmModelConfig = {
   baseUrl: string
   protocol: LlmProtocol
   maxOutputTokens: number
+  maxContextTokens: number
   isDefault: boolean
   sharedFrom: string
   sharedFromName: string
@@ -30,6 +32,7 @@ export type LlmModelInput = {
   baseUrl: string
   protocol: LlmProtocol
   maxOutputTokens?: number
+  maxContextTokens?: number
   apiKey?: string
 }
 

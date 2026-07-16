@@ -23,37 +23,44 @@ var supportedProtocols = map[string]struct{}{
 	"google":            {},
 }
 
+// defaultMaxContextTokens is applied when a model is saved without an explicit
+// context window size, so history assembly and compaction always have a limit.
+const defaultMaxContextTokens = 256000
+
 type modelResponse struct {
-	ID              string `json:"id"`
-	Name            string `json:"name"`
-	ModelID         string `json:"modelId"`
-	BaseURL         string `json:"baseUrl"`
-	Protocol        string `json:"protocol"`
-	MaxOutputTokens int    `json:"maxOutputTokens"`
-	IsDefault       bool   `json:"isDefault"`
-	SharedFrom      string `json:"sharedFrom"`
-	SharedFromName  string `json:"sharedFromName"`
-	HasAPIKey       bool   `json:"hasApiKey"`
-	Created         string `json:"created"`
-	Updated         string `json:"updated"`
+	ID               string `json:"id"`
+	Name             string `json:"name"`
+	ModelID          string `json:"modelId"`
+	BaseURL          string `json:"baseUrl"`
+	Protocol         string `json:"protocol"`
+	MaxOutputTokens  int    `json:"maxOutputTokens"`
+	MaxContextTokens int    `json:"maxContextTokens"`
+	IsDefault        bool   `json:"isDefault"`
+	SharedFrom       string `json:"sharedFrom"`
+	SharedFromName   string `json:"sharedFromName"`
+	HasAPIKey        bool   `json:"hasApiKey"`
+	Created          string `json:"created"`
+	Updated          string `json:"updated"`
 }
 
 type createModelRequest struct {
-	Name            string `json:"name"`
-	ModelID         string `json:"modelId"`
-	BaseURL         string `json:"baseUrl"`
-	APIKey          string `json:"apiKey"`
-	Protocol        string `json:"protocol"`
-	MaxOutputTokens *int   `json:"maxOutputTokens"`
+	Name             string `json:"name"`
+	ModelID          string `json:"modelId"`
+	BaseURL          string `json:"baseUrl"`
+	APIKey           string `json:"apiKey"`
+	Protocol         string `json:"protocol"`
+	MaxOutputTokens  *int   `json:"maxOutputTokens"`
+	MaxContextTokens *int   `json:"maxContextTokens"`
 }
 
 type updateModelRequest struct {
-	Name            *string `json:"name"`
-	ModelID         *string `json:"modelId"`
-	BaseURL         *string `json:"baseUrl"`
-	APIKey          *string `json:"apiKey"`
-	Protocol        *string `json:"protocol"`
-	MaxOutputTokens *int    `json:"maxOutputTokens"`
+	Name             *string `json:"name"`
+	ModelID          *string `json:"modelId"`
+	BaseURL          *string `json:"baseUrl"`
+	APIKey           *string `json:"apiKey"`
+	Protocol         *string `json:"protocol"`
+	MaxOutputTokens  *int    `json:"maxOutputTokens"`
+	MaxContextTokens *int    `json:"maxContextTokens"`
 }
 
 type shareTargetResponse struct {
@@ -112,6 +119,7 @@ func createModel(event *core.RequestEvent) error {
 	if err != nil {
 		return event.BadRequestError(err.Error(), nil)
 	}
+	maxContextTokens := normalizeMaxContextTokens(request.MaxContextTokens)
 
 	var createdID string
 	err = event.App.RunInTransaction(func(txApp core.App) error {
@@ -139,6 +147,7 @@ func createModel(event *core.RequestEvent) error {
 		record.Set("api_key", request.APIKey)
 		record.Set("protocol", request.Protocol)
 		record.Set("max_output_tokens", maxOutputTokens)
+		record.Set("max_context_tokens", maxContextTokens)
 		record.Set("is_default", len(existing) == 0)
 		if err := txApp.Save(record); err != nil {
 			return err
@@ -195,12 +204,17 @@ func updateModel(event *core.RequestEvent) error {
 			return event.BadRequestError(err.Error(), nil)
 		}
 	}
+	maxContextTokens := int(record.GetInt("max_context_tokens"))
+	if request.MaxContextTokens != nil {
+		maxContextTokens = normalizeMaxContextTokens(request.MaxContextTokens)
+	}
 
 	record.Set("name", name)
 	record.Set("model_id", modelID)
 	record.Set("base_url", baseURL)
 	record.Set("protocol", protocol)
 	record.Set("max_output_tokens", maxOutputTokens)
+	record.Set("max_context_tokens", maxContextTokens)
 	if request.APIKey != nil {
 		record.Set("api_key", strings.TrimSpace(*request.APIKey))
 	}
@@ -466,6 +480,7 @@ func respondToShare(event *core.RequestEvent) error {
 			record.Set("api_key", source.GetString("api_key"))
 			record.Set("protocol", source.GetString("protocol"))
 			record.Set("max_output_tokens", source.GetInt("max_output_tokens"))
+			record.Set("max_context_tokens", source.GetInt("max_context_tokens"))
 			record.Set("is_default", len(existing) == 0)
 			// Record the author this copy came from: marks it as a received
 			// copy (blocks onward sharing) and keeps the source traceable.
@@ -535,6 +550,16 @@ func validateMaxOutputTokens(value *int) (int, error) {
 	return *value, nil
 }
 
+// normalizeMaxContextTokens resolves an optional context window size. Unlike
+// max output tokens there is no provider-side fallback, so omitted, zero, and
+// negative values all resolve to the package default.
+func normalizeMaxContextTokens(value *int) int {
+	if value == nil || *value <= 0 {
+		return defaultMaxContextTokens
+	}
+	return *value
+}
+
 func uniqueNonEmptyStrings(values []string) []string {
 	seen := make(map[string]struct{}, len(values))
 	result := make([]string, 0, len(values))
@@ -562,18 +587,19 @@ func toModelResponse(record *core.Record) modelResponse {
 		sharedFromName = strings.TrimSpace(author.GetString("name"))
 	}
 	return modelResponse{
-		ID:              record.Id,
-		Name:            record.GetString("name"),
-		ModelID:         record.GetString("model_id"),
-		BaseURL:         record.GetString("base_url"),
-		Protocol:        record.GetString("protocol"),
-		MaxOutputTokens: int(record.GetInt("max_output_tokens")),
-		IsDefault:       record.GetBool("is_default"),
-		SharedFrom:      record.GetString("shared_from"),
-		SharedFromName:  sharedFromName,
-		HasAPIKey:       record.GetString("api_key") != "",
-		Created:         record.GetDateTime("created").String(),
-		Updated:         record.GetDateTime("updated").String(),
+		ID:               record.Id,
+		Name:             record.GetString("name"),
+		ModelID:          record.GetString("model_id"),
+		BaseURL:          record.GetString("base_url"),
+		Protocol:         record.GetString("protocol"),
+		MaxOutputTokens:  int(record.GetInt("max_output_tokens")),
+		MaxContextTokens: int(record.GetInt("max_context_tokens")),
+		IsDefault:        record.GetBool("is_default"),
+		SharedFrom:       record.GetString("shared_from"),
+		SharedFromName:   sharedFromName,
+		HasAPIKey:        record.GetString("api_key") != "",
+		Created:          record.GetDateTime("created").String(),
+		Updated:          record.GetDateTime("updated").String(),
 	}
 }
 
