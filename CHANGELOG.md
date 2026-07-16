@@ -46,6 +46,18 @@ Docs (paste the source in the HTML source view) or keep the file.
   kind server-side.
 - The chat assistant now registers 24 tools instead of 30; the seven
   `microapps_*` tools were replaced by the extended docs tools.
+- The context ring hover was reworked: it now shows cache hit/write, the
+  compaction threshold ("Compacts at"), and the conversation's accumulated
+  input/output totals, replacing the misleading final-step input/output split.
+
+### Fixed
+
+- When a provider reports no input usage (e.g. GLM's Anthropic-compatible
+  endpoint always returns `input_tokens: 0`), the context size now falls back
+  to a character-based estimate instead of a meaningless tiny number, so the
+  ring stays truthful and automatic compaction still triggers. Estimated
+  values are marked with a `~` prefix, and unreported cache/input details
+  render as `~` instead of hiding or showing a fake `0`.
 
 ## [0.0.5] - 2026-07-16
 

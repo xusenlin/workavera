@@ -109,6 +109,7 @@ Important protocol rules:
 - User and assistant records are created transactionally before the model starts.
 - Streaming snapshots are saved on significant part changes and when a later chunk arrives after the one-second checkpoint interval.
 - Successful completion stores final parts and metadata, then updates conversation usage counters and the context-size snapshot (final-step usage with provider-correct cache accounting).
+- When a provider reports no input usage at all, the context snapshot falls back to a character-based estimate of the sent history and produced parts, flagged as estimated so the UI renders it with a `~` prefix.
 
 ## 7. Run lifecycle and recovery
 
