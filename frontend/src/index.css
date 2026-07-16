@@ -393,33 +393,36 @@
   left: auto !important;
 }
 
-.doc-source-area {
+.doc-code-editor {
   min-height: 0;
   flex: 1;
-  overflow: auto;
+  overflow: hidden;
   width: 100%;
-  margin: 0;
-  padding: 2.5rem 3rem 5rem;
-  border: 0;
-  border-radius: 0;
+}
+
+.doc-code-editor .cm-editor {
+  height: 100%;
   background: var(--background);
-  box-shadow: none;
-  color: var(--foreground);
+  font-size: 0.875rem;
+}
+
+.doc-code-editor .cm-scroller {
   font-family:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
     monospace;
-  font-size: 0.925rem;
-  line-height: 1.75;
-  resize: none;
+  line-height: 1.7;
 }
 
-.doc-source-area:focus-visible {
-  box-shadow: none;
+.doc-code-editor .cm-gutters {
+  background: var(--background);
+  border-right: 1px solid var(--border);
+  color: var(--muted-foreground);
+}
+
+.doc-code-editor .cm-content {
+  padding-block: 1rem;
+}
+
+.doc-code-editor .cm-editor.cm-focused {
   outline: none;
-}
-
-@media (max-width: 768px) {
-  .doc-source-area {
-    padding: 2rem 1.5rem 4rem;
-  }
 }

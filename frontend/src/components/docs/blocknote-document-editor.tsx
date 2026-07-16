@@ -3,7 +3,6 @@ import {
   useEffect,
   useMemo,
   useRef,
-  useState,
   type ChangeEvent,
 } from "react"
 
@@ -45,8 +44,7 @@ import { useMarkdownBlockTypeItems } from "@/components/docs/doc-editor-block-ty
 import { promoteDocAttachmentLinks } from "@/components/docs/doc-attachment-inline"
 import { docEditorSchema } from "@/components/docs/doc-editor-schema"
 import { DocDragHandleMenu } from "@/components/docs/doc-editor-side-menu"
-import { useTheme } from "@/components/theme-provider"
-import { Textarea } from "@/components/ui/textarea"
+import { SourceCodeEditor } from "@/components/docs/source-code-editor"
 import {
   DOC_ASSET_ACCEPT,
   docAssetDownloadURL,
@@ -57,26 +55,9 @@ import {
   uploadDocAsset,
 } from "@/lib/doc-assets"
 import { extractErrorMessage } from "@/lib/error"
+import { useResolvedTheme } from "@/lib/use-resolved-theme"
 
 export type DocumentEditorMode = "rich-text" | "source"
-
-function useResolvedTheme(): "light" | "dark" {
-  const { theme } = useTheme()
-  const [systemTheme, setSystemTheme] = useState<"light" | "dark">(() =>
-    window.matchMedia("(prefers-color-scheme: dark)").matches
-      ? "dark"
-      : "light"
-  )
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
-    const update = () => setSystemTheme(mediaQuery.matches ? "dark" : "light")
-    mediaQuery.addEventListener("change", update)
-    return () => mediaQuery.removeEventListener("change", update)
-  }, [])
-
-  return theme === "system" ? systemTheme : theme
-}
 
 export function BlockNoteDocumentEditor({
   docId,
@@ -94,13 +75,7 @@ export function BlockNoteDocumentEditor({
       {mode === "rich-text" ? (
         <RichTextArea docId={docId} value={value} onChange={onChange} />
       ) : (
-        <Textarea
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          aria-label="Markdown source"
-          className="doc-source-area"
-          spellCheck={false}
-        />
+        <SourceCodeEditor language="markdown" value={value} onChange={onChange} />
       )}
     </div>
   )
@@ -149,6 +124,17 @@ function RichTextArea({
   const lastMarkdown = useRef<string | null>(null)
   const applyingExternal = useRef(0)
   const serializeSeq = useRef(0)
+
+  // Invalidate in-flight serializations on unmount: switching documents
+  // remounts this editor (and HTML documents render no editor at all), and a
+  // late async onChange from the old instance would otherwise clobber the
+  // freshly loaded document's draft with the previous document's Markdown.
+  useEffect(() => {
+    const seq = serializeSeq
+    return () => {
+      seq.current++
+    }
+  }, [])
 
   useEffect(() => {
     if (value === lastMarkdown.current) return
