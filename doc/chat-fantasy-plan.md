@@ -160,8 +160,7 @@ The actor-scoped production registry contains:
 - Board: project/task/template reads and permission-aware project, workflow, label, member, and task mutations.
 - Calendar: schedule lookup plus event creation and update.
 - Reading: search, get, upsert, and summarize.
-- Docs: search, get, optimistic-concurrency upsert, and exact-text replace.
-- AI Micro Apps: create, update, get, list, search, replace, and chunked HTML writing.
+- Docs: search, get, optimistic-concurrency upsert, exact-text replace, and chunked writes for long content (Markdown or self-contained HTML documents).
 
 Tool descriptions require explicit mutation intent, real IDs from prior reads, current revisions where applicable, and sequential writes to the same resource. Tool outputs render in module-specific UI cards and can open records through unified workspace deep links. Mock tools are excluded from the production registry.
 

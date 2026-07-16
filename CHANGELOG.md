@@ -7,6 +7,42 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.0.6] - 2026-07-16
+
+### ⚠️ Breaking: AI Micro Apps module removed
+
+The AI Micro Apps module has been absorbed into Docs and its UI, API routes
+(`/api/ai-micro-apps/*`), and AI tools (`microapps_*`) no longer exist.
+
+**Your data is NOT deleted in this release.** The `ai_micro_apps` collection
+and its stored HTML files remain in `pb_data/` as a one-version recovery
+buffer, but they are no longer reachable from the app. To keep an app, open
+the PocketBase admin UI (`/_/`), browse the `ai_micro_apps` collection, and
+download each record's `html_file` — then re-create it as an HTML document in
+Docs (paste the source in the HTML source view) or keep the file.
+
+**The collection and all remaining data will be permanently deleted in
+0.0.7.** Export anything you care about before upgrading past this version.
+
+### Added
+
+- Docs now have a kind: `markdown` (default) or `html`. HTML documents hold a
+  self-contained interactive page rendered in a sandboxed preview (scripts run
+  in an opaque origin with no access to your session), with source editing,
+  raw `.html` export, versions, project sharing, pins, and conflict detection.
+- New `docs_write_chunk` AI tool writes long content in pieces (Markdown or
+  HTML); a whole chunked session records a single version.
+- The docs list, board document links, and chat tool cards mark HTML documents
+  with a code icon, and chat tool cards show a sandboxed live preview.
+
+### Changed
+
+- `docs_upsert` accepts a `kind` when creating; the kind of an existing
+  document never changes, and content edits are validated against the stored
+  kind server-side.
+- The chat assistant now registers 24 tools instead of 30; the seven
+  `microapps_*` tools were replaced by the extended docs tools.
+
 ## [0.0.5] - 2026-07-16
 
 ### Added
@@ -80,7 +116,8 @@ First public release.
 - **AI Micro Apps** for self-contained HTML tools with sandboxed preview.
 - **Dashboard**, realtime **Notifications**, and **Settings** with per-user model configurations and model sharing.
 
-[Unreleased]: https://github.com/xusenlin/workavera/compare/v0.0.5...HEAD
+[Unreleased]: https://github.com/xusenlin/workavera/compare/v0.0.6...HEAD
+[0.0.6]: https://github.com/xusenlin/workavera/compare/v0.0.5...v0.0.6
 [0.0.5]: https://github.com/xusenlin/workavera/compare/v0.0.4...v0.0.5
 [0.0.4]: https://github.com/xusenlin/workavera/compare/v0.0.3...v0.0.4
 [0.0.3]: https://github.com/xusenlin/workavera/compare/v0.0.2...v0.0.3

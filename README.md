@@ -19,7 +19,7 @@ Self-hosted AI tools are a crowded space, but most of them fall on one of two si
 
 Workavera combines both halves and adds the part neither has:
 
-- **Permission-aware AI tool calling.** Chat can search your context and operate Board, Calendar, Docs, Reading, Contacts, and AI Micro Apps—but only within the permissions your account already has, and the server re-authorizes every tool call (identity, role, ownership, revision). The AI is never a privileged service account.
+- **Permission-aware AI tool calling.** Chat can search your context and operate Board, Calendar, Docs, Reading, and Contacts—but only within the permissions your account already has, and the server re-authorizes every tool call (identity, role, ownership, revision). The AI is never a privileged service account.
 - **One self-contained binary.** The frontend is embedded via `go:embed` and data lives in PocketBase/SQLite—no Postgres, Redis, or vector-database stack. Deploy with a single `docker run` or a single downloaded binary.
 - **Built for freelancers and small teams.** Bring your own model API keys, run it on a cheap VPS or a NAS, and own all of your data. Open source under Apache-2.0.
 
@@ -77,16 +77,15 @@ By default it listens on <http://127.0.0.1:8090>. Pass `--http=0.0.0.0:8090` to 
 - **Reading** saves external URLs and notes with project, tags, read status, pins, archive, configurable summary language, and AI-generated summaries.
 - **Contacts** provides a searchable contact list, detailed profiles, and personal favorites; Chat can search a bounded, non-sensitive contact projection.
 - **Chat** streams model output, reasoning, and tool calls into durable conversations. Runs continue across browser disconnects and can be resumed or stopped. A context-usage indicator tracks token and cache details, and long conversations are automatically compacted into a summary near the model's context limit without altering the visible history.
-- **Docs** stores private and project Markdown documents with BlockNote rich editing, source/fullscreen modes, Markdown/HTML export, explicit versions, conflict detection, pins, archive, and AI editing.
+- **Docs** stores private and project documents with BlockNote rich editing, source/fullscreen modes, Markdown/HTML export, explicit versions, conflict detection, pins, archive, and AI editing. Documents are Markdown or self-contained interactive HTML apps rendered in a sandboxed preview.
 - **Board** manages independent project workflows, labels, roles, tasks, activity history, due dates, and same-project document links. Ten bilingual workflow templates are included.
 - **Calendar** combines personal events with visible Board deadlines, supports recurrence and system-timezone scheduling, and produces in-app reminders.
-- **AI Micro Apps** manages self-contained HTML tools and prototypes with sandboxed preview, pins, archive/restore actions, and Assistant tools for HTML generation and revision.
 - **Notifications** provides realtime model-share requests, task-due notices, and calendar reminders with record deep links.
 - **Settings and Profile** manage model configurations, model sharing, per-user appearance, profile fields, and avatars.
 
-Reading is the external-information intake layer, Docs is the reusable knowledge layer, Board is the action layer, Calendar is the time-commitment layer, and AI Micro Apps is the interactive delivery layer.
+Reading is the external-information intake layer, Docs is the reusable knowledge and interactive-artifact layer, Board is the action layer, and Calendar is the time-commitment layer.
 
-Chat connects these layers as a permission-aware AI control surface. It can search the context visible to you and invoke registered tools for Board, Calendar, Reading, Docs, Contacts, and AI Micro Apps. Tool availability never bypasses product rules: the backend checks identity, role, ownership, relationships, and revisions for every operation.
+Chat connects these layers as a permission-aware AI control surface. It can search the context visible to you and invoke registered tools for Board, Calendar, Reading, Docs, and Contacts. Tool availability never bypasses product rules: the backend checks identity, role, ownership, relationships, and revisions for every operation.
 
 ## Technology
 
@@ -233,9 +232,8 @@ The container runs as a non-root user, includes CA certificates and timezone dat
 │   ├── chat/                    # Conversations, runs, SSE, persistence
 │   ├── configs/                 # System configuration API
 │   ├── contacts/                # Contacts and safe Assistant queries
-│   ├── docs/                    # Markdown documents and versions
+│   ├── docs/                    # Markdown/HTML documents and versions
 │   ├── llm/                     # Model settings and sharing
-│   ├── microapps/               # AI Micro Apps domain and previews
 │   ├── notifications/           # Realtime notifications and scheduler
 │   └── reading/                 # Reading library and summaries
 ├── migrations/                  # PocketBase schema migrations and tests
