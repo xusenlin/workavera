@@ -27,7 +27,6 @@ import { BoardProjectDetailToolCard } from "./board-project-detail-tool-output"
 import { BoardTemplatesToolCard } from "./board-templates-tool-output"
 import { BoardMutationToolCard } from "./board-mutation-tool-output"
 import { TasksToolCard } from "./tasks-tool-output"
-import { AIMicroAppsToolCard } from "./ai-micro-apps-tool-output"
 import {
   ReadingSearchToolCard,
   ReadingItemToolCard,
@@ -37,16 +36,6 @@ import {
   CalendarScheduleToolCard,
   CalendarMutationToolCard,
 } from "./calendar-tool-output"
-
-const aiMicroAppToolNames = new Set([
-  "microapps_create",
-  "microapps_update",
-  "microapps_get",
-  "microapps_list",
-  "microapps_search",
-  "microapps_replace",
-  "microapps_write_chunk",
-])
 
 const boardMutationToolNames = new Set([
   "board_create_project",
@@ -64,7 +53,12 @@ const readingItemToolNames = new Set([
   "reading_summarize",
 ])
 
-const docItemToolNames = new Set(["docs_get", "docs_upsert", "docs_replace"])
+const docItemToolNames = new Set([
+  "docs_get",
+  "docs_upsert",
+  "docs_replace",
+  "docs_write_chunk",
+])
 
 const calendarMutationToolNames = new Set([
   "calendar_create_event",
@@ -113,9 +107,6 @@ function MessageParts({ message }: { message: ChatUIMessage }) {
         }
         if (boardMutationToolNames.has(part.toolName)) {
           return <BoardMutationToolCard key={part.toolCallId} part={part} />
-        }
-        if (aiMicroAppToolNames.has(part.toolName)) {
-          return <AIMicroAppsToolCard key={part.toolCallId} part={part} />
         }
         if (part.toolName === "reading_search") {
           return <ReadingSearchToolCard key={part.toolCallId} part={part} />

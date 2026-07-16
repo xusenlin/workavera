@@ -9,6 +9,7 @@ import {
   Delete02Icon,
   DocumentAttachmentIcon,
   Download01Icon,
+  File02Icon,
   FloppyDiskIcon,
   FolderTransferIcon,
   HistoryIcon,
@@ -53,6 +54,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { SourceCodeEditor } from "@/components/docs/source-code-editor"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -75,7 +77,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { extractErrorMessage } from "@/lib/error"
+import { extractErrorMessage, isRequestAbort } from "@/lib/error"
 import { pb } from "@/lib/pocketbase"
 import { cn } from "@/lib/utils"
 import {
@@ -83,8 +85,11 @@ import {
   workspaceRecordUrl,
 } from "@/lib/workspace-navigation"
 
+type DocKind = "markdown" | "html"
+
 type DocRecord = RecordModel & {
   title: string
+  kind: DocKind
   content: string
   owner: string
   project: string
@@ -97,6 +102,7 @@ type DocRecord = RecordModel & {
 type DocumentResult = {
   id: string
   title: string
+  kind: DocKind
   content: string
   ownerId: string
   projectId?: string
@@ -145,6 +151,7 @@ export function DocsPage() {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [archivedOpen, setArchivedOpen] = useState(false)
   const [editorMode, setEditorMode] = useState<DocumentEditorMode>("rich-text")
+  const [htmlMode, setHtmlMode] = useState<"preview" | "source">("preview")
   const [fullscreen, setFullscreen] = useState(false)
   const editorAreaRef = useRef<HTMLElement>(null)
 
@@ -233,7 +240,13 @@ export function DocsPage() {
     [page, query]
   )
 
+  // Selection can change while a document fetch is in flight (URL sync and
+  // selection updates land in separate commits, so switching briefly ping-pongs
+  // through the previous document). Only the newest load may apply its result;
+  // a stale response must never overwrite the document loaded after it.
+  const loadDocumentSeq = useRef(0)
   const loadDocument = useCallback(async (id: string) => {
+    const seq = ++loadDocumentSeq.current
     const record = await pb.collection("docs").getOne<DocRecord>(id)
     const project = record.project
       ? await pb
@@ -241,9 +254,11 @@ export function DocsPage() {
           .getOne<RecordModel & { name: string }>(record.project)
           .catch(() => null)
       : null
+    if (seq !== loadDocumentSeq.current) return
     const doc: DocumentResult = {
       id: record.id,
       title: record.title,
+      kind: record.kind === "html" ? "html" : "markdown",
       content: record.content,
       ownerId: record.owner,
       projectId: record.project || undefined,
@@ -259,14 +274,16 @@ export function DocsPage() {
     setDraftContent(doc.content)
     setServerHasNewVersion(false)
     setEditorMode("rich-text")
+    setHtmlMode("preview")
   }, [])
 
   useEffect(() => {
     void Promise.resolve()
       .then(() => loadList())
-      .catch((error) =>
+      .catch((error) => {
+        if (isRequestAbort(error)) return
         toast.error(extractErrorMessage(error, "Could not load documents."))
-      )
+      })
       .finally(() => setLoading(false))
   }, [loadList])
 
@@ -292,6 +309,7 @@ export function DocsPage() {
     void Promise.resolve()
       .then(() => loadDocument(selectedId))
       .catch((error) => {
+        if (isRequestAbort(error)) return
         toast.error(extractErrorMessage(error, "Could not load the document."))
         if (requestedDocId === selectedId) {
           setSelectedId(null)
@@ -380,6 +398,16 @@ export function DocsPage() {
   }
 
   const exportHtml = async () => {
+    // HTML documents are already standalone files; export their source as-is
+    // instead of wrapping it through the Markdown export pipeline.
+    if (persisted?.kind === "html") {
+      downloadFile(
+        `${exportFileName(draftTitle)}.html`,
+        draftContent,
+        "text/html;charset=utf-8"
+      )
+      return
+    }
     try {
       const html = await documentMarkdownToStandaloneHtml(
         draftContent,
@@ -501,6 +529,7 @@ export function DocsPage() {
                 documents={pinnedDocuments.map((doc) => ({
                   id: doc.id,
                   title: doc.title,
+                  kind: doc.kind,
                   owner: doc.ownerId,
                   project: doc.projectId ?? "",
                   revision: doc.revision,
@@ -518,6 +547,7 @@ export function DocsPage() {
                 documents={documents.map((doc) => ({
                   id: doc.id,
                   title: doc.title,
+                  kind: doc.kind,
                   owner: doc.owner,
                   project: doc.project,
                   revision: doc.revision,
@@ -618,20 +648,37 @@ export function DocsPage() {
                     Load latest
                   </Button>
                 )}
-                <HeaderIconButton
-                  label={
-                    editorMode === "source"
-                      ? "Switch to rich text"
-                      : "Edit Markdown source"
-                  }
-                  icon={SourceCodeIcon}
-                  active={editorMode === "source"}
-                  onClick={() =>
-                    setEditorMode((current) =>
-                      current === "source" ? "rich-text" : "source"
-                    )
-                  }
-                />
+                {persisted.kind === "html" ? (
+                  <HeaderIconButton
+                    label={
+                      htmlMode === "source"
+                        ? "Show preview"
+                        : "Edit HTML source"
+                    }
+                    icon={SourceCodeIcon}
+                    active={htmlMode === "source"}
+                    onClick={() =>
+                      setHtmlMode((current) =>
+                        current === "source" ? "preview" : "source"
+                      )
+                    }
+                  />
+                ) : (
+                  <HeaderIconButton
+                    label={
+                      editorMode === "source"
+                        ? "Switch to rich text"
+                        : "Edit Markdown source"
+                    }
+                    icon={SourceCodeIcon}
+                    active={editorMode === "source"}
+                    onClick={() =>
+                      setEditorMode((current) =>
+                        current === "source" ? "rich-text" : "source"
+                      )
+                    }
+                  />
+                )}
                 <HeaderIconButton
                   label={fullscreen ? "Exit fullscreen" : "Fullscreen"}
                   icon={fullscreen ? Minimize01Icon : Maximize01Icon}
@@ -653,9 +700,11 @@ export function DocsPage() {
                     <TooltipContent side="bottom">Export</TooltipContent>
                   </Tooltip>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={exportMarkdown}>
-                      Markdown (.md)
-                    </DropdownMenuItem>
+                    {persisted.kind !== "html" && (
+                      <DropdownMenuItem onClick={exportMarkdown}>
+                        Markdown (.md)
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem onClick={() => void exportHtml()}>
                       HTML (.html)
                     </DropdownMenuItem>
@@ -675,13 +724,49 @@ export function DocsPage() {
                 />
               </div>
             </div>
-            <BlockNoteDocumentEditor
-              key={persisted.id}
-              docId={persisted.id}
-              value={draftContent}
-              mode={editorMode}
-              onChange={setDraftContent}
-            />
+            {persisted.kind === "html" ? (
+              htmlMode === "source" ? (
+                <div className="workavera-doc-editor">
+                  <SourceCodeEditor
+                    language="html"
+                    value={draftContent}
+                    onChange={setDraftContent}
+                  />
+                </div>
+              ) : draftContent.trim() === "" ? (
+                <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center text-muted-foreground">
+                  <HugeiconsIcon
+                    icon={SourceCodeIcon}
+                    strokeWidth={1.5}
+                    className="size-10"
+                  />
+                  <p className="text-sm">
+                    This document is empty. Edit the HTML source to add
+                    content.
+                  </p>
+                </div>
+              ) : (
+                // srcdoc + sandbox without allow-same-origin runs the document
+                // in an opaque origin: scripts work but can never reach the
+                // parent page or its PocketBase session.
+                <iframe
+                  key={persisted.id}
+                  title={`${draftTitle || "HTML document"} preview`}
+                  srcDoc={draftContent}
+                  sandbox="allow-scripts allow-forms allow-popups allow-modals allow-downloads"
+                  referrerPolicy="no-referrer"
+                  className="min-h-0 w-full flex-1 bg-white"
+                />
+              )
+            ) : (
+              <BlockNoteDocumentEditor
+                key={persisted.id}
+                docId={persisted.id}
+                value={draftContent}
+                mode={editorMode}
+                onChange={setDraftContent}
+              />
+            )}
           </>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center text-muted-foreground">
@@ -721,6 +806,7 @@ export function DocsPage() {
             setDraftTitle(doc.title)
             setDraftContent(doc.content)
             setEditorMode("rich-text")
+            setHtmlMode("preview")
             await loadList()
           }}
         />
@@ -769,6 +855,7 @@ function HeaderIconButton({
 type DocumentListEntry = {
   id: string
   title: string
+  kind: DocKind
   owner: string
   project: string
   revision: number
@@ -861,6 +948,14 @@ function DocumentListItem({
               className="size-3 shrink-0 text-muted-foreground"
             />
           )}
+          <HugeiconsIcon
+            icon={document.kind === "html" ? SourceCodeIcon : File02Icon}
+            strokeWidth={2}
+            className="size-3 shrink-0 text-muted-foreground"
+            aria-label={
+              document.kind === "html" ? "HTML document" : "Markdown document"
+            }
+          />
           <p className="truncate text-sm font-medium">{document.title}</p>
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
@@ -954,9 +1049,10 @@ function ArchivedDocumentsDialog({
     if (!open) return
     void Promise.resolve()
       .then(load)
-      .catch((error) =>
+      .catch((error) => {
+        if (isRequestAbort(error)) return
         toast.error(extractErrorMessage(error, "Could not load archive."))
-      )
+      })
       .finally(() => setLoading(false))
   }, [load, open])
 
@@ -1124,6 +1220,7 @@ function CreateDocumentDialog({
   onCreated: (doc: DocumentResult) => Promise<void>
 }) {
   const [title, setTitle] = useState("")
+  const [kind, setKind] = useState<DocKind>("markdown")
   const [location, setLocation] = useState<"private" | "project">("private")
   const [projectId, setProjectId] = useState("")
   const [saving, setSaving] = useState(false)
@@ -1134,12 +1231,14 @@ function CreateDocumentDialog({
         method: "POST",
         body: {
           title,
+          kind,
           content: "",
           projectId: location === "private" ? "" : projectId,
         },
       })
       await onCreated(doc)
       setTitle("")
+      setKind("markdown")
       setLocation("private")
       setProjectId("")
       onOpenChange(false)
@@ -1167,6 +1266,39 @@ function CreateDocumentDialog({
               onChange={(event) => setTitle(event.target.value)}
               autoFocus
             />
+          </div>
+          <div className="space-y-3">
+            <Label>Kind</Label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setKind("markdown")}
+                className={cn(
+                  "rounded-xl border p-4 text-left transition-colors hover:bg-muted/50",
+                  kind === "markdown" &&
+                    "border-foreground/30 bg-muted ring-1 ring-foreground/10"
+                )}
+              >
+                <span className="block text-sm font-medium">Markdown</span>
+                <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
+                  Notes and knowledge with rich-text editing.
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setKind("html")}
+                className={cn(
+                  "rounded-xl border p-4 text-left transition-colors hover:bg-muted/50",
+                  kind === "html" &&
+                    "border-foreground/30 bg-muted ring-1 ring-foreground/10"
+                )}
+              >
+                <span className="block text-sm font-medium">HTML app</span>
+                <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
+                  A self-contained interactive page with sandboxed preview.
+                </span>
+              </button>
+            </div>
           </div>
           <div className="space-y-3">
             <Label>Who can access it?</Label>
@@ -1254,13 +1386,7 @@ function MoveToProjectButton({
   const [open, setOpen] = useState(false)
   const [projectId, setProjectId] = useState("")
   const move = async () => {
-    if (
-      !projectId ||
-      !window.confirm(
-        "Project members will gain access. This cannot be undone in the first version."
-      )
-    )
-      return
+    if (!projectId) return
     try {
       const doc = await pb.send<DocumentResult>(
         `/api/docs/${document.id}/move-to-project`,
@@ -1331,9 +1457,10 @@ function HistoryDialog({
     void pb
       .send<Version[]>(`/api/docs/${document.id}/versions`, {})
       .then(setVersions)
-      .catch((error) =>
+      .catch((error) => {
+        if (isRequestAbort(error)) return
         toast.error(extractErrorMessage(error, "Could not load history."))
-      )
+      })
   }, [document.id, open])
   const inspect = async (version: Version) => {
     const full = await pb.send<Version>(
@@ -1385,7 +1512,7 @@ function HistoryDialog({
             ))}
           </div>
           <pre className="overflow-auto p-5 text-sm whitespace-pre-wrap">
-            {selected?.content ?? "Select a version to preview its Markdown."}
+            {selected?.content ?? "Select a version to preview its content."}
           </pre>
         </div>
         <DialogFooter className="flex-shrink-0">

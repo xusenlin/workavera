@@ -6,6 +6,7 @@ import {
   Search01Icon,
   ReplaceIcon,
   ArrowRight01Icon,
+  SourceCodeIcon,
 } from "@hugeicons/core-free-icons"
 import {
   CheckCircleIcon,
@@ -30,6 +31,7 @@ import { workspaceRecordUrl } from "@/lib/workspace-navigation"
 type Doc = {
   id: string
   title: string
+  kind?: "markdown" | "html"
   content: string
   ownerId: string
   projectId?: string
@@ -39,6 +41,10 @@ type Doc = {
   lastEditedBy: string
   created: string
   updated: string
+}
+
+function docKindIcon(kind: Doc["kind"]) {
+  return kind === "html" ? SourceCodeIcon : File02Icon
 }
 
 const statusLabels: Partial<Record<DynamicToolUIPart["state"], string>> = {
@@ -193,7 +199,7 @@ export function DocsSearchToolCard({ part }: { part: DynamicToolUIPart }) {
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex min-w-0 items-center gap-1.5">
                       <HugeiconsIcon
-                        icon={File02Icon}
+                        icon={docKindIcon(doc.kind)}
                         strokeWidth={2}
                         className="size-3.5 shrink-0 text-muted-foreground"
                       />
@@ -245,7 +251,15 @@ const docToolMeta: Record<string, { label: string; icon: typeof File02Icon }> =
     docs_get: { label: "Document", icon: File02Icon },
     docs_upsert: { label: "Upsert Document", icon: FileEditIcon },
     docs_replace: { label: "Replace Text", icon: ReplaceIcon },
+    docs_write_chunk: { label: "Write Document Chunk", icon: FileEditIcon },
   }
+
+type WriteChunkResult = {
+  id: string
+  kind?: "markdown" | "html"
+  revision: number
+  contentLength: number
+}
 
 export function DocsItemToolCard({ part }: { part: DynamicToolUIPart }) {
   const navigate = useNavigate()
@@ -258,15 +272,23 @@ export function DocsItemToolCard({ part }: { part: DynamicToolUIPart }) {
   }
   const isUpsert = part.toolName === "docs_upsert"
   const isReplace = part.toolName === "docs_replace"
+  const isWriteChunk = part.toolName === "docs_write_chunk"
 
-  // docs_upsert updates and docs_replace wrap the document, while
-  // docs_upsert creates return a bare document.
+  // docs_upsert updates and docs_replace wrap the document, docs_write_chunk
+  // returns a lightweight progress summary, and docs_upsert creates return a
+  // bare document.
   const raw = part.output
   let doc: Doc | null = null
   let changed: boolean | undefined
   let matches: number | undefined
+  let chunkResult: WriteChunkResult | null = null
   const isWrapped = isUpsert || isReplace
-  if (isWrapped) {
+  if (isWriteChunk) {
+    const parsed = typeof raw === "string" ? safeParse(raw) : raw
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      chunkResult = parsed as WriteChunkResult
+    }
+  } else if (isWrapped) {
     const parsed = typeof raw === "string" ? safeParse(raw) : raw
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
       const obj = parsed as Record<string, unknown>
@@ -325,9 +347,11 @@ export function DocsItemToolCard({ part }: { part: DynamicToolUIPart }) {
               <span>
                 {isReplace
                   ? "Replacing text…"
-                  : isUpsert
-                    ? "Saving document…"
-                    : "Loading document…"}
+                  : isWriteChunk
+                    ? "Writing content…"
+                    : isUpsert
+                      ? "Saving document…"
+                      : "Loading document…"}
               </span>
             </div>
           </div>
@@ -346,7 +370,7 @@ export function DocsItemToolCard({ part }: { part: DynamicToolUIPart }) {
               <div className="flex items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-1.5">
                   <HugeiconsIcon
-                    icon={File02Icon}
+                    icon={docKindIcon(doc.kind)}
                     strokeWidth={2}
                     className="size-3.5 shrink-0 text-muted-foreground"
                   />
@@ -392,15 +416,38 @@ export function DocsItemToolCard({ part }: { part: DynamicToolUIPart }) {
               </div>
             </div>
 
+            {/* Sandboxed preview for HTML documents */}
+            {doc.kind === "html" && doc.content && (
+              <Collapsible defaultOpen>
+                <CollapsibleTrigger className="group/preview text-xs font-medium text-muted-foreground underline-offset-2 hover:underline">
+                  <span className="group-data-[state=open]/preview:hidden">
+                    Show preview
+                  </span>
+                  <span className="hidden group-data-[state=open]/preview:inline">
+                    Hide preview
+                  </span>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="mt-1 overflow-hidden rounded-md border">
+                  <iframe
+                    title={`${doc.title} preview`}
+                    srcDoc={doc.content}
+                    sandbox="allow-scripts allow-forms allow-popups allow-modals"
+                    referrerPolicy="no-referrer"
+                    className="h-80 w-full bg-white"
+                  />
+                </CollapsibleContent>
+              </Collapsible>
+            )}
+
             {/* Content preview */}
             {doc.content && (
               <Collapsible>
                 <CollapsibleTrigger className="group/content text-xs font-medium text-muted-foreground underline-offset-2 hover:underline">
                   <span className="group-data-[state=open]/content:hidden">
-                    Show Markdown content
+                    {doc.kind === "html" ? "Show HTML source" : "Show Markdown content"}
                   </span>
                   <span className="hidden group-data-[state=open]/content:inline">
-                    Hide Markdown content
+                    {doc.kind === "html" ? "Hide HTML source" : "Hide Markdown content"}
                   </span>
                 </CollapsibleTrigger>
                 <CollapsibleContent className="mt-1 max-h-72 overflow-y-auto rounded-md border bg-muted/20 p-2.5">
@@ -429,7 +476,30 @@ export function DocsItemToolCard({ part }: { part: DynamicToolUIPart }) {
           </div>
         )}
 
-        {part.state === "output-available" && !doc && (
+        {part.state === "output-available" && chunkResult && (
+          <div className="flex items-center justify-between gap-2 rounded-md border bg-card px-3 py-2">
+            <span className="text-xs text-muted-foreground">
+              Wrote {chunkResult.contentLength.toLocaleString()} characters · R
+              {chunkResult.revision}
+            </span>
+            <button
+              type="button"
+              onClick={() =>
+                navigate(workspaceRecordUrl("docs", chunkResult.id))
+              }
+              className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground transition-colors hover:bg-secondary/80"
+            >
+              Open in editor
+              <HugeiconsIcon
+                icon={ArrowRight01Icon}
+                strokeWidth={2}
+                className="size-3"
+              />
+            </button>
+          </div>
+        )}
+
+        {part.state === "output-available" && !doc && !chunkResult && (
           <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
             Document not found
           </div>

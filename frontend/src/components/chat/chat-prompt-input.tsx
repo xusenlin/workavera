@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 
 import type { UseChatHelpers } from "@ai-sdk/react"
 import type { ChatStatus } from "ai"
@@ -73,21 +73,7 @@ export function ChatPromptInput({
     string | null
   >(initialModelConfigId || null)
   const modelConfigId = selectedModelConfigId ?? defaultModelId
-  const [text, setText] = useState(() => {
-    const appId = sessionStorage.getItem("aiMicroAppEditId")
-    if (!appId) return ""
-    sessionStorage.removeItem("aiMicroAppEditId")
-    return `Edit AI micro app ${appId}: `
-  })
-  useEffect(() => {
-    function handleMicroAppEdit(event: Event) {
-      const appId = (event as CustomEvent<string>).detail
-      if (appId) setText(`Edit AI micro app ${appId}: `)
-    }
-    window.addEventListener("ai-micro-app-edit", handleMicroAppEdit)
-    return () =>
-      window.removeEventListener("ai-micro-app-edit", handleMicroAppEdit)
-  }, [])
+  const [text, setText] = useState("")
 
   const handleSubmit = async (message: PromptInputMessage) => {
     const content = message.text.trim()

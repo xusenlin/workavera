@@ -7,7 +7,6 @@ import {
   ContactBookIcon,
   Calendar03Icon,
   BookOpen01Icon,
-  AppWindowIcon,
   Settings02Icon,
 } from "@hugeicons/core-free-icons"
 
@@ -73,12 +72,6 @@ export const navGroups: NavGroup[] = [
         url: "/calendar",
         icon: Calendar03Icon,
         description: "Schedule and events",
-      },
-      {
-        title: "AI Micro Apps",
-        url: "/micro-apps",
-        icon: AppWindowIcon,
-        description: "AI-generated self-contained micro apps",
       },
     ],
   },

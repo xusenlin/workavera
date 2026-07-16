@@ -7,6 +7,7 @@ import {
   Cancel01Icon,
   Delete02Icon,
   File01Icon,
+  SourceCodeIcon,
   Link02Icon,
 } from "@hugeicons/core-free-icons"
 
@@ -123,7 +124,9 @@ export function TodoCardSheet({
   )
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [documentDialogOpen, setDocumentDialogOpen] = useState(false)
-  const [docTitles, setDocTitles] = useState<Record<string, string>>({})
+  const [docTitles, setDocTitles] = useState<
+    Record<string, { title: string; kind?: string }>
+  >({})
 
   // Resolve titles for any linked documents we don't have a title for yet
   // (initial load, and after linking more via the picker).
@@ -132,14 +135,15 @@ export function TodoCardSheet({
     if (missing.length === 0) return
     const filter = missing.map((id) => `id = "${id}"`).join(" || ")
     pb.collection("docs")
-      .getList<{ id: string; title: string }>(1, missing.length, {
+      .getList<{ id: string; title: string; kind?: string }>(1, missing.length, {
         filter,
         requestKey: null,
       })
       .then((result) =>
         setDocTitles((prev) => {
           const next = { ...prev }
-          for (const doc of result.items) next[doc.id] = doc.title
+          for (const doc of result.items)
+            next[doc.id] = { title: doc.title, kind: doc.kind }
           return next
         })
       )
@@ -427,12 +431,16 @@ export function TodoCardSheet({
                     className="group flex cursor-pointer items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm transition-colors hover:border-primary/40 hover:bg-primary/5"
                   >
                     <HugeiconsIcon
-                      icon={File01Icon}
+                      icon={
+                        docTitles[id]?.kind === "html"
+                          ? SourceCodeIcon
+                          : File01Icon
+                      }
                       strokeWidth={2}
                       className="size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-primary"
                     />
                     <span className="min-w-0 flex-1 truncate font-medium text-primary underline-offset-2 group-hover:underline">
-                      {docTitles[id] ?? "Untitled document"}
+                      {docTitles[id]?.title ?? "Untitled document"}
                     </span>
                     <HugeiconsIcon
                       icon={ArrowUpRight01Icon}

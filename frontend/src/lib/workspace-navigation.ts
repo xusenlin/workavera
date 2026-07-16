@@ -7,7 +7,6 @@ export type OpenableWorkspaceModule =
   | "contacts"
   | "docs"
   | "reading"
-  | "micro-apps"
   | "notifications"
 
 export function workspaceRecordUrl(

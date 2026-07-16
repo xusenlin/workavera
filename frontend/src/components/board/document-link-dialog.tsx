@@ -4,6 +4,7 @@ import { HugeiconsIcon } from "@hugeicons/react"
 import {
   AlertCircleIcon,
   File01Icon,
+  SourceCodeIcon,
   Search02Icon,
   Tick02Icon,
 } from "@hugeicons/core-free-icons"
@@ -25,6 +26,7 @@ import { pb } from "@/lib/pocketbase"
 type DocOption = {
   id: string
   title: string
+  kind?: string
 }
 
 type DocumentLinkDialogProps = {
@@ -74,7 +76,9 @@ export function DocumentLinkDialog({
       })
       .then((result) => {
         if (active)
-          setOptions(result.items.map(({ id, title }) => ({ id, title })))
+          setOptions(
+            result.items.map(({ id, title, kind }) => ({ id, title, kind }))
+          )
       })
       .catch((loadError) => {
         if (active)
@@ -190,7 +194,7 @@ export function DocumentLinkDialog({
                     )}
                   </span>
                   <HugeiconsIcon
-                    icon={File01Icon}
+                    icon={option.kind === "html" ? SourceCodeIcon : File01Icon}
                     strokeWidth={2}
                     className="size-4 shrink-0 text-muted-foreground"
                   />

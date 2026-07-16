@@ -19,6 +19,7 @@ func createBoardTestDoc(t *testing.T, app core.App, ownerID, projectID, title st
 	}
 	record := core.NewRecord(collection)
 	record.Set("title", title)
+	record.Set("kind", "markdown")
 	record.Set("owner", ownerID)
 	record.Set("project", projectID)
 	record.Set("status", "draft")

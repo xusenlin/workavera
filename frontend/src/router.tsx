@@ -34,11 +34,6 @@ const ReadingPage = lazy(() =>
     default: module.ReadingPage,
   }))
 )
-const AIMicroAppsPage = lazy(() =>
-  import("@/pages/micro-apps").then((module) => ({
-    default: module.AIMicroAppsPage,
-  }))
-)
 const SettingsPage = lazy(() =>
   import("@/pages/settings").then((module) => ({
     default: module.SettingsPage,
@@ -81,7 +76,6 @@ export function AppRouter() {
               <Route path="/contacts" element={<ContactsPage />} />
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/reading" element={<ReadingPage />} />
-              <Route path="/micro-apps" element={<AIMicroAppsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/notifications" element={<NotificationsPage />} />

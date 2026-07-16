@@ -10,7 +10,6 @@ export function DashboardLayout() {
   const isFullBleed =
     pathname.startsWith("/chat") ||
     pathname.startsWith("/docs") ||
-    pathname.startsWith("/micro-apps") ||
     pathname.startsWith("/reading") ||
     pathname.startsWith("/notifications")
 

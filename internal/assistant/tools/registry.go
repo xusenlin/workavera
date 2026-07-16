@@ -41,12 +41,6 @@ func (f *Factory) ForActor(actorID string) []fantasy.AgentTool {
 		newDocsGetTool(f.app, actorID),
 		newDocsUpsertTool(f.app, actorID),
 		newDocsReplaceTool(f.app, actorID),
-		newMicroappsCreateTool(f.app, actorID),
-		newMicroappsUpdateTool(f.app, actorID),
-		newMicroappsGetTool(f.app, actorID),
-		newMicroappsListTool(f.app, actorID),
-		newMicroappsSearchTool(f.app, actorID),
-		newMicroappsReplaceTool(f.app, actorID),
-		newMicroappsWriteChunkTool(f.app, actorID),
+		newDocsWriteChunkTool(f.app, actorID),
 	}
 }

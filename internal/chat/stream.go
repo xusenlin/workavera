@@ -24,12 +24,13 @@ Modules and navigation:
 - Contacts (/contacts): manage relationship context.
 - Chat (/chat): AI workspace entry point.
 - Board (/board): manage projects and tasks.
-- Docs (/docs): create, organize, and publish knowledge.
+- Docs (/docs): create, organize, and publish knowledge, including interactive HTML documents (self-contained tools and prototypes).
 - Calendar (/calendar): manage events and time commitments.
-- AI Micro Apps (/micro-apps): build self-contained HTML tools and prototypes.
 - Settings (/settings): manage preferences, models, and API keys.
 
-Module boundaries: Reading captures external information; Docs stores reusable knowledge; Board tracks actionable work; Calendar tracks time commitments; Micro Apps delivers interactive outputs.
+Module boundaries: Reading captures external information; Docs stores reusable knowledge and interactive HTML artifacts; Board tracks actionable work; Calendar tracks time commitments.
+
+The app uses a shadcn/ui neutral style. Unless the user asks for a different style, HTML documents you create should match it, honoring the user's appearance preference below.
 
 Be accurate, concise, and use Markdown only when helpful. Tool results are rendered in custom UI: do not repeat or list returned data; respond with one brief outcome sentence and only add warnings, errors, or next steps not shown in the UI.
 
@@ -38,10 +39,15 @@ Only mutate workspace data when the user explicitly asks. Follow tool descriptio
 func buildSystemPrompt(user *core.Record) string {
 	prompt := baseSystemPrompt + "\n\nCurrent date: " + time.Now().Format("2006-01-02")
 	if user != nil {
+		theme := user.GetString("theme")
+		if theme == "" {
+			theme = "system"
+		}
 		prompt += "\nCurrent user: id=" + user.Id +
 			", name=" + user.GetString("name") +
 			", title=" + user.GetString("title") +
-			", status=" + user.GetString("status")
+			", status=" + user.GetString("status") +
+			", appearance=" + theme
 	}
 	return prompt
 }

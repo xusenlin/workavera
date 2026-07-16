@@ -3,6 +3,7 @@ package docs
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/pocketbase/dbx"
@@ -14,6 +15,13 @@ const (
 	VersionsCollectionName = "doc_versions"
 	PinsCollectionName     = "doc_pins"
 	maxPinnedDocuments     = 6
+
+	// KindMarkdown documents use the BlockNote editing flow; KindHTML
+	// documents hold a self-contained HTML artifact rendered in a sandboxed
+	// preview. The kind is fixed at creation: content mutations validate
+	// against the stored kind, never against caller input.
+	KindMarkdown = "markdown"
+	KindHTML     = "html"
 )
 
 var (
@@ -27,6 +35,7 @@ var (
 type Document struct {
 	ID           string `json:"id"`
 	Title        string `json:"title"`
+	Kind         string `json:"kind"`
 	Content      string `json:"content"`
 	OwnerID      string `json:"ownerId"`
 	ProjectID    string `json:"projectId,omitempty"`
@@ -50,6 +59,7 @@ type Version struct {
 
 type CreateInput struct {
 	Title     string `json:"title"`
+	Kind      string `json:"kind"`
 	Content   string `json:"content"`
 	ProjectID string `json:"projectId"`
 	Source    string `json:"-"`
@@ -76,6 +86,14 @@ type ReplaceInput struct {
 	Source       string `json:"-"`
 }
 
+type WriteChunkInput struct {
+	ID           string `json:"id"`
+	Content      string `json:"content"`
+	Mode         string `json:"mode"`
+	BaseRevision int    `json:"baseRevision"`
+	Source       string `json:"-"`
+}
+
 func Create(ctx context.Context, app core.App, actorID string, input CreateInput) (Document, error) {
 	if err := requireActor(ctx, app, actorID); err != nil {
 		return Document{}, err
@@ -83,6 +101,15 @@ func Create(ctx context.Context, app core.App, actorID string, input CreateInput
 	input.Title = strings.TrimSpace(input.Title)
 	if input.Title == "" || len(input.Title) > 240 {
 		return Document{}, ErrInvalidInput
+	}
+	if input.Kind == "" {
+		input.Kind = KindMarkdown
+	}
+	if input.Kind != KindMarkdown && input.Kind != KindHTML {
+		return Document{}, ErrInvalidInput
+	}
+	if err := validateContentForKind(input.Kind, input.Content); err != nil {
+		return Document{}, err
 	}
 	if input.ProjectID != "" {
 		canEdit, err := canEditProject(app, actorID, input.ProjectID)
@@ -102,6 +129,7 @@ func Create(ctx context.Context, app core.App, actorID string, input CreateInput
 		}
 		record := core.NewRecord(collection)
 		record.Set("title", input.Title)
+		record.Set("kind", input.Kind)
 		record.Set("content", input.Content)
 		record.Set("owner", actorID)
 		record.Set("project", input.ProjectID)
@@ -154,6 +182,9 @@ func Update(ctx context.Context, app core.App, actorID, id string, input UpdateI
 		}
 		if record.GetString("title") == input.Title && record.GetString("content") == input.Content {
 			return nil
+		}
+		if err := validateContentForKind(record.GetString("kind"), input.Content); err != nil {
+			return err
 		}
 		record.Set("title", input.Title)
 		record.Set("content", input.Content)
@@ -208,6 +239,9 @@ func Replace(ctx context.Context, app core.App, actorID, id string, input Replac
 		if matches == 0 {
 			return nil
 		}
+		if err := validateContentForKind(record.GetString("kind"), newContent); err != nil {
+			return err
+		}
 		record.Set("content", newContent)
 		record.Set("revision", input.BaseRevision+1)
 		record.Set("last_edited_by", actorID)
@@ -222,6 +256,62 @@ func Replace(ctx context.Context, app core.App, actorID, id string, input Replac
 	}
 	doc, err := Get(ctx, app, actorID, id)
 	return doc, matches, changed, err
+}
+
+// WriteChunk writes long content in pieces, for callers (mainly AI tools)
+// whose single-call output is limited. Mode "replace" starts a new chunked
+// write: it bumps the revision and records one version. Mode "append" extends
+// the same write: it keeps the revision and syncs that version's snapshot, so
+// a whole chunked session leaves exactly one version entry. Both modes require
+// the caller's baseRevision to match, and each call returns the revision to
+// pass next.
+func WriteChunk(ctx context.Context, app core.App, actorID string, input WriteChunkInput) (Document, error) {
+	if err := ctx.Err(); err != nil {
+		return Document{}, err
+	}
+	if input.Mode == "" {
+		input.Mode = "append"
+	}
+	if input.ID == "" || input.Content == "" || input.BaseRevision < 1 || (input.Mode != "append" && input.Mode != "replace") {
+		return Document{}, ErrInvalidInput
+	}
+	if input.Source != "ai" {
+		input.Source = "user"
+	}
+
+	err := app.RunInTransaction(func(tx core.App) error {
+		record, err := editableRecord(tx, actorID, input.ID)
+		if err != nil {
+			return err
+		}
+		if record.GetInt("revision") != input.BaseRevision {
+			return ErrConflict
+		}
+		content := input.Content
+		if input.Mode == "append" {
+			content = record.GetString("content") + input.Content
+		}
+		if err := validateContentForKind(record.GetString("kind"), content); err != nil {
+			return err
+		}
+		record.Set("content", content)
+		record.Set("last_edited_by", actorID)
+		if input.Mode == "replace" {
+			record.Set("revision", input.BaseRevision+1)
+			if err := tx.Save(record); err != nil {
+				return err
+			}
+			return saveVersion(tx, record, actorID, input.Source)
+		}
+		if err := tx.Save(record); err != nil {
+			return err
+		}
+		return syncVersionContent(tx, record)
+	})
+	if err != nil {
+		return Document{}, err
+	}
+	return Get(ctx, app, actorID, input.ID)
 }
 
 func Search(ctx context.Context, app core.App, actorID string, options SearchOptions) ([]Document, error) {
@@ -425,6 +515,45 @@ func saveVersion(app core.App, doc *core.Record, actorID, source string) error {
 	return app.Save(record)
 }
 
+// syncVersionContent keeps the current revision's version snapshot equal to
+// the document content while a chunked write appends to it.
+func syncVersionContent(app core.App, doc *core.Record) error {
+	version, err := app.FindFirstRecordByFilter(
+		VersionsCollectionName,
+		"doc = {:doc} && revision = {:revision}",
+		dbx.Params{"doc": doc.Id, "revision": doc.GetInt("revision")},
+	)
+	if err != nil {
+		return err
+	}
+	version.Set("content", doc.GetString("content"))
+	return app.Save(version)
+}
+
+// validateContentForKind enforces kind-specific content rules. HTML documents
+// must stay self-contained; the check is marker-based so partially written
+// chunked content still passes. Markdown content is unrestricted.
+func validateContentForKind(kind, content string) error {
+	if kind != KindHTML {
+		return nil
+	}
+	lower := strings.ToLower(content)
+	blocked := []string{
+		"/@vite/client",
+		"/@react-refresh",
+		"/src/main.tsx",
+		"/src/main.jsx",
+		"localhost:",
+		"127.0.0.1:",
+	}
+	for _, marker := range blocked {
+		if strings.Contains(lower, marker) {
+			return fmt.Errorf("%w: HTML must be self-contained and cannot reference dev server assets such as %s", ErrInvalidInput, marker)
+		}
+	}
+	return nil
+}
+
 func accessibleRecord(app core.App, actorID, id string) (*core.Record, error) {
 	record, err := app.FindRecordById(CollectionName, id)
 	if err != nil {
@@ -518,7 +647,11 @@ func documentForRecord(app core.App, record *core.Record) Document {
 			projectName = project.GetString("name")
 		}
 	}
-	return Document{ID: record.Id, Title: record.GetString("title"), Content: record.GetString("content"), OwnerID: record.GetString("owner"), ProjectID: projectID, ProjectName: projectName, Status: record.GetString("status"), Revision: record.GetInt("revision"), LastEditedBy: record.GetString("last_edited_by"), Created: record.GetString("created"), Updated: record.GetString("updated")}
+	kind := record.GetString("kind")
+	if kind == "" {
+		kind = KindMarkdown
+	}
+	return Document{ID: record.Id, Title: record.GetString("title"), Kind: kind, Content: record.GetString("content"), OwnerID: record.GetString("owner"), ProjectID: projectID, ProjectName: projectName, Status: record.GetString("status"), Revision: record.GetInt("revision"), LastEditedBy: record.GetString("last_edited_by"), Created: record.GetString("created"), Updated: record.GetString("updated")}
 }
 
 func versionForRecord(record *core.Record, includeContent bool) Version {

@@ -161,6 +161,76 @@ func TestArchiveAndDeleteRequireDocumentManager(t *testing.T) {
 	}
 }
 
+func TestCreateValidatesKindAndDefaultsToMarkdown(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(app.Cleanup)
+	actor := createTestUser(t, app, "kind-owner@example.com")
+
+	doc, err := Create(context.Background(), app, actor.Id, CreateInput{Title: "Notes", Content: "# hi"})
+	if err != nil || doc.Kind != KindMarkdown {
+		t.Fatalf("default kind must be markdown: %#v, %v", doc, err)
+	}
+	htmlDoc, err := Create(context.Background(), app, actor.Id, CreateInput{Title: "Widget", Kind: KindHTML, Content: "<!DOCTYPE html><html><body>hi</body></html>"})
+	if err != nil || htmlDoc.Kind != KindHTML {
+		t.Fatalf("html kind create: %#v, %v", htmlDoc, err)
+	}
+	if _, err := Create(context.Background(), app, actor.Id, CreateInput{Title: "Bad", Kind: "pdf"}); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("unknown kind must be rejected, got %v", err)
+	}
+	if _, err := Create(context.Background(), app, actor.Id, CreateInput{Title: "Dev", Kind: KindHTML, Content: `<script src="http://localhost:5173/@vite/client"></script>`}); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("dev-server HTML must be rejected, got %v", err)
+	}
+	// Content mutations validate against the stored kind, not caller input.
+	if _, _, err := Update(context.Background(), app, actor.Id, htmlDoc.ID, UpdateInput{Title: "Widget", Content: `<a href="http://127.0.0.1:8090/x">x</a>`, BaseRevision: 1}); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("html update must be validated, got %v", err)
+	}
+	if _, _, err := Update(context.Background(), app, actor.Id, doc.ID, UpdateInput{Title: "Notes", Content: "see http://localhost:8090 for dev", BaseRevision: 1}); err != nil {
+		t.Fatalf("markdown content must stay unrestricted, got %v", err)
+	}
+}
+
+func TestWriteChunkKeepsOneVersionPerSession(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(app.Cleanup)
+	actor := createTestUser(t, app, "chunk-owner@example.com")
+	doc, err := Create(context.Background(), app, actor.Id, CreateInput{Title: "App", Kind: KindHTML, Content: "<!DOCTYPE html>"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	first, err := WriteChunk(context.Background(), app, actor.Id, WriteChunkInput{ID: doc.ID, Content: "<!DOCTYPE html><html><body>", Mode: "replace", BaseRevision: 1})
+	if err != nil || first.Revision != 2 {
+		t.Fatalf("replace chunk: %#v, %v", first, err)
+	}
+	second, err := WriteChunk(context.Background(), app, actor.Id, WriteChunkInput{ID: doc.ID, Content: "<h1>Hi</h1></body></html>", Mode: "append", BaseRevision: 2})
+	if err != nil || second.Revision != 2 {
+		t.Fatalf("append chunk must keep the revision: %#v, %v", second, err)
+	}
+	if second.Content != "<!DOCTYPE html><html><body><h1>Hi</h1></body></html>" {
+		t.Fatalf("unexpected chunked content: %q", second.Content)
+	}
+	if _, err := WriteChunk(context.Background(), app, actor.Id, WriteChunkInput{ID: doc.ID, Content: "x", Mode: "append", BaseRevision: 1}); !errors.Is(err, ErrConflict) {
+		t.Fatalf("stale baseRevision must conflict, got %v", err)
+	}
+
+	// The whole chunked session leaves one version whose snapshot matches the
+	// final content, so restore round-trips.
+	versions, err := ListVersions(context.Background(), app, actor.Id, doc.ID)
+	if err != nil || len(versions) != 2 {
+		t.Fatalf("expected create + one chunk-session version, got %#v, %v", versions, err)
+	}
+	version, err := GetVersion(context.Background(), app, actor.Id, doc.ID, 2)
+	if err != nil || version.Content != second.Content {
+		t.Fatalf("version snapshot must match final content: %#v, %v", version, err)
+	}
+}
+
 func TestDocumentAssetUploadPermissionsValidationAndCascadeDelete(t *testing.T) {
 	app, err := tests.NewTestApp()
 	if err != nil {
