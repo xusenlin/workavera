@@ -13,8 +13,8 @@ This directory contains the Workavera Vite, React, and TypeScript application. P
 - Zustand stores
 - PocketBase JavaScript SDK and realtime subscriptions
 - AI SDK React and AI Elements-style components
-- Milkdown Crepe for Markdown documents
-- CodeMirror language packages for document and micro-app code editing
+- BlockNote for Markdown documents
+- Shiki syntax highlighting for document code blocks
 
 ## Development
 
@@ -68,7 +68,7 @@ src/
 │   ├── board/          # Board and task surfaces
 │   ├── calendar/       # Calendar lists and event sheet
 │   ├── chat/           # Conversation and tool-result UI
-│   ├── docs/           # Milkdown document editor
+│   ├── docs/           # BlockNote document editor
 │   ├── notifications/  # Notification items
 │   └── ui/             # Reusable local UI primitives
 ├── pages/              # Lazy-loaded route pages

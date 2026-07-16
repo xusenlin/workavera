@@ -79,7 +79,7 @@ By default it listens on <http://127.0.0.1:8090>. Pass `--http=0.0.0.0:8090` to 
 - **Reading** saves external URLs and notes with project, tags, read status, pins, archive, configurable summary language, and AI-generated summaries.
 - **Contacts** provides a searchable contact list, detailed profiles, and personal favorites; Chat can search a bounded, non-sensitive contact projection.
 - **Chat** streams model output, reasoning, and tool calls into durable conversations. Runs continue across browser disconnects and can be resumed or stopped.
-- **Docs** stores private and project Markdown documents with Milkdown rich editing, Source/Diff/fullscreen modes, explicit versions, conflict detection, pins, archive, and AI editing.
+- **Docs** stores private and project Markdown documents with BlockNote rich editing, source/fullscreen modes, Markdown/HTML export, explicit versions, conflict detection, pins, archive, and AI editing.
 - **Board** manages independent project workflows, labels, roles, tasks, activity history, due dates, and same-project document links. Ten bilingual workflow templates are included.
 - **Calendar** combines personal events with visible Board deadlines, supports recurrence and system-timezone scheduling, and produces in-app reminders.
 - **AI Micro Apps** manages self-contained HTML tools and prototypes with sandboxed preview, pins, archive/restore actions, and Assistant tools for HTML generation and revision.
@@ -99,7 +99,7 @@ Chat connects these layers as a permission-aware AI control surface. It can sear
 - Tailwind CSS 4 and local shadcn/ui components
 - AI SDK UI message streaming
 - Zustand and the PocketBase JavaScript SDK
-- Milkdown Crepe for Markdown editing
+- BlockNote for Markdown editing
 
 ## Data and security notes
 
@@ -201,9 +201,10 @@ Cross-compile self-contained binaries for GitHub releases:
 task release
 ```
 
-This builds the frontend, embeds it, and cross-compiles for three platforms into `dist/`, packaged as compressed archives named by version, OS, and architecture:
+This builds and embeds the frontend, then cross-compiles four targets across Linux, macOS, and Windows into `dist/`. Archives are named by version, OS, and architecture:
 
 - `dist/workavera_<version>_linux_amd64.tar.gz`
+- `dist/workavera_<version>_darwin_amd64.tar.gz`
 - `dist/workavera_<version>_darwin_arm64.tar.gz`
 - `dist/workavera_<version>_windows_amd64.zip`
 

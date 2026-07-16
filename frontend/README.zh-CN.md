@@ -13,8 +13,8 @@
 - Zustand Store
 - PocketBase JavaScript SDK 与 realtime 订阅
 - AI SDK React 与 AI Elements 风格组件
-- Milkdown Crepe Markdown 文档编辑器
-- 用于文档和微应用代码编辑的 CodeMirror 语言包
+- BlockNote Markdown 文档编辑器
+- 使用 Shiki 为文档代码块提供语法高亮
 
 ## 开发
 
@@ -68,7 +68,7 @@ src/
 │   ├── board/          # Board 与任务界面
 │   ├── calendar/       # Calendar 列表与事件抽屉
 │   ├── chat/           # 会话与工具结果 UI
-│   ├── docs/           # Milkdown 文档编辑器
+│   ├── docs/           # BlockNote 文档编辑器
 │   ├── notifications/  # 通知项
 │   └── ui/             # 可复用本地 UI 基础组件
 ├── pages/              # 懒加载路由页面
