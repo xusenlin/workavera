@@ -7,6 +7,20 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.0.5] - 2026-07-16
+
+### Added
+
+- Model configurations have a context window size ("Max context") with common presets from 32k to 2M or a custom value (`300k`, `1.5m`, or a plain number); existing models are migrated to 256k.
+- Conversations automatically compact older turns into a running summary when the previous run exceeds 75% of the model's context window, keeping the newest four user turns verbatim. The stored chat history is never modified, and the transcript marks where compaction happened.
+- The chat input shows a context-usage ring next to the model selector; hovering reveals the current context size and input, output, reasoning, cache-hit, and cache-write token details.
+
+### Changed
+
+- The fixed chat history window (last 30 messages / 15 user turns) was removed. The model now receives the full conversation—or the summary plus recent turns after compaction—so provider prompt caches stay warm across turns instead of missing on every turn once the window slid.
+- Assistant message metadata and conversation stats record the context size of the latest run, measured from the final step's usage with provider-correct cache accounting.
+- Upgraded Fantasy to 0.37.3 and Go to 1.26.5.
+
 ## [0.0.4] - 2026-07-15
 
 ### Added
@@ -66,7 +80,8 @@ First public release.
 - **AI Micro Apps** for self-contained HTML tools with sandboxed preview.
 - **Dashboard**, realtime **Notifications**, and **Settings** with per-user model configurations and model sharing.
 
-[Unreleased]: https://github.com/xusenlin/workavera/compare/v0.0.4...HEAD
+[Unreleased]: https://github.com/xusenlin/workavera/compare/v0.0.5...HEAD
+[0.0.5]: https://github.com/xusenlin/workavera/compare/v0.0.4...v0.0.5
 [0.0.4]: https://github.com/xusenlin/workavera/compare/v0.0.3...v0.0.4
 [0.0.3]: https://github.com/xusenlin/workavera/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/xusenlin/workavera/compare/v0.0.1...v0.0.2

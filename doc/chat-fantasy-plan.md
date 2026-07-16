@@ -35,7 +35,7 @@ Chat is Workavera's AI workspace entry point. It combines user-owned model confi
 Each chat turn references a record in `llm_models` owned by the caller.
 
 - Supported protocols: `openai`, `openai-compatible`, `anthropic`, and `google`.
-- Configuration includes display name, model ID, base URL, API key, optional maximum output tokens, and default status.
+- Configuration includes display name, model ID, base URL, API key, optional maximum output tokens, a context window size (defaults to 256k), and default status.
 - The first model created for a user becomes the default; users can choose another default.
 - The prompt selects the conversation's last-used `model_config` when available, otherwise the user's default.
 - Model selection is submitted with each run and updates the conversation's last-used `model_config`.
@@ -62,6 +62,9 @@ Fantasy uses at most 12 agent steps and defaults to 16,384 output tokens unless 
 | `input_tokens` | number | Accumulated input usage |
 | `output_tokens` | number | Accumulated output usage |
 | `total_tokens` | number | Accumulated total usage |
+| `context_tokens` | number | Context-window occupancy after the latest run |
+| `context_summary` | text | Active compaction summary of older turns |
+| `summary_until_sequence` | number | Last message sequence covered by the summary |
 | `created`, `updated` | autodate | Record timestamps |
 
 All Records API rules are owner-scoped. Users can create, rename, pin, archive, restore, and delete their own conversations.
@@ -92,7 +95,7 @@ Fantasy callbacks
      -> reducer -> chat_messages parts/metadata snapshots
 ```
 
-Supported stream parts include lifecycle, step, text, reasoning, tool input/output, source URL/document, and message metadata events. Application tools are dynamic tools because their definitions live on the Go server.
+Supported stream parts include lifecycle, step, text, reasoning, tool input/output, source URL/document, data (`data-compaction`), and message metadata events. Application tools are dynamic tools because their definitions live on the Go server.
 
 Important protocol rules:
 
@@ -101,10 +104,11 @@ Important protocol rules:
 - `step-start` markers are persisted so multi-step assistant/tool history can be reconstructed.
 - Provider metadata on reasoning and tool parts is retained, including Anthropic thinking signatures.
 - The browser sends only the new user message; trusted history is loaded from PocketBase.
-- Model context uses at most 30 complete messages and 15 user turns, trimmed to begin with a user message.
+- Model context contains every complete message after the conversation's summary boundary, prefixed by the active compaction summary as a synthetic user message.
+- When the previous run exceeded 75% of the model's context window, the next run first compacts older turns into the summary with the same model (keeping the newest four user turns verbatim) and emits a `data-compaction` part; stored messages are never modified.
 - User and assistant records are created transactionally before the model starts.
 - Streaming snapshots are saved on significant part changes and when a later chunk arrives after the one-second checkpoint interval.
-- Successful completion stores final parts and metadata, then updates conversation usage counters.
+- Successful completion stores final parts and metadata, then updates conversation usage counters and the context-size snapshot (final-step usage with provider-correct cache accounting).
 
 ## 7. Run lifecycle and recovery
 

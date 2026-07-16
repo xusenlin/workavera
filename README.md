@@ -4,11 +4,9 @@
 
 [简体中文](./README.zh-CN.md)
 
-**One self-contained binary. A full team workspace. An AI that can only do what you can do—every AI action is re-authorized by the server against your own permissions.**
+> **The AI-driven, open-source, self-hosted alternative to Slack + Notion + Linear** — one binary on your own server, your data, no per-seat fees.
 
-Workavera is a self-hosted AI team workspace that connects conversations, knowledge, relationships, projects, tasks, and time commitments in one application.
-
-**Use Chat to put your workspace in motion.** AI can use the workspace capabilities you already have permission to use—finding context and creating or updating supported records—without receiving access beyond your own. Every action is authorized again by the server before it is applied.
+Workavera connects conversations, knowledge, relationships, projects, tasks, and time commitments in one workspace, and Chat is how you put it in motion: the AI can only use the capabilities your account already has—finding context, creating or updating records—and the server re-authorizes every action against your own permissions before it is applied.
 
 It uses Go and PocketBase for the backend and Vite, React, and TypeScript for the frontend. The compiled frontend is embedded into the Go binary (`go:embed`) and served by the same PocketBase process, so a release ships as a single self-contained executable.
 
@@ -78,7 +76,7 @@ By default it listens on <http://127.0.0.1:8090>. Pass `--http=0.0.0.0:8090` to 
 - **Dashboard** shows counts for active projects, open tasks, the next seven days, and unread Reading items, together with due tasks, upcoming events and deadlines, recently updated Docs/Chat/Reading records, and quick links.
 - **Reading** saves external URLs and notes with project, tags, read status, pins, archive, configurable summary language, and AI-generated summaries.
 - **Contacts** provides a searchable contact list, detailed profiles, and personal favorites; Chat can search a bounded, non-sensitive contact projection.
-- **Chat** streams model output, reasoning, and tool calls into durable conversations. Runs continue across browser disconnects and can be resumed or stopped.
+- **Chat** streams model output, reasoning, and tool calls into durable conversations. Runs continue across browser disconnects and can be resumed or stopped. A context-usage indicator tracks token and cache details, and long conversations are automatically compacted into a summary near the model's context limit without altering the visible history.
 - **Docs** stores private and project Markdown documents with BlockNote rich editing, source/fullscreen modes, Markdown/HTML export, explicit versions, conflict detection, pins, archive, and AI editing.
 - **Board** manages independent project workflows, labels, roles, tasks, activity history, due dates, and same-project document links. Ten bilingual workflow templates are included.
 - **Calendar** combines personal events with visible Board deadlines, supports recurrence and system-timezone scheduling, and produces in-app reminders.
@@ -92,9 +90,9 @@ Chat connects these layers as a permission-aware AI control surface. It can sear
 
 ## Technology
 
-- Go 1.26.4
+- Go 1.26.5
 - PocketBase 0.39.4
-- Fantasy 0.35.0
+- Fantasy 0.37.3
 - React 19, TypeScript 6, Vite 8
 - Tailwind CSS 4 and local shadcn/ui components
 - AI SDK UI message streaming
@@ -116,7 +114,7 @@ Everything below is only needed when contributing or building from source—see 
 
 ### Requirements
 
-- Go 1.26.4 or newer
+- Go 1.26.5 or newer
 - Node.js and [pnpm](https://pnpm.io/)
 - [Task](https://taskfile.dev/) 3 or newer
 - Docker with Buildx only when building or publishing containers

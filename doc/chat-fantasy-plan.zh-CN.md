@@ -35,7 +35,7 @@ Chat 是 Workavera 的 AI 工作入口，将用户自己的模型配置、持久
 每一轮 Chat 都引用调用者拥有的 `llm_models` 记录。
 
 - 支持 `openai`、`openai-compatible`、`anthropic` 和 `google` 协议。
-- 配置包含显示名称、模型 ID、Base URL、API Key、可选最大输出 token 和默认状态。
+- 配置包含显示名称、模型 ID、Base URL、API Key、可选最大输出 token、上下文窗口大小（默认 256k）和默认状态。
 - 用户创建的第一个模型自动成为默认模型，也可以设置其他默认模型。
 - 输入框优先选择会话最近使用的 `model_config`，没有时使用用户默认模型。
 - 每次运行都提交模型选择，并更新会话最近使用的 `model_config`。
@@ -62,6 +62,9 @@ Fantasy 最多执行 12 个 Agent step。模型未设置正数限制时，默认
 | `input_tokens` | number | 累计输入用量 |
 | `output_tokens` | number | 累计输出用量 |
 | `total_tokens` | number | 累计总用量 |
+| `context_tokens` | number | 最近一次运行后的上下文窗口占用 |
+| `context_summary` | text | 较旧轮次的当前压缩摘要 |
+| `summary_until_sequence` | number | 摘要覆盖到的最后一条消息 sequence |
 | `created`、`updated` | autodate | 记录时间 |
 
 Records API 规则全部按 Owner 隔离。用户可以创建、重命名、置顶、归档、恢复和删除自己的会话。
@@ -92,7 +95,7 @@ Fantasy callbacks
      -> reducer -> chat_messages parts/metadata 快照
 ```
 
-流支持生命周期、step、文本、推理、工具输入/输出、URL/文档来源和消息元数据事件。应用工具定义在 Go 服务端，因此统一以动态工具传输。
+流支持生命周期、step、文本、推理、工具输入/输出、URL/文档来源、数据（`data-compaction`）和消息元数据事件。应用工具定义在 Go 服务端，因此统一以动态工具传输。
 
 协议规则：
 
@@ -101,10 +104,11 @@ Fantasy callbacks
 - 持久化 `step-start` 标记，用于重建多步 Assistant/Tool 历史。
 - 保留推理和工具 part 的 Provider metadata，包括 Anthropic thinking signature。
 - 浏览器只发送新增 User 消息，可信历史从 PocketBase 加载。
-- 模型上下文最多加载 30 条完成消息和 15 个 User 轮次，并裁剪到以 User 消息开始。
+- 模型上下文包含摘要边界之后的全部完成消息，并在最前注入当前压缩摘要（合成 User 消息）。
+- 上一次运行超过模型上下文窗口 75% 时，下一次运行先用同一模型把较旧轮次压缩进摘要（保留最近 4 个 User 轮原文），并发送 `data-compaction` part；持久化消息不会被修改。
 - 模型运行前，在事务中创建 User 和 Assistant 消息。
 - 重要 part 状态变化时保存流式快照；后续 chunk 到达且已超过一秒检查点间隔时也会保存。
-- 成功结束后保存最终 parts 与 metadata，再更新会话用量统计。
+- 成功结束后保存最终 parts 与 metadata，再更新会话用量统计和上下文占用快照（按末步用量并对各协议缓存口径做归一）。
 
 ## 7. 运行生命周期与恢复
 
