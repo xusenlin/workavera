@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Workavera is a self-hosted AI team workspace. The backend is a Go 1.26.4 + PocketBase application, and the frontend is a Vite + React + TypeScript application. Frontend build output lives in `frontend/dist` and is embedded into the Go binary via `frontend/embed.go` (`go:embed`), so a built binary is self-contained.
+Workavera is a self-hosted AI team workspace. The backend is a Go 1.26.5 + PocketBase application, and the frontend is a Vite + React + TypeScript application. Frontend build output lives in `frontend/dist` and is embedded into the Go binary via `frontend/embed.go` (`go:embed`), so a built binary is self-contained.
 
 Key backend entry points:
 
