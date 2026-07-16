@@ -242,15 +242,27 @@ func (s *service) executeRun(ctx context.Context, run *activeRun, conversation *
 	}
 
 	result.FinishReason = normalizeFinishReason(result.FinishReason)
+	parts := reducer.Snapshot().Parts
 	contextTokens := workagent.ContextSize(model.Protocol, result.LastStepUsage)
 	metadata := runMetadata(model, run.id)
+	// Some providers never report input usage (e.g. GLM's Anthropic-compatible
+	// endpoint always sends input_tokens = 0). A zero input side would render
+	// a tiny context ring and, worse, never trigger compaction — fall back to
+	// a character-based estimate of what was actually sent and produced.
+	if result.LastStepUsage.InputTokens+result.LastStepUsage.CacheCreationTokens+result.LastStepUsage.CacheReadTokens == 0 {
+		contextTokens = estimateContextTokens(history, parts)
+		metadata["contextTokensEstimated"] = true
+	}
 	metadata["usage"] = result.Usage
+	// The final step's usage describes what currently occupies the context
+	// window (the ring and its hover breakdown), while "usage" above sums
+	// every step for cost reporting.
+	metadata["contextUsage"] = result.LastStepUsage
 	metadata["contextTokens"] = contextTokens
 	metadata["finishReason"] = result.FinishReason
 	metadata["stepCount"] = result.StepCount
 	run.publish(workagent.StreamChunk{Type: "message-metadata", MessageMetadata: metadata})
 	run.publish(workagent.StreamChunk{Type: "finish", FinishReason: result.FinishReason, MessageMetadata: metadata})
-	parts := reducer.Snapshot().Parts
 	if err := saveMessageSnapshot(s.app, assistantMessageID, "complete", parts, metadata); err == nil {
 		_ = updateConversationStats(s.app, conversationID, parts, result.Usage, contextTokens)
 	}

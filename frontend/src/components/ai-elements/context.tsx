@@ -35,6 +35,13 @@ type ContextSchema = {
   usedTokens: number
   maxTokens: number
   usage?: ContextUsage
+  /** usedTokens is an estimate; rendered values get a "~" prefix. */
+  estimated?: boolean
+  /** Conversation-wide accumulated usage across every run. */
+  totals?: {
+    inputTokens: number
+    outputTokens: number
+  }
 }
 
 const ContextContext = createContext<ContextSchema | null>(null)
@@ -63,9 +70,13 @@ export const Context = ({
   usedTokens,
   maxTokens,
   usage,
+  estimated,
+  totals,
   ...props
 }: ContextProps) => (
-  <ContextContext.Provider value={{ usedTokens, maxTokens, usage }}>
+  <ContextContext.Provider
+    value={{ usedTokens, maxTokens, usage, estimated, totals }}
+  >
     <HoverCard closeDelay={0} openDelay={0} {...props} />
   </ContextContext.Provider>
 )
@@ -114,13 +125,14 @@ const ContextIcon = () => {
 export type ContextTriggerProps = ComponentProps<typeof Button>
 
 export const ContextTrigger = ({ children, ...props }: ContextTriggerProps) => {
-  const { usedTokens, maxTokens } = useContextValue()
+  const { usedTokens, maxTokens, estimated } = useContextValue()
 
   return (
     <HoverCardTrigger asChild>
       {children ?? (
         <Button type="button" variant="ghost" {...props}>
           <span className="font-medium text-muted-foreground">
+            {estimated ? "~" : ""}
             {formatPercent(usedTokens, maxTokens)}
           </span>
           <ContextIcon />
@@ -149,16 +161,21 @@ export const ContextContentHeader = ({
   className,
   ...props
 }: ContextContentHeaderProps) => {
-  const { usedTokens, maxTokens } = useContextValue()
+  const { usedTokens, maxTokens, estimated } = useContextValue()
   const usedPercent = maxTokens > 0 ? Math.min(usedTokens / maxTokens, 1) : 0
+  const prefix = estimated ? "~" : ""
 
   return (
     <div className={cn("w-full space-y-2 p-3", className)} {...props}>
       {children ?? (
         <>
           <div className="flex items-center justify-between gap-3 text-xs">
-            <p>{formatPercent(usedTokens, maxTokens)}</p>
+            <p>
+              {prefix}
+              {formatPercent(usedTokens, maxTokens)}
+            </p>
             <p className="font-mono text-muted-foreground">
+              {prefix}
               {compactNumber.format(usedTokens)}
               {maxTokens > 0 ? ` / ${compactNumber.format(maxTokens)}` : ""}
             </p>
@@ -182,37 +199,74 @@ export const ContextContentBody = ({
   </div>
 )
 
-const UsageRow = ({ label, tokens }: { label: string; tokens?: number }) => {
-  if (!tokens) return null
+const UsageRow = ({
+  label,
+  tokens,
+  unknown = false,
+}: {
+  label: string
+  tokens?: number
+  /** The provider did not report this value; render "~" instead of a number. */
+  unknown?: boolean
+}) => (
+  <div className="flex items-center justify-between text-xs">
+    <span className="text-muted-foreground">{label}</span>
+    <span>{unknown ? "~" : compactNumber.format(tokens ?? 0)}</span>
+  </div>
+)
+
+export const ContextCacheUsage = () => {
+  const { usage, estimated } = useContextValue()
+  if (!usage) return null
   return (
-    <div className="flex items-center justify-between text-xs">
-      <span className="text-muted-foreground">{label}</span>
-      <span>{compactNumber.format(tokens)}</span>
-    </div>
+    <UsageRow label="Cache hit" tokens={usage.cacheReadTokens} unknown={estimated} />
   )
 }
 
-export const ContextInputUsage = () => {
-  const { usage } = useContextValue()
-  return <UsageRow label="Input" tokens={usage?.inputTokens} />
-}
-
-export const ContextOutputUsage = () => {
-  const { usage } = useContextValue()
-  return <UsageRow label="Output" tokens={usage?.outputTokens} />
-}
-
-export const ContextReasoningUsage = () => {
-  const { usage } = useContextValue()
-  return <UsageRow label="Reasoning" tokens={usage?.reasoningTokens} />
-}
-
-export const ContextCacheUsage = () => {
-  const { usage } = useContextValue()
-  return <UsageRow label="Cache hit" tokens={usage?.cacheReadTokens} />
-}
-
 export const ContextCacheCreationUsage = () => {
-  const { usage } = useContextValue()
-  return <UsageRow label="Cache write" tokens={usage?.cacheCreationTokens} />
+  const { usage, estimated } = useContextValue()
+  if (!usage) return null
+  return (
+    <UsageRow
+      label="Cache write"
+      tokens={usage.cacheCreationTokens}
+      unknown={estimated}
+    />
+  )
+}
+
+export const ContextTotalsUsage = () => {
+  const { totals } = useContextValue()
+  if (!totals) return null
+  // An accumulated input of 0 alongside real output means the provider never
+  // reported input usage, not that nothing was sent.
+  const inputUnknown = totals.inputTokens === 0 && totals.outputTokens > 0
+  return (
+    <>
+      <UsageRow
+        label="Total input"
+        tokens={totals.inputTokens}
+        unknown={inputUnknown}
+      />
+      <UsageRow label="Total output" tokens={totals.outputTokens} />
+    </>
+  )
+}
+
+export const ContextCompactionThreshold = ({
+  threshold = 0.75,
+}: {
+  threshold?: number
+}) => {
+  const { maxTokens } = useContextValue()
+  if (maxTokens <= 0) return null
+  return (
+    <div className="flex items-center justify-between text-xs">
+      <span className="text-muted-foreground">Compacts at</span>
+      <span>
+        {compactNumber.format(Math.round(maxTokens * threshold))} (
+        {Math.round(threshold * 100)}%)
+      </span>
+    </div>
+  )
 }

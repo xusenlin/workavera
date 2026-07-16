@@ -37,8 +37,19 @@ export type ChatMessageMetadata = {
     cacheCreationTokens: number
     cacheReadTokens: number
   }
+  /** Final-step usage: the breakdown of what occupies the context window. */
+  contextUsage?: {
+    inputTokens: number
+    outputTokens: number
+    totalTokens: number
+    reasoningTokens: number
+    cacheCreationTokens: number
+    cacheReadTokens: number
+  }
   /** Context-window tokens occupied after this run (last-step usage). */
   contextTokens?: number
+  /** True when contextTokens is a character-based estimate because the provider reported no input usage. */
+  contextTokensEstimated?: boolean
   finishReason?: string
   stepCount?: number
   createdAt?: string

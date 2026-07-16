@@ -7,12 +7,11 @@ import {
   Context,
   ContextCacheCreationUsage,
   ContextCacheUsage,
+  ContextCompactionThreshold,
   ContextContent,
   ContextContentBody,
   ContextContentHeader,
-  ContextInputUsage,
-  ContextOutputUsage,
-  ContextReasoningUsage,
+  ContextTotalsUsage,
   ContextTrigger,
   type ContextUsage,
 } from "@/components/ai-elements/context"
@@ -37,6 +36,13 @@ import type { ChatUIMessage } from "@/types/chat"
 export type ChatContextInfo = {
   usedTokens: number
   usage?: ContextUsage
+  /** usedTokens is a character-based estimate (provider reported no usage). */
+  estimated?: boolean
+  /** Conversation-wide accumulated usage across every run. */
+  totals?: {
+    inputTokens: number
+    outputTokens: number
+  }
 }
 
 type Props = {
@@ -150,6 +156,8 @@ export function ChatPromptInput({
                 maxTokens={selectedModel.maxContextTokens}
                 usedTokens={contextInfo.usedTokens}
                 usage={contextInfo.usage}
+                estimated={contextInfo.estimated}
+                totals={contextInfo.totals}
               >
                 <ContextTrigger
                   variant="ghost"
@@ -159,11 +167,12 @@ export function ChatPromptInput({
                 <ContextContent>
                   <ContextContentHeader />
                   <ContextContentBody className="space-y-1">
-                    <ContextInputUsage />
-                    <ContextOutputUsage />
-                    <ContextReasoningUsage />
                     <ContextCacheUsage />
                     <ContextCacheCreationUsage />
+                    <ContextCompactionThreshold />
+                  </ContextContentBody>
+                  <ContextContentBody className="space-y-1">
+                    <ContextTotalsUsage />
                   </ContextContentBody>
                 </ContextContent>
               </Context>

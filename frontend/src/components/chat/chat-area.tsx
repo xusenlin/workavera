@@ -31,20 +31,26 @@ function deriveContextInfo(
   messages: ChatUIMessage[],
   conversation: ChatConversation
 ): ChatContextInfo {
+  const totals = {
+    inputTokens: conversation.input_tokens ?? 0,
+    outputTokens: conversation.output_tokens ?? 0,
+  }
   for (let index = messages.length - 1; index >= 0; index--) {
     const message = messages[index]
     if (message.role !== "assistant") continue
     const metadata = message.metadata
     if (!metadata?.usage && metadata?.contextTokens === undefined) continue
-    const usage = metadata.usage
+    const usage = metadata.contextUsage ?? metadata.usage
     return {
       usedTokens:
         metadata.contextTokens ??
         (usage ? usage.inputTokens + usage.outputTokens : 0),
       usage,
+      estimated: metadata.contextTokensEstimated === true,
+      totals,
     }
   }
-  return { usedTokens: conversation.context_tokens ?? 0 }
+  return { usedTokens: conversation.context_tokens ?? 0, totals }
 }
 
 function ChatEmptyState({ onCreate }: { onCreate: () => void }) {

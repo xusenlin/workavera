@@ -84,6 +84,20 @@ func TestPlanCompactionMergesPreviousSummaryRange(t *testing.T) {
 	}
 }
 
+func TestEstimateContextTokensCountsHistoryAndParts(t *testing.T) {
+	history := []workagent.Message{
+		{Role: "user", Parts: []workagent.Part{{"type": "text", "text": strings.Repeat("a", 400)}}},
+		{Role: "assistant", Parts: []workagent.Part{
+			{"type": "dynamic-tool", "toolName": "docs_upsert", "input": strings.Repeat("b", 400), "output": strings.Repeat("c", 400)},
+		}},
+	}
+	parts := []workagent.Part{{"type": "text", "text": strings.Repeat("中", 300)}}
+	// 1200 ASCII chars / 4 + 300 CJK chars * 2/3 = 300 + 200.
+	if estimate := estimateContextTokens(history, parts); estimate != 500 {
+		t.Fatalf("expected estimate 500, got %d", estimate)
+	}
+}
+
 func TestNeedsCompactionThreshold(t *testing.T) {
 	server := newChatTestServer(t)
 	conversationID := server.createConversation(t)

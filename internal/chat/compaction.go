@@ -26,6 +26,50 @@ const compactionSystemPrompt = `You maintain the running summary of a conversati
 Write a replacement summary that preserves everything needed to continue the conversation: user goals and preferences, decisions and their reasons, important facts, names and identifiers (IDs, URLs, file names), tool actions and their outcomes, and open questions or unfinished work.
 Merge the previous summary (if any) with the new messages. Drop pleasantries and redundant detail. Write in the language the conversation is held in. Output only the summary text.`
 
+// estimateContextTokens approximates the context size from the text sent to
+// and produced by the model, for providers that do not report input usage
+// (e.g. GLM's Anthropic-compatible endpoint always reports input_tokens as 0,
+// which would otherwise show a tiny context and never trigger compaction).
+// Roughly 4 ASCII characters or 1.5 CJK characters per token.
+func estimateContextTokens(history []workagent.Message, parts []workagent.Part) int64 {
+	var ascii, wide int64
+	count := func(text string) {
+		for _, r := range text {
+			if r < 128 {
+				ascii++
+			} else {
+				wide++
+			}
+		}
+	}
+	countValue := func(value any) {
+		if value == nil {
+			return
+		}
+		if text, ok := value.(string); ok {
+			count(text)
+			return
+		}
+		count(fmt.Sprintf("%v", value))
+	}
+	countParts := func(messageParts []workagent.Part) {
+		for _, part := range messageParts {
+			if text, _ := part["text"].(string); text != "" {
+				count(text)
+			}
+			if part["type"] == "dynamic-tool" {
+				countValue(part["input"])
+				countValue(part["output"])
+			}
+		}
+	}
+	for _, message := range history {
+		countParts(message.Parts)
+	}
+	countParts(parts)
+	return ascii/4 + wide*2/3
+}
+
 // needsCompaction reports whether the conversation's latest context snapshot
 // crossed the compaction threshold for the model's context window.
 func needsCompaction(conversation *core.Record, model workagent.ModelConfig) bool {
