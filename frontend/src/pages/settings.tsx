@@ -50,11 +50,23 @@ import {
 } from "@/components/ui/table"
 import {
   useLlmSettingsStore,
+  DEFAULT_MAX_CONTEXT_TOKENS,
   DEFAULT_MAX_OUTPUT_TOKENS,
   type LlmModelConfig,
 } from "@/store/llm-settings"
 import { cn } from "@/lib/utils"
 import { useAuthStore } from "@/store/auth"
+
+/** Formats a context window size the way the presets are labelled: 256k, 1M. */
+function formatContextSize(tokens: number) {
+  if (tokens >= 1000000) {
+    return `${Number((tokens / 1000000).toFixed(1))}M`
+  }
+  if (tokens >= 1000) {
+    return `${Number((tokens / 1000).toFixed(1))}k`
+  }
+  return String(tokens)
+}
 
 export function SettingsPage() {
   const models = useLlmSettingsStore((state) => state.models)
@@ -241,7 +253,10 @@ export function SettingsPage() {
                     Protocol
                   </TableHead>
                   <TableHead className="hidden sm:table-cell">
-                    Max tokens
+                    Max output
+                  </TableHead>
+                  <TableHead className="hidden sm:table-cell">
+                    Context
                   </TableHead>
                   <TableHead className="pr-6 text-right">Actions</TableHead>
                 </TableRow>
@@ -274,6 +289,13 @@ export function SettingsPage() {
                         ? model.maxOutputTokens
                         : DEFAULT_MAX_OUTPUT_TOKENS
                       ).toLocaleString()}
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell">
+                      {formatContextSize(
+                        model.maxContextTokens > 0
+                          ? model.maxContextTokens
+                          : DEFAULT_MAX_CONTEXT_TOKENS
+                      )}
                     </TableCell>
                     <TableCell className="pr-6">
                       <div className="flex items-center justify-end gap-1">
