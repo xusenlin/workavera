@@ -2,6 +2,8 @@ package tools
 
 import (
 	"encoding/json"
+	"slices"
+	"strings"
 	"testing"
 )
 
@@ -68,5 +70,17 @@ func TestBoardUpdateTaskInputTracksNullableDueDate(t *testing.T) {
 	}
 	if omitted.dueDateSet {
 		t.Fatalf("omitted dueDate must remain unchanged: %#v", omitted)
+	}
+}
+
+func TestDocsUpsertRequiresDocumentKindAndPromptsForChoice(t *testing.T) {
+	info := newDocsUpsertTool(nil, "actor-1").Info()
+	if !slices.Contains(info.Required, "kind") {
+		t.Fatalf("docs_upsert kind must be required: %#v", info.Required)
+	}
+	for _, text := range []string{"ask them to choose", "Markdown", "HTML"} {
+		if !strings.Contains(info.Description, text) {
+			t.Fatalf("docs_upsert description is missing %q: %s", text, info.Description)
+		}
 	}
 }

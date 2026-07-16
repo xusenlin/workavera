@@ -5,9 +5,7 @@ All notable changes to Workavera are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
-
-## [0.0.6] - 2026-07-16
+## [0.0.6] - Unreleased
 
 ### ⚠️ Breaking: AI Micro Apps module removed
 
@@ -26,6 +24,9 @@ Docs (paste the source in the HTML source view) or keep the file.
 
 ### Added
 
+- Fresh installations now seed a verified demo application user
+  (`demo@workavera.local` / `workavera`) when the `users` collection is empty,
+  so Workavera can be opened without first creating a user in PocketBase Admin.
 - Docs now have a kind: `markdown` (default) or `html`. HTML documents hold a
   self-contained interactive page rendered in a sandboxed preview (scripts run
   in an opaque origin with no access to your session), with source editing,
@@ -37,6 +38,9 @@ Docs (paste the source in the HTML source view) or keep the file.
 
 ### Changed
 
+- AI document creation now requires an explicit Markdown or HTML kind. If the
+  user has not chosen one, the Docs tool instructs the Assistant to ask whether
+  they prefer simple, easily editable Markdown or rich, interactive HTML.
 - `docs_upsert` accepts a `kind` when creating; the kind of an existing
   document never changes, and content edits are validated against the stored
   kind server-side.
@@ -116,8 +120,7 @@ First public release.
 - **AI Micro Apps** for self-contained HTML tools with sandboxed preview.
 - **Dashboard**, realtime **Notifications**, and **Settings** with per-user model configurations and model sharing.
 
-[Unreleased]: https://github.com/xusenlin/workavera/compare/v0.0.6...HEAD
-[0.0.6]: https://github.com/xusenlin/workavera/compare/v0.0.5...v0.0.6
+[0.0.6]: https://github.com/xusenlin/workavera/compare/v0.0.5...HEAD
 [0.0.5]: https://github.com/xusenlin/workavera/compare/v0.0.4...v0.0.5
 [0.0.4]: https://github.com/xusenlin/workavera/compare/v0.0.3...v0.0.4
 [0.0.3]: https://github.com/xusenlin/workavera/compare/v0.0.2...v0.0.3

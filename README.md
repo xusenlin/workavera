@@ -67,9 +67,12 @@ By default it listens on <http://127.0.0.1:8090>. Pass `--http=0.0.0.0:8090` to 
 
 ### First-run setup
 
-1. **Create the superuser.** On the first start, PocketBase prints a one-time link containing a token, e.g. `http://127.0.0.1:8090/_/#/pbinstal/<token>`. Find it in the terminal output (or in `docker logs` for a detached container), open it in a browser, and create the superuser account.
-2. **Create an application user.** In the Admin UI at <http://127.0.0.1:8090/_/>, add a record to the `users` collection. Workavera's login page only accepts these admin-created accounts—the superuser itself cannot sign in to the app.
-3. **Sign in and add a model.** Open <http://127.0.0.1:8090>, sign in with that user, and add at least one model configuration in Settings before using Chat or AI summaries.
+1. **Sign in with the demo user.** A fresh data directory automatically gets one application user: `demo@workavera.local` with password `workavera`.
+2. **Secure the account.** Change the demo password from Profile before exposing Workavera to other machines or the public internet.
+3. **Create the superuser.** PocketBase prints a one-time setup link containing a token, e.g. `http://127.0.0.1:8090/_/#/pbinstal/<token>`. Find it in the terminal output (or in `docker logs` for a detached container), open it, and create the superuser used to manage collections and application users. The superuser itself cannot sign in to Workavera.
+4. **Add a model.** In Settings, add at least one model configuration before using Chat or AI summaries.
+
+The demo user is seeded only when the `users` collection is empty, so upgrades do not add or overwrite an account in an existing workspace.
 
 ## Product areas
 
@@ -145,7 +148,7 @@ PocketBase also exposes:
 - Admin UI: <http://127.0.0.1:8090/_/>
 - Health endpoint: <http://127.0.0.1:8090/api/health>
 
-On the first start the server prints the same one-time superuser setup link described in [First-run setup](#first-run-setup); create the superuser and application users the same way. After signing in, add at least one model configuration in Settings before using Chat or AI summaries.
+On the first start, sign in with the demo credentials and follow the remaining steps in [First-run setup](#first-run-setup). After signing in, add at least one model configuration in Settings before using Chat or AI summaries.
 
 When `task dev:go` runs through `go run`, PocketBase automigration is enabled and schema changes are written to `migrations/`.
 

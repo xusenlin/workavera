@@ -21,7 +21,7 @@ type docsGetInput struct {
 type docsUpsertInput struct {
 	ID           string `json:"id,omitempty" description:"Existing document ID. Omit to create a new document; provide to update an existing one."`
 	Title        string `json:"title" description:"Complete document title"`
-	Kind         string `json:"kind,omitempty" description:"Document kind, only used when creating: markdown (default) for notes and knowledge, html for a self-contained interactive HTML app, tool, or prototype. The kind of an existing document never changes."`
+	Kind         string `json:"kind" enum:"markdown,html" description:"Document kind: markdown for simple, easily editable content; html for rich, interactive content. Before creating, ask the user to choose if they have not specified a kind. When updating, use the existing kind returned by docs_get."`
 	Content      string `json:"content,omitempty" description:"Complete document content: Markdown for markdown documents, a full self-contained HTML file for html documents. For HTML too large for one call, create with a short placeholder and continue with docs_write_chunk."`
 	ProjectID    string `json:"projectId,omitempty" description:"Optional Board project ID; omit for a private document. Only used when creating."`
 	BaseRevision int    `json:"baseRevision,omitempty" description:"Revision returned by docs_get; required when updating. The save fails if it is stale."`
@@ -57,7 +57,7 @@ func newDocsGetTool(app core.App, actorID string) fantasy.AgentTool {
 }
 
 func newDocsUpsertTool(app core.App, actorID string) fantasy.AgentTool {
-	return fantasy.NewAgentTool("docs_upsert", "Create or update a document only when explicitly requested. Omit id to create (kind markdown for notes, html for a self-contained interactive app or prototype); provide id to update. Before updating, call docs_get and pass its revision as baseRevision. Prefer one call for multiple edits. Never mutate the same document in parallel or overwrite a revision conflict.", func(ctx context.Context, input docsUpsertInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
+	return fantasy.NewAgentTool("docs_upsert", "Create or update a document only when explicitly requested. Before creating, if the user has not chosen a kind, briefly ask them to choose simple, easily editable Markdown or rich, interactive HTML. Before updating, call docs_get and use its kind and revision. Prefer one call for multiple edits. Never mutate the same document in parallel or overwrite a revision conflict.", func(ctx context.Context, input docsUpsertInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
 		if input.ID == "" {
 			result, err := workdocs.Create(ctx, app, actorID, workdocs.CreateInput{Title: input.Title, Kind: input.Kind, Content: input.Content, ProjectID: input.ProjectID, Source: "ai"})
 			return docsToolResponse(result, err)

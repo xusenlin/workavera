@@ -166,10 +166,10 @@ Docs 使用 Milkdown Crepe，并由应用提供工具栏。
 
 - `docs_search`：按标题/正文搜索可见活动文档，返回元数据和摘要；默认 20 条，最多 50 条。
 - `docs_get`：返回完整的当前 Markdown 和 revision。
-- `docs_upsert`：创建文档，或使用 `baseRevision` 完整替换已有文档。
+- `docs_upsert`：创建文档，或使用 `baseRevision` 完整替换已有文档。`kind` 为必填；新建时若用户没有指定类型，Assistant 会先简短询问选择简单易编辑的 Markdown，还是丰富可交互的 HTML。
 - `docs_replace`：使用 `baseRevision` 替换第一个或全部精确 Markdown 匹配。
 
-Assistant 更新前必须调用 `docs_get`，使用返回的 revision，对同一文档串行写入，并且不能覆盖冲突。成功的 AI 变更创建来源为 `ai` 的版本；无变化 upsert 和无匹配 replace 不创建版本。
+Assistant 更新前必须调用 `docs_get`，沿用返回的 kind 和 revision，对同一文档串行写入，并且不能覆盖冲突。成功的 AI 变更创建来源为 `ai` 的版本；无变化 upsert 和无匹配 replace 不创建版本。
 
 ## 11. Board 集成
 

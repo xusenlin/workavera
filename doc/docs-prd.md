@@ -166,10 +166,10 @@ All endpoints require `users` authentication. Inaccessible private/project docum
 
 - `docs_search`: searches visible active documents by title/content and returns metadata plus an excerpt; default 20, maximum 50.
 - `docs_get`: returns complete current Markdown and revision.
-- `docs_upsert`: creates a document or writes a complete replacement using `baseRevision`.
+- `docs_upsert`: creates a document or writes a complete replacement using `baseRevision`. Its `kind` is required; before creating, the Assistant briefly asks the user to choose simple, easily editable Markdown or rich, interactive HTML when no kind was specified.
 - `docs_replace`: replaces the first or all exact Markdown matches using `baseRevision`.
 
-The Assistant must call `docs_get` before updating, use the returned revision, serialize mutations to the same document, and never overwrite a conflict. Successful AI changes create versions with source `ai`; unchanged upserts and unmatched replacements create no version.
+The Assistant must call `docs_get` before updating, reuse the returned kind and revision, serialize mutations to the same document, and never overwrite a conflict. Successful AI changes create versions with source `ai`; unchanged upserts and unmatched replacements create no version.
 
 ## 11. Board integration
 
