@@ -14,12 +14,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+  TokenSizeInput,
+  type TokenSizePreset,
+} from "@/components/token-size-input"
 import {
   Sheet,
   SheetClose,
@@ -37,6 +34,7 @@ import {
   type LlmModelInput,
   type LlmProtocol,
 } from "@/store/llm-settings"
+import { formatTokenSize, parseTokenSize } from "@/lib/token-size"
 
 type ModelSheetProps = {
   open: boolean
@@ -70,7 +68,16 @@ const PROTOCOLS: Array<{
   },
 ]
 
-const CONTEXT_PRESETS = [
+const OUTPUT_PRESETS: TokenSizePreset[] = [
+  { label: "2k", value: 2048 },
+  { label: "4k", value: 4096 },
+  { label: "8k", value: 8192 },
+  { label: "16k", value: 16384 },
+  { label: "32k", value: 32768 },
+  { label: "64k", value: 65536 },
+]
+
+const CONTEXT_PRESETS: TokenSizePreset[] = [
   { label: "32k", value: 32000 },
   { label: "64k", value: 64000 },
   { label: "128k", value: 128000 },
@@ -80,36 +87,35 @@ const CONTEXT_PRESETS = [
   { label: "2M", value: 2000000 },
 ]
 
-/** Parses "128k", "1.5m", or a plain number of tokens; NaN when invalid. */
-function parseTokenSize(raw: string): number {
-  const text = raw.trim().toLowerCase()
-  if (!text) return NaN
-  const match = /^(\d+(?:\.\d+)?)([km]?)$/.exec(text)
-  if (!match) return NaN
-  const base = Number(match[1])
-  const factor = match[2] === "m" ? 1000000 : match[2] === "k" ? 1000 : 1
-  const value = Math.round(base * factor)
-  return Number.isInteger(value) && value > 0 ? value : NaN
+function createTokenSizeFields(value: number, presets: TokenSizePreset[]) {
+  const preset = presets.find((entry) => entry.value === value)
+  return {
+    preset: preset ? String(preset.value) : "custom",
+    custom: preset ? "" : formatTokenSize(value),
+  }
 }
 
 function createForm(model?: LlmModelConfig | null) {
+  const outputTokens =
+    model?.maxOutputTokens && model.maxOutputTokens > 0
+      ? model.maxOutputTokens
+      : DEFAULT_MAX_OUTPUT_TOKENS
   const contextTokens =
     model?.maxContextTokens && model.maxContextTokens > 0
       ? model.maxContextTokens
       : DEFAULT_MAX_CONTEXT_TOKENS
-  const preset = CONTEXT_PRESETS.find((entry) => entry.value === contextTokens)
+  const output = createTokenSizeFields(outputTokens, OUTPUT_PRESETS)
+  const context = createTokenSizeFields(contextTokens, CONTEXT_PRESETS)
   return {
     name: model?.name ?? "",
     modelId: model?.modelId ?? "",
     baseUrl: model?.baseUrl ?? DEFAULT_BASE_URLS.openai,
     apiKey: "",
     protocol: model?.protocol ?? ("openai" as LlmProtocol),
-    maxOutputTokens:
-      model?.maxOutputTokens && model.maxOutputTokens > 0
-        ? String(model.maxOutputTokens)
-        : "",
-    contextPreset: preset ? String(preset.value) : "custom",
-    customContext: preset ? "" : String(contextTokens),
+    outputPreset: output.preset,
+    customOutput: output.custom,
+    contextPreset: context.preset,
+    customContext: context.custom,
   }
 }
 
@@ -167,15 +173,15 @@ export function ModelSheet({ open, onOpenChange, model }: ModelSheetProps) {
       return
     }
 
-    const trimmedTokens = form.maxOutputTokens.trim()
-    let maxOutputTokens: number | undefined
-    if (trimmedTokens !== "") {
-      const parsed = Number(trimmedTokens)
-      if (!Number.isInteger(parsed) || parsed <= 0) {
-        setError("Max output tokens must be a positive whole number.")
-        return
-      }
-      maxOutputTokens = parsed
+    const maxOutputTokens =
+      form.outputPreset === "custom"
+        ? parseTokenSize(form.customOutput)
+        : Number(form.outputPreset)
+    if (!Number.isInteger(maxOutputTokens) || maxOutputTokens <= 0) {
+      setError(
+        'Max output must be a token count like "8k", "32k", or a plain number.'
+      )
+      return
     }
 
     const maxContextTokens =
@@ -196,10 +202,8 @@ export function ModelSheet({ open, onOpenChange, model }: ModelSheetProps) {
         modelId,
         baseUrl,
         protocol: form.protocol,
+        maxOutputTokens,
         maxContextTokens,
-      }
-      if (maxOutputTokens !== undefined) {
-        input.maxOutputTokens = maxOutputTokens
       }
       if (!model || form.apiKey.trim() || clearSavedKey) {
         input.apiKey = clearSavedKey ? "" : form.apiKey.trim()
@@ -354,58 +358,32 @@ export function ModelSheet({ open, onOpenChange, model }: ModelSheetProps) {
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="max-output-tokens">Max output tokens</Label>
-            <Input
+            <TokenSizeInput
               id="max-output-tokens"
-              type="number"
-              min={1}
-              placeholder={String(DEFAULT_MAX_OUTPUT_TOKENS)}
-              value={form.maxOutputTokens}
-              onChange={(event) =>
-                setField("maxOutputTokens", event.target.value)
-              }
+              presets={OUTPUT_PRESETS}
+              preset={form.outputPreset}
+              customValue={form.customOutput}
+              customPlaceholder="e.g. 8k, 16k, or 16000"
+              onPresetChange={(value) => setField("outputPreset", value)}
+              onCustomValueChange={(value) => setField("customOutput", value)}
             />
             <p className="text-xs text-muted-foreground">
-              The maximum number of tokens the model can generate per step.
-              Leave blank to use the default of{" "}
-              {DEFAULT_MAX_OUTPUT_TOKENS.toLocaleString()}.
+              The maximum number of tokens the model can generate per step. The
+              default is {formatTokenSize(DEFAULT_MAX_OUTPUT_TOKENS)}.
             </p>
           </div>
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="max-context-tokens">Max context</Label>
-            <div className="flex gap-2">
-              <Select
-                value={form.contextPreset}
-                onValueChange={(value) => setField("contextPreset", value)}
-              >
-                <SelectTrigger
-                  id="max-context-tokens"
-                  className={
-                    form.contextPreset === "custom" ? "w-32" : "w-full"
-                  }
-                >
-                  <SelectValue placeholder="Select size" />
-                </SelectTrigger>
-                <SelectContent>
-                  {CONTEXT_PRESETS.map((preset) => (
-                    <SelectItem key={preset.value} value={String(preset.value)}>
-                      {preset.label} ({preset.value.toLocaleString()} tokens)
-                    </SelectItem>
-                  ))}
-                  <SelectItem value="custom">Custom…</SelectItem>
-                </SelectContent>
-              </Select>
-              {form.contextPreset === "custom" && (
-                <Input
-                  placeholder="e.g. 300k, 1.5m, or 300000"
-                  value={form.customContext}
-                  onChange={(event) =>
-                    setField("customContext", event.target.value)
-                  }
-                  className="flex-1"
-                />
-              )}
-            </div>
+            <TokenSizeInput
+              id="max-context-tokens"
+              presets={CONTEXT_PRESETS}
+              preset={form.contextPreset}
+              customValue={form.customContext}
+              customPlaceholder="e.g. 300k, 1.5m, or 300000"
+              onPresetChange={(value) => setField("contextPreset", value)}
+              onCustomValueChange={(value) => setField("customContext", value)}
+            />
             <p className="text-xs text-muted-foreground">
               The model's context window size. When a conversation exceeds 75%
               of it, older messages are automatically compacted into a summary.

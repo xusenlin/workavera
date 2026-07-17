@@ -33,6 +33,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
 - The Chat conversation list now shows a realtime Responding indicator for
   every conversation with an active assistant response stream, including
   background conversations.
+- Model settings now use shared output and context token-size controls with
+  compact `k` and `M` values, presets, and custom-size support.
 
 ### Fixed
 
@@ -40,6 +42,9 @@ and versions follow [Semantic Versioning](https://semver.org/).
   instead of navigating the sandboxed frame to an empty application page.
 - Notification items in the bell dropdown no longer show the browser's gray
   focus outline when the popover opens; keyboard focus uses a subtle background.
+- Internal one-shot text generation now uses the provider's streaming transport,
+  avoiding providers that reject non-streaming requests with large output limits
+  before the typically shorter response is generated.
 
 ### Removed
 

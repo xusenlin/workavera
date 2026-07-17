@@ -45,14 +45,23 @@ func GenerateText(ctx context.Context, config ModelConfig, systemPrompt, prompt 
 	if err != nil {
 		return "", err
 	}
+	return generateText(ctx, model, effectiveMaxOutputTokens(config), systemPrompt, prompt)
+}
+
+// generateText uses the provider's streaming transport even though callers
+// receive one completed string. Some providers reject non-streaming requests
+// solely because the configured output limit could take a long time, before
+// considering that the actual response (for example, a summary) will be much
+// shorter.
+func generateText(ctx context.Context, model fantasy.LanguageModel, maxOutputTokens int64, systemPrompt, prompt string) (string, error) {
 	opts := []fantasy.AgentOption{
 		fantasy.WithStopConditions(fantasy.StepCountIs(1)),
-		fantasy.WithMaxOutputTokens(effectiveMaxOutputTokens(config)),
+		fantasy.WithMaxOutputTokens(maxOutputTokens),
 	}
 	if systemPrompt != "" {
 		opts = append(opts, fantasy.WithSystemPrompt(systemPrompt))
 	}
-	result, err := fantasy.NewAgent(model, opts...).Generate(ctx, fantasy.AgentCall{Prompt: prompt})
+	result, err := fantasy.NewAgent(model, opts...).Stream(ctx, fantasy.AgentStreamCall{Prompt: prompt})
 	if err != nil {
 		return "", err
 	}

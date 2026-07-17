@@ -55,18 +55,8 @@ import {
   type LlmModelConfig,
 } from "@/store/llm-settings"
 import { cn } from "@/lib/utils"
+import { formatTokenSize } from "@/lib/token-size"
 import { useAuthStore } from "@/store/auth"
-
-/** Formats a context window size the way the presets are labelled: 256k, 1M. */
-function formatContextSize(tokens: number) {
-  if (tokens >= 1000000) {
-    return `${Number((tokens / 1000000).toFixed(1))}M`
-  }
-  if (tokens >= 1000) {
-    return `${Number((tokens / 1000).toFixed(1))}k`
-  }
-  return String(tokens)
-}
 
 export function SettingsPage() {
   const models = useLlmSettingsStore((state) => state.models)
@@ -285,13 +275,14 @@ export function SettingsPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="hidden sm:table-cell">
-                      {(model.maxOutputTokens > 0
-                        ? model.maxOutputTokens
-                        : DEFAULT_MAX_OUTPUT_TOKENS
-                      ).toLocaleString()}
+                      {formatTokenSize(
+                        model.maxOutputTokens > 0
+                          ? model.maxOutputTokens
+                          : DEFAULT_MAX_OUTPUT_TOKENS
+                      )}
                     </TableCell>
                     <TableCell className="hidden sm:table-cell">
-                      {formatContextSize(
+                      {formatTokenSize(
                         model.maxContextTokens > 0
                           ? model.maxContextTokens
                           : DEFAULT_MAX_CONTEXT_TOKENS
