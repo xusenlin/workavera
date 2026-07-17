@@ -5,7 +5,7 @@ All notable changes to Workavera are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/).
 
-## [0.0.7] - Unreleased
+## [0.0.7] - 2026-07-17
 
 ### Added
 
