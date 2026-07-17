@@ -77,8 +77,10 @@ type ReadingState = ReadingListFilters & {
   page: number
   totalPages: number
   totalItems: number
+  unreadCount: number
   loading: boolean
   saving: boolean
+  markingAllRead: boolean
   summarizing: boolean
   error: string | null
   fetchItems: (
@@ -95,6 +97,7 @@ type ReadingState = ReadingListFilters & {
   updateItem: (id: string, patch: Partial<ReadingItemInput>) => Promise<void>
   togglePin: (id: string, pinned: boolean) => Promise<void>
   deleteItem: (id: string) => Promise<void>
+  markAllRead: () => Promise<number>
   summarizeItem: (id: string) => Promise<void>
 }
 
@@ -196,8 +199,10 @@ export const useReadingStore = create<ReadingState>((set, get) => ({
   page: 1,
   totalPages: 1,
   totalItems: 0,
+  unreadCount: 0,
   loading: false,
   saving: false,
+  markingAllRead: false,
   summarizing: false,
   error: null,
 
@@ -210,19 +215,25 @@ export const useReadingStore = create<ReadingState>((set, get) => ({
     }
     set({ loading: true, error: null, page, ...filters })
     try {
-      const result = await pb
-        .collection("reading_items")
-        .getList<ReadingItemRecord>(page, 20, {
+      const [result, unreadResult] = await Promise.all([
+        pb.collection("reading_items").getList<ReadingItemRecord>(page, 20, {
           sort: "-pinned,-updated",
           filter: readingListFilter(filters),
           requestKey: null,
-        })
+        }),
+        pb.collection("reading_items").getList(1, 1, {
+          filter: 'status = "unread"',
+          fields: "id",
+          requestKey: null,
+        }),
+      ])
       if (sequence !== fetchItemsSequence) return
       set({
         items: result.items.map(toReadingItem),
         page,
         totalPages: Math.max(1, result.totalPages),
         totalItems: result.totalItems,
+        unreadCount: unreadResult.totalItems,
       })
     } catch (error) {
       if (sequence !== fetchItemsSequence) return
@@ -376,6 +387,38 @@ export const useReadingStore = create<ReadingState>((set, get) => ({
       const message = readingErrorMessage(error, "Could not update pin")
       toast.error(message)
       throw new Error(message, { cause: error })
+    }
+  },
+
+  markAllRead: async () => {
+    set({ markingAllRead: true, error: null })
+    try {
+      const response = await pb.send<{ updated: number }>(
+        "/api/reading/items/read-all",
+        { method: "POST" }
+      )
+      set((state) => ({
+        openedItem:
+          state.openedItem?.status === "unread"
+            ? { ...state.openedItem, status: "read" }
+            : state.openedItem,
+      }))
+      await get().fetchItems()
+      set({ markingAllRead: false })
+      toast.success(
+        response.updated === 1
+          ? "Marked 1 reading item as read"
+          : `Marked ${response.updated} reading items as read`
+      )
+      return response.updated
+    } catch (error) {
+      const message = readingErrorMessage(
+        error,
+        "Could not mark all reading items as read"
+      )
+      set({ markingAllRead: false, error: message })
+      toast.error(message)
+      return 0
     }
   },
 

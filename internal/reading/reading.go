@@ -85,6 +85,7 @@ type SummarizeResult struct {
 
 func Register(app core.App) {
 	app.OnServe().BindFunc(func(event *core.ServeEvent) error {
+		event.Router.POST("/api/reading/items/read-all", markAllRead).Bind(apis.RequireAuth("users"))
 		event.Router.POST("/api/reading/items/{id}/summarize", summarizeItem).Bind(apis.RequireAuth("users"))
 		event.Router.POST("/api/reading/items/{id}/pin", pinItem).Bind(apis.RequireAuth("users"))
 		return event.Next()
@@ -113,6 +114,51 @@ func validateItemUpdate(event *core.RecordRequestEvent) error {
 		return event.BadRequestError(ErrPinLimit.Error(), nil)
 	}
 	return event.Next()
+}
+
+func markAllRead(event *core.RequestEvent) error {
+	updated, err := MarkAllRead(event.Request.Context(), event.App, event.Auth.Id)
+	if err != nil {
+		return event.InternalServerError("Could not mark reading items as read.", err)
+	}
+	return event.JSON(http.StatusOK, map[string]int{"updated": updated})
+}
+
+// MarkAllRead marks every active unread reading item owned by the actor as read.
+func MarkAllRead(ctx context.Context, app core.App, actorID string) (int, error) {
+	if actorID == "" {
+		return 0, errors.New("missing actor")
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+
+	updated := 0
+	err := app.RunInTransaction(func(tx core.App) error {
+		records, err := tx.FindRecordsByFilter(
+			itemsCollection,
+			"owner = {:owner} && status = 'unread'",
+			"",
+			0,
+			0,
+			dbx.Params{"owner": actorID},
+		)
+		if err != nil {
+			return err
+		}
+		for _, record := range records {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			record.Set("status", "read")
+			if err := tx.Save(record); err != nil {
+				return err
+			}
+		}
+		updated = len(records)
+		return nil
+	})
+	return updated, err
 }
 
 func summarizeItem(event *core.RequestEvent) error {

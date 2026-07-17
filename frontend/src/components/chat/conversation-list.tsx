@@ -32,6 +32,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
+import { Spinner } from "@/components/ui/spinner"
 import {
   Pagination,
   PaginationContent,
@@ -42,6 +43,7 @@ import {
 import { formatRelativeTime } from "@/lib/chat-utils"
 import { cn } from "@/lib/utils"
 import { workspaceRecordUrl } from "@/lib/workspace-navigation"
+import { useChatRunsStore } from "@/store/chat-runs"
 import { useChatStore } from "@/store/chat"
 import type { Conversation } from "@/types/chat"
 
@@ -50,10 +52,12 @@ import { ArchivedConversationsDialog } from "./archived-conversations-dialog"
 function ConversationItem({
   conversation,
   isActive,
+  isResponding,
   onSelect,
 }: {
   conversation: Conversation
   isActive: boolean
+  isResponding: boolean
   onSelect: () => void
 }) {
   const togglePin = useChatStore((s) => s.togglePin)
@@ -140,7 +144,19 @@ function ConversationItem({
         )}
 
         {!renaming && (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            {isResponding && (
+              <span
+                role="status"
+                className="inline-flex items-center gap-1 font-medium text-primary"
+              >
+                <Spinner className="size-3" />
+                Responding
+              </span>
+            )}
+            {isResponding && (
+              <span className="text-muted-foreground/50">·</span>
+            )}
             <span>{formatRelativeTime(conversation.updated)}</span>
             <span className="text-muted-foreground/50">·</span>
             <span>{conversation.message_count} msgs</span>
@@ -239,11 +255,13 @@ function ConversationGroup({
   label,
   conversations,
   activeId,
+  respondingConversationIds,
   onSelect,
 }: {
   label: string
   conversations: Conversation[]
   activeId: string | null
+  respondingConversationIds: ReadonlySet<string>
   onSelect: (id: string) => void
 }) {
   if (conversations.length === 0) return null
@@ -260,6 +278,7 @@ function ConversationGroup({
           key={conv.id}
           conversation={conv}
           isActive={conv.id === activeId}
+          isResponding={respondingConversationIds.has(conv.id)}
           onSelect={() => onSelect(conv.id)}
         />
       ))}
@@ -273,6 +292,7 @@ export function ConversationList() {
   const activeConversationId = useChatStore((s) => s.activeConversationId)
   const setActiveConversation = useChatStore((s) => s.setActiveConversation)
   const createConversation = useChatStore((s) => s.createConversation)
+  const runs = useChatRunsStore((s) => s.runs)
   const page = useChatStore((s) => s.page)
   const totalPages = useChatStore((s) => s.totalPages)
   const loading = useChatStore((s) => s.loading)
@@ -280,6 +300,11 @@ export function ConversationList() {
 
   const [query, setQuery] = useState("")
   const [archivedOpen, setArchivedOpen] = useState(false)
+
+  const respondingConversationIds = useMemo(
+    () => new Set(Object.values(runs).map((run) => run.conversationId)),
+    [runs]
+  )
 
   const { pinned, recent } = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -362,12 +387,14 @@ export function ConversationList() {
               label="Pinned"
               conversations={pinned}
               activeId={activeConversationId}
+              respondingConversationIds={respondingConversationIds}
               onSelect={handleSelect}
             />
             <ConversationGroup
               label="Recent"
               conversations={recent}
               activeId={activeConversationId}
+              respondingConversationIds={respondingConversationIds}
               onSelect={handleSelect}
             />
           </div>

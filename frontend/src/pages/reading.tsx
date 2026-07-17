@@ -150,8 +150,10 @@ export function ReadingPage() {
   const page = useReadingStore((s) => s.page)
   const totalPages = useReadingStore((s) => s.totalPages)
   const totalItems = useReadingStore((s) => s.totalItems)
+  const unreadCount = useReadingStore((s) => s.unreadCount)
   const loading = useReadingStore((s) => s.loading)
   const saving = useReadingStore((s) => s.saving)
+  const markingAllRead = useReadingStore((s) => s.markingAllRead)
   const summarizing = useReadingStore((s) => s.summarizing)
   const fetchItems = useReadingStore((s) => s.fetchItems)
   const fetchProjects = useReadingStore((s) => s.fetchProjects)
@@ -163,6 +165,7 @@ export function ReadingPage() {
   const addItem = useReadingStore((s) => s.addItem)
   const updateItem = useReadingStore((s) => s.updateItem)
   const deleteItem = useReadingStore((s) => s.deleteItem)
+  const markAllRead = useReadingStore((s) => s.markAllRead)
   const summarizeItem = useReadingStore((s) => s.summarizeItem)
   const togglePin = useReadingStore((s) => s.togglePin)
 
@@ -287,6 +290,13 @@ export function ReadingPage() {
     await togglePin(item.id, !item.pinned).catch(() => undefined)
   }
 
+  const handleMarkAllRead = async () => {
+    const updated = await markAllRead()
+    if (updated > 0 && selectedItem?.status === "unread") {
+      setDetailForm((form) => ({ ...form, status: "read" }))
+    }
+  }
+
   return (
     <div className="-m-4 flex h-[calc(100vh-4rem)] overflow-hidden md:-m-6">
       {/* Left sidebar */}
@@ -296,10 +306,19 @@ export function ReadingPage() {
             <div>
               <span className="text-sm font-semibold">Reading</span>
               <p className="text-xs text-muted-foreground">
-                {totalItems} {hasActiveFilters ? "matching" : "active"}
+                {totalItems} {hasActiveFilters ? "matching" : "active"} ·{" "}
+                {unreadCount} unread
               </p>
             </div>
             <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={unreadCount === 0 || markingAllRead}
+                onClick={() => void handleMarkAllRead()}
+              >
+                Mark all read
+              </Button>
               <Button
                 variant="ghost"
                 size="icon-sm"

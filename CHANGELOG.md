@@ -18,8 +18,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
   warn when deleting a recurring calendar series.
 - Notifications can now be searched and filtered by read state and type, with
   pinning, paginated active and archived lists, restore, and permanent delete.
-- Reading now has server-side search, status and project filters, paginated
-  active and archived lists, restore, and permanent delete.
+- Reading now has server-side search, status and project filters, a mark-all-read
+  action, paginated active and archived lists, restore, and permanent delete.
 
 ### Changed
 
@@ -30,11 +30,16 @@ and versions follow [Semantic Versioning](https://semver.org/).
   model-share responses, and article summarization keep custom endpoints.
 - Reading list previews show the description when present, otherwise the
   summary, and clamp the preview to two lines.
+- The Chat conversation list now shows a realtime Responding indicator for
+  every conversation with an active assistant response stream, including
+  background conversations.
 
 ### Fixed
 
 - HTML document previews now keep anchor links inside the rendered document
   instead of navigating the sandboxed frame to an empty application page.
+- Notification items in the bell dropdown no longer show the browser's gray
+  focus outline when the popover opens; keyboard focus uses a subtle background.
 
 ### Removed
 

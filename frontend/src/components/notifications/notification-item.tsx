@@ -36,7 +36,8 @@ export function NotificationItem({
       className={cn(
         "flex w-full cursor-pointer gap-3 rounded-lg p-3 text-left transition-colors hover:bg-muted/70",
         selected && "bg-muted",
-        compact && "rounded-none border-b last:border-b-0",
+        compact &&
+          "rounded-none border-b focus-visible:bg-muted/70 focus-visible:outline-none focus-visible:ring-0 last:border-b-0",
         className
       )}
     >
