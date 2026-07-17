@@ -6,9 +6,9 @@
 
 > **The AI-driven, open-source, self-hosted alternative to Slack + Notion + Linear** — one binary on your own server, your data, no per-seat fees.
 
-Workavera connects conversations, knowledge, relationships, projects, tasks, and time commitments in one workspace, and Chat is how you put it in motion: the AI can only use the capabilities your account already has—finding context, creating or updating records—and the server re-authorizes every action against your own permissions before it is applied.
+> ⚠️ **Early-stage software (0.0.x).** Workavera is under active development: features and data schemas are still changing quickly, and releases may include breaking changes (see the [changelog](./CHANGELOG.md)). It is not ready for production use yet.
 
-It uses Go and PocketBase for the backend and Vite, React, and TypeScript for the frontend. The compiled frontend is embedded into the Go binary (`go:embed`) and served by the same PocketBase process, so a release ships as a single self-contained executable.
+Workavera connects conversations, knowledge, relationships, projects, tasks, and time commitments in one workspace, and Chat is how you put it in motion: the AI can only use the capabilities your account already has—finding context, creating or updating records—and the server re-authorizes every action against your own permissions before it is applied.
 
 ## Why Workavera
 
@@ -86,171 +86,21 @@ The demo user is seeded only when the `users` collection is empty, so upgrades d
 - **Notifications** provides realtime model-share requests, task-due notices, and calendar reminders with record deep links.
 - **Settings and Profile** manage model configurations, model sharing, per-user appearance, profile fields, and avatars.
 
-Reading is the external-information intake layer, Docs is the reusable knowledge and interactive-artifact layer, Board is the action layer, and Calendar is the time-commitment layer.
-
-Chat connects these layers as a permission-aware AI control surface. It can search the context visible to you and invoke registered tools for Board, Calendar, Reading, Docs, and Contacts. Tool availability never bypasses product rules: the backend checks identity, role, ownership, relationships, and revisions for every operation.
-
-## Technology
-
-- Go 1.26.5
-- PocketBase 0.39.4
-- Fantasy 0.37.3
-- React 19, TypeScript 6, Vite 8
-- Tailwind CSS 4 and local shadcn/ui components
-- AI SDK UI message streaming
-- Zustand and the PocketBase JavaScript SDK
-- BlockNote for Markdown editing
-
-## Data and security notes
-
-- Runtime data lives in `pb_data/` and is not committed.
-- Model API keys stay in the hidden `llm_models.api_key` field and are accessed through authenticated server endpoints.
-- User-facing records are protected by PocketBase rules and server-side domain validation.
-- Chat history is loaded by the server; browsers do not provide authoritative prior messages.
-- Active Chat runs are process-local. Stream reconnection works while the same server process is alive; production multi-instance execution requires shared durable run infrastructure.
-- Calendar scheduling and reminders use `configs/system.timezone`.
-
 ## Development
 
-Everything below is only needed when contributing or building from source—see [Quick start](#quick-start) if you just want to run Workavera.
-
-### Requirements
-
-- Go 1.26.5 or newer
-- Node.js and [pnpm](https://pnpm.io/)
-- [Task](https://taskfile.dev/) 3 or newer
-- Docker with Buildx only when building or publishing containers
-
-### Local development
-
-Install frontend dependencies once:
+Only needed when contributing or building from source. Requires Go 1.26.5+, Node.js with [pnpm](https://pnpm.io/), and [Task](https://taskfile.dev/) 3+.
 
 ```bash
-cd frontend
-pnpm install
-cd ..
+cd frontend && pnpm install && cd ..   # once
+
+task dev:go     # backend at http://127.0.0.1:8090 (admin UI at /_/)
+task dev:ui     # Vite dev server at http://127.0.0.1:5173
+task test       # go test ./...
+task build      # self-contained binary with the frontend embedded
+task release    # cross-compiled release archives in dist/
 ```
 
-Run the backend and Vite frontend in separate terminals:
-
-```bash
-task dev:go
-```
-
-```bash
-task dev:ui
-```
-
-Open <http://127.0.0.1:5173>. Vite proxies `/api` to PocketBase at <http://127.0.0.1:8090>.
-
-PocketBase also exposes:
-
-- Admin UI: <http://127.0.0.1:8090/_/>
-- Health endpoint: <http://127.0.0.1:8090/api/health>
-
-On the first start, sign in with the demo credentials and follow the remaining steps in [First-run setup](#first-run-setup). After signing in, add at least one model configuration in Settings before using Chat or AI summaries.
-
-When `task dev:go` runs through `go run`, PocketBase automigration is enabled and schema changes are written to `migrations/`.
-
-### Build and run
-
-Build the frontend and backend:
-
-```bash
-task build:ui
-task build:go
-```
-
-Run the packaged application after the frontend has been built:
-
-```bash
-task run
-```
-
-Open <http://127.0.0.1:8090>. `task run` rebuilds the Go binary with the current `frontend/dist` embedded, so the resulting binary is fully self-contained.
-
-The version comes from [`VERSION`](./VERSION) and is injected into the binary. Check it with:
-
-```bash
-./workavera --version
-```
-
-### Commands
-
-| Command | Purpose |
-| --- | --- |
-| `task dev:go` | Run the Go/PocketBase development server |
-| `task dev:ui` | Run the Vite development server |
-| `task build:ui` | Type-check and build `frontend/dist` |
-| `task build:go` | Build the `workavera` binary (embeds `frontend/dist`) |
-| `task build` | Build the frontend and the self-contained binary |
-| `task release` | Cross-compile and package release archives for Linux/macOS/Windows into `dist/` |
-| `task run` | Build and run the Go binary |
-| `task build:docker` | Build the frontend and local `ghcr.io/xusenlin/workavera:latest` image |
-| `task push` | Build and push `linux/amd64` version and `latest` images |
-| `task test` | Run `go test ./...` |
-| `task tidy` | Run `go mod tidy` |
-
-Frontend-only commands are documented in [`frontend/README.md`](./frontend/README.md).
-
-### Binary releases
-
-Cross-compile self-contained binaries for GitHub releases:
-
-```bash
-task release
-```
-
-This builds and embeds the frontend, then cross-compiles four targets across Linux, macOS, and Windows into `dist/`. Archives are named by version, OS, and architecture:
-
-- `dist/workavera_<version>_linux_amd64.tar.gz`
-- `dist/workavera_<version>_darwin_amd64.tar.gz`
-- `dist/workavera_<version>_darwin_arm64.tar.gz`
-- `dist/workavera_<version>_windows_amd64.zip`
-
-Each archive contains a single self-contained `workavera` binary (`workavera.exe` on Windows)—no separate frontend assets are required at runtime. A `dist/SHA256SUMS.txt` checksum file is generated alongside the archives. The `dist/` directory is git-ignored.
-
-### Docker image
-
-Build the local image:
-
-```bash
-task build:docker
-```
-
-The container runs as a non-root user, includes CA certificates and timezone data, exposes a health check, stores data in `/app/pb_data`, and ships as a single self-contained binary with the frontend assets embedded. See [Quick start](#quick-start) for the run command.
-
-`task push` uses the value in `VERSION` to publish both `:<version>` and `:latest` for `linux/amd64`.
-
-## Repository structure
-
-```text
-.
-├── workavera.go                 # PocketBase entry point and frontend serving
-├── internal/
-│   ├── agent/                   # Fantasy and AI SDK stream adaptation
-│   ├── assistant/tools/         # Actor-scoped workspace tools
-│   ├── board/                   # Projects, tasks, roles, validation, activity
-│   ├── calendar/                # Events, recurrence, and schedule queries
-│   ├── chat/                    # Conversations, runs, SSE, persistence
-│   ├── configs/                 # System configuration API
-│   ├── contacts/                # Contacts and safe Assistant queries
-│   ├── docs/                    # Markdown/HTML documents and versions
-│   ├── llm/                     # Model settings and sharing
-│   ├── notifications/           # Realtime notifications and scheduler
-│   └── reading/                 # Reading library and summaries
-├── migrations/                  # PocketBase schema migrations and tests
-├── frontend/                    # Vite React application
-│   └── src/
-│       ├── components/          # Feature and UI components
-│       ├── pages/               # Route-level pages
-│       ├── store/               # Zustand stores
-│       └── lib/                 # PocketBase and shared utilities
-├── doc/                         # English and Chinese product documents
-├── Dockerfile
-├── Taskfile.yml
-└── VERSION
-```
+All tasks are defined in [`Taskfile.yml`](./Taskfile.yml); frontend-only commands are documented in [`frontend/README.md`](./frontend/README.md).
 
 ## Product documentation
 
