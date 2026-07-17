@@ -153,6 +153,40 @@ func UpdateEvent(ctx context.Context, app core.App, actorID string, command Upda
 	return EventMutationResult{OK: true, Action: "updated", Event: eventFromRecord(record)}, nil
 }
 
+// GetDeletableEvent resolves an owned event for a human-readable approval
+// prompt. Repeating events are stored as one record, so deleting the record
+// removes the complete series.
+func GetDeletableEvent(ctx context.Context, app core.App, actorID, eventID string) (Event, error) {
+	if err := requireActiveActor(ctx, app, actorID); err != nil {
+		return Event{}, err
+	}
+	record, err := app.FindRecordById(eventsCollection, strings.TrimSpace(eventID))
+	if err != nil || record.GetString("owner") != actorID {
+		return Event{}, errors.New("calendar event not found")
+	}
+	return eventFromRecord(record), nil
+}
+
+// DeleteEvent re-reads and re-authorizes the event immediately before the
+// mutation so an approval cannot outlive an ownership or target change.
+func DeleteEvent(ctx context.Context, app core.App, actorID, eventID string) (EventMutationResult, error) {
+	if err := requireActiveActor(ctx, app, actorID); err != nil {
+		return EventMutationResult{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return EventMutationResult{}, err
+	}
+	record, err := app.FindRecordById(eventsCollection, strings.TrimSpace(eventID))
+	if err != nil || record.GetString("owner") != actorID {
+		return EventMutationResult{}, errors.New("calendar event not found")
+	}
+	event := eventFromRecord(record)
+	if err := app.Delete(record); err != nil {
+		return EventMutationResult{}, err
+	}
+	return EventMutationResult{OK: true, Action: "deleted", Event: event}, nil
+}
+
 func validateEventRecord(record *core.Record) error {
 	return validateEventValues(
 		record.GetString("title"),

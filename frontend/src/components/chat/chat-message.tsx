@@ -36,6 +36,7 @@ import {
   CalendarScheduleToolCard,
   CalendarMutationToolCard,
 } from "./calendar-tool-output"
+import { ApprovalToolCard } from "./approval-tool-card"
 
 const boardMutationToolNames = new Set([
   "board_create_project",
@@ -65,7 +66,19 @@ const calendarMutationToolNames = new Set([
   "calendar_update_event",
 ])
 
-function MessageParts({ message }: { message: ChatUIMessage }) {
+function MessageParts({
+  message,
+  activeRunId,
+}: {
+  message: ChatUIMessage
+  activeRunId: string | null
+}) {
+  const approvals = new Map(
+    message.parts
+      .filter((part) => part.type === "data-approval")
+      .map((part) => [part.data.toolCallId, part.data])
+  )
+
   return message.parts.map((part, index) => {
     switch (part.type) {
       case "text":
@@ -88,6 +101,18 @@ function MessageParts({ message }: { message: ChatUIMessage }) {
           </Reasoning>
         )
       case "dynamic-tool":
+        if (approvals.has(part.toolCallId)) {
+          return (
+            <ApprovalToolCard
+              key={part.toolCallId}
+              part={part}
+              approval={approvals.get(part.toolCallId)!}
+              runId={message.metadata?.runId}
+              runActive={message.metadata?.runId === activeRunId}
+              messageStatus={message.metadata?.status}
+            />
+          )
+        }
         if (part.toolName === "contacts_search") {
           return <ContactsToolCard key={part.toolCallId} part={part} />
         }
@@ -182,13 +207,21 @@ function MessageParts({ message }: { message: ChatUIMessage }) {
               : "Older messages were compacted into a summary"}
           </div>
         )
+      case "data-approval":
+        return null
       default:
         return null
     }
   })
 }
 
-export function ChatMessageItem({ message }: { message: ChatUIMessage }) {
+export function ChatMessageItem({
+  message,
+  activeRunId,
+}: {
+  message: ChatUIMessage
+  activeRunId: string | null
+}) {
   const isUser = message.role === "user"
   const metadata = message.metadata
   const createdAt = metadata?.createdAt
@@ -226,7 +259,7 @@ export function ChatMessageItem({ message }: { message: ChatUIMessage }) {
       </div>
 
       <MessageContent>
-        <MessageParts message={message} />
+        <MessageParts message={message} activeRunId={activeRunId} />
       </MessageContent>
 
       {!isUser &&

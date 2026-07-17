@@ -7,6 +7,16 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [0.0.7] - Unreleased
 
+### Added
+
+- Destructive assistant tools can now pause a running chat for explicit user
+  approval, stream a reusable approval card to the frontend, and resume after
+  the user approves or rejects the request. Rejections are recorded in the
+  conversation without executing the tool.
+- The `board_delete_task` and `calendar_delete_event` tools now require this
+  approval before deleting data; approval cards show the affected item and
+  warn when deleting a recurring calendar series.
+
 ### Changed
 
 - Document lists now return metadata only and fetch full content when a

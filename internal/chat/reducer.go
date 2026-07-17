@@ -12,6 +12,7 @@ type messageReducer struct {
 	message   workagent.Message
 	active    map[string]int
 	toolInput map[string]string
+	approvals map[string]string
 }
 
 func newMessageReducer(messageID string) *messageReducer {
@@ -19,6 +20,7 @@ func newMessageReducer(messageID string) *messageReducer {
 		message:   workagent.Message{ID: messageID, Role: "assistant", Parts: []workagent.Part{}},
 		active:    make(map[string]int),
 		toolInput: make(map[string]string),
+		approvals: make(map[string]string),
 	}
 }
 
@@ -86,6 +88,20 @@ func (r *messageReducer) Apply(chunk workagent.StreamChunk) {
 			part["state"] = "input-available"
 		}
 		delete(r.toolInput, chunk.ToolCallID)
+	case "tool-approval-request":
+		part := r.toolPart(chunk.ToolCallID, chunk.ToolName)
+		part["state"] = "approval-requested"
+		part["approval"] = map[string]any{"id": chunk.ApprovalID}
+		r.approvals[chunk.ApprovalID] = chunk.ToolCallID
+	case "tool-approval-response":
+		toolCallID := r.approvals[chunk.ApprovalID]
+		if toolCallID == "" {
+			break
+		}
+		part := r.toolPart(toolCallID, "")
+		part["state"] = "approval-responded"
+		part["approval"] = map[string]any{"id": chunk.ApprovalID, "approved": chunk.Approved != nil && *chunk.Approved}
+		delete(r.approvals, chunk.ApprovalID)
 	case "tool-output-available", "tool-output-error":
 		part := r.toolPart(chunk.ToolCallID, chunk.ToolName)
 		part["providerExecuted"] = chunk.ProviderExecuted
@@ -160,5 +176,5 @@ func (r *messageReducer) Snapshot() workagent.Message {
 }
 
 func shouldCheckpoint(chunk workagent.StreamChunk) bool {
-	return strings.HasSuffix(chunk.Type, "-end") || chunk.Type == "tool-input-available" || chunk.Type == "tool-input-error" || strings.HasPrefix(chunk.Type, "tool-output-") || chunk.Type == "finish-step"
+	return strings.HasSuffix(chunk.Type, "-end") || chunk.Type == "tool-input-available" || chunk.Type == "tool-input-error" || strings.HasPrefix(chunk.Type, "tool-approval-") || strings.HasPrefix(chunk.Type, "tool-output-") || chunk.Type == "finish-step"
 }

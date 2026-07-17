@@ -30,6 +30,8 @@ type StreamChunk struct {
 
 	ToolCallID       string `json:"toolCallId,omitempty"`
 	ToolName         string `json:"toolName,omitempty"`
+	ApprovalID       string `json:"approvalId,omitempty"`
+	Approved         *bool  `json:"approved,omitempty"`
 	InputTextDelta   string `json:"inputTextDelta,omitempty"`
 	Input            any    `json:"input,omitempty"`
 	Output           any    `json:"output,omitempty"`
@@ -109,6 +111,10 @@ func (c StreamChunk) ValidForWire() bool {
 		return c.ToolCallID != "" && c.ToolName != ""
 	case "tool-input-error":
 		return c.ToolCallID != "" && c.ToolName != "" && c.ErrorText != ""
+	case "tool-approval-request":
+		return c.ApprovalID != "" && c.ToolCallID != ""
+	case "tool-approval-response":
+		return c.ApprovalID != "" && c.Approved != nil
 
 	// Tool output.
 	case "tool-output-available":

@@ -10,8 +10,8 @@ import (
 func TestFactoryRegistersOnlyProductionTools(t *testing.T) {
 	factory := NewFactory(nil)
 	registered := factory.ForActor("actor-1")
-	if len(registered) != 24 {
-		t.Fatalf("expected twenty-four production tools, got %d", len(registered))
+	if len(registered) != 26 {
+		t.Fatalf("expected twenty-six production tools, got %d", len(registered))
 	}
 	names := map[string]bool{}
 	for _, tool := range registered {
@@ -30,9 +30,11 @@ func TestFactoryRegistersOnlyProductionTools(t *testing.T) {
 		"board_upsert_member",
 		"board_create_task",
 		"board_update_task",
+		"board_delete_task",
 		"calendar_get_schedule",
 		"calendar_create_event",
 		"calendar_update_event",
+		"calendar_delete_event",
 		"reading_search",
 		"reading_upsert",
 		"reading_get",
@@ -50,8 +52,8 @@ func TestFactoryRegistersOnlyProductionTools(t *testing.T) {
 	if names["get_weather"] {
 		t.Fatalf("unexpected production tool registry: %#v", names)
 	}
-	if names["board_delete_task"] || names["board_delete_project"] {
-		t.Fatalf("destructive Board tools must not be registered: %#v", names)
+	if names["board_delete_project"] {
+		t.Fatalf("project deletion must not be registered: %#v", names)
 	}
 }
 

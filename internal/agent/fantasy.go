@@ -60,6 +60,7 @@ func GenerateText(ctx context.Context, config ModelConfig, systemPrompt, prompt 
 }
 
 func (r *FantasyRunner) Stream(ctx context.Context, request Request, emit EmitFunc) (Result, error) {
+	ctx = withApprovalHandler(ctx, request.Approval)
 	model, err := languageModel(ctx, request.Model)
 	if err != nil {
 		return Result{}, err

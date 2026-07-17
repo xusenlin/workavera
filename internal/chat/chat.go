@@ -28,6 +28,7 @@ func register(app core.App, service *service) {
 		group.GET("/conversations/{id}/messages", service.listMessages)
 		group.POST("/stream", service.stream)
 		group.GET("/runs/{id}/stream", service.resumeRun)
+		group.POST("/runs/{id}/approvals/{approvalId}", service.respondApproval)
 		group.POST("/runs/{id}/stop", service.stopRun)
 		return event.Next()
 	})

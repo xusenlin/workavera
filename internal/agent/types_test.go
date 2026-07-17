@@ -75,6 +75,7 @@ func TestToFantasyMessagesKeepsProviderExecutedResultsWithAssistant(t *testing.T
 }
 
 func TestStreamChunkValidForWire(t *testing.T) {
+	approved := false
 	cases := []struct {
 		name  string
 		chunk StreamChunk
@@ -113,6 +114,10 @@ func TestStreamChunkValidForWire(t *testing.T) {
 		{"tool-input-available null input", StreamChunk{Type: "tool-input-available", ToolCallID: "c1", ToolName: "get_weather"}, true},
 		{"tool-input-error ok", StreamChunk{Type: "tool-input-error", ToolCallID: "c1", ToolName: "get_weather", Input: map[string]any{}, ErrorText: "bad"}, true},
 		{"tool-input-error missing errorText", StreamChunk{Type: "tool-input-error", ToolCallID: "c1", ToolName: "get_weather", Input: map[string]any{}}, false},
+		{"tool-approval-request ok", StreamChunk{Type: "tool-approval-request", ApprovalID: "a1", ToolCallID: "c1"}, true},
+		{"tool-approval-request missing approvalId", StreamChunk{Type: "tool-approval-request", ToolCallID: "c1"}, false},
+		{"tool-approval-response denied", StreamChunk{Type: "tool-approval-response", ApprovalID: "a1", Approved: &approved}, true},
+		{"tool-approval-response missing decision", StreamChunk{Type: "tool-approval-response", ApprovalID: "a1"}, false},
 
 		// Tool output.
 		{"tool-output-available ok", StreamChunk{Type: "tool-output-available", ToolCallID: "c1", Output: "rain"}, true},

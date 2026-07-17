@@ -65,8 +65,36 @@ export type CompactionData = {
   untilSequence?: number
 }
 
+export type ToolApprovalData = {
+  approvalId: string
+  toolCallId: string
+  toolName: string
+  title: string
+  summary: string
+  target?: {
+    type?: string
+    id?: string
+    name?: string
+  } | null
+  details?: Array<{
+    label?: string
+    value: string
+    format?: "text" | "datetime"
+    tone?: "default" | "destructive"
+  }> | null
+  presentation?: {
+    confirmLabel?: string
+    confirmVariant?: "default" | "destructive"
+    pendingMessage?: string
+    successMessage?: string
+    deniedMessage?: string
+    failureMessage?: string
+  }
+}
+
 export type ChatDataParts = {
   compaction: CompactionData
+  approval: ToolApprovalData
 }
 
 export type ChatUIMessage = UIMessage<ChatMessageMetadata, ChatDataParts>

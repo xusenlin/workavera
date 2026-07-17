@@ -9,6 +9,7 @@ import (
 
 	"charm.land/fantasy"
 	"github.com/pocketbase/pocketbase/core"
+	workagent "github.com/xusenlin/workavera/internal/agent"
 	workcalendar "github.com/xusenlin/workavera/internal/calendar"
 	"github.com/xusenlin/workavera/internal/configs"
 )
@@ -42,6 +43,10 @@ type calendarUpdateEventInput struct {
 	RecurrenceFrequency   *string `json:"recurrenceFrequency,omitempty" description:"Optional replacement repeat frequency: none, daily, weekly, monthly, or yearly"`
 	RecurrenceInterval    *int    `json:"recurrenceInterval,omitempty" description:"Optional positive whole-number repeat interval"`
 	ReminderMinutesBefore *int    `json:"reminderMinutesBefore,omitempty" description:"Optional reminder lead time: -1, 0, 5, 10, 30, 60, or 1440 minutes"`
+}
+
+type calendarDeleteEventInput struct {
+	EventID string `json:"eventId" description:"Existing personal event ID returned by calendar_get_schedule"`
 }
 
 func newCalendarGetScheduleTool(app core.App, actorID string) fantasy.AgentTool {
@@ -101,6 +106,57 @@ func newCalendarUpdateEventTool(app core.App, actorID string) fantasy.AgentTool 
 				RecurrenceInterval: input.RecurrenceInterval, ReminderMinutesBefore: input.ReminderMinutesBefore,
 			})
 			return calendarToolResult(app, actorID, "update event", result, err)
+		},
+	)
+}
+
+func newCalendarDeleteEventTool(app core.App, actorID string) fantasy.AgentTool {
+	return fantasy.NewAgentTool(
+		"calendar_delete_event",
+		"Permanently delete one personal Calendar event only when explicitly requested. Call calendar_get_schedule first and use an exact returned event ID. Deleting a repeating event removes the entire series. This action always pauses for user approval. If approval is denied, do not retry unless the user explicitly asks again.",
+		func(ctx context.Context, input calendarDeleteEventInput, call fantasy.ToolCall) (fantasy.ToolResponse, error) {
+			target, err := workcalendar.GetDeletableEvent(ctx, app, actorID, input.EventID)
+			if err != nil {
+				return calendarToolResult(app, actorID, "prepare delete event", nil, err)
+			}
+			summary := "Permanently delete “" + target.Title + "”."
+			details := []workagent.ApprovalDetail{
+				{Label: "Starts", Value: target.StartAt, Format: "datetime"},
+			}
+			if target.RecurrenceFrequency != "none" {
+				summary = "Permanently delete the recurring event “" + target.Title + "” and all of its occurrences."
+				details = append(details, workagent.ApprovalDetail{Label: "Scope", Value: "Entire recurring series", Tone: "destructive"})
+			}
+			approved, err := workagent.RequireApproval(ctx, workagent.ApprovalRequest{
+				ToolCallID: call.ID,
+				ToolName:   call.Name,
+				Title:      "Delete event?",
+				Summary:    summary,
+				Target: map[string]any{
+					"type": "calendar_event",
+					"id":   target.ID,
+					"name": target.Title,
+				},
+				Details: details,
+				Presentation: workagent.ApprovalPresentation{
+					ConfirmLabel:   "Delete",
+					ConfirmVariant: "destructive",
+					PendingMessage: "Deleting event…",
+					SuccessMessage: "Event deleted.",
+					DeniedMessage:  "Event deletion cancelled.",
+					FailureMessage: "The event could not be deleted.",
+				},
+			})
+			if err != nil {
+				return fantasy.ToolResponse{}, err
+			}
+			if !approved {
+				return calendarToolResult(app, actorID, "delete event", map[string]any{
+					"ok": false, "action": "denied", "event": target, "reason": "user_denied",
+				}, nil)
+			}
+			result, err := workcalendar.DeleteEvent(ctx, app, actorID, input.EventID)
+			return calendarToolResult(app, actorID, "delete event", result, err)
 		},
 	)
 }

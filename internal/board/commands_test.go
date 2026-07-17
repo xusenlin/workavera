@@ -243,6 +243,48 @@ func TestTaskCommandsValidateRelationsAndPatchClearsFields(t *testing.T) {
 	}
 }
 
+func TestDeleteTaskReauthorizesAndWritesActivity(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(app.Cleanup)
+	owner := createQueryTestUser(t, app, "delete-owner@example.com", "Owner")
+	member := createQueryTestUser(t, app, "delete-member@example.com", "Member")
+	viewer := createQueryTestUser(t, app, "delete-viewer@example.com", "Viewer")
+	project := createQueryTestProject(t, app, owner.Id, "Deletion", false)
+	createProjectTestMembership(t, app, project.Id, member.Id, "member")
+	createProjectTestMembership(t, app, project.Id, viewer.Id, "viewer")
+	state := createQueryTestState(t, app, project.Id)
+	created, err := CreateTask(context.Background(), app, owner.Id, CreateTaskCommand{ProjectID: project.Id, StateID: state.Id, Title: "Delete me"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	target, err := GetDeletableTask(context.Background(), app, member.Id, created.ID)
+	if err != nil || target.Title != "Delete me" || target.ProjectName != "Deletion" {
+		t.Fatalf("unexpected deletion target: %#v, %v", target, err)
+	}
+	if _, err := GetDeletableTask(context.Background(), app, viewer.Id, created.ID); !errors.Is(err, ErrTaskWriteDenied) {
+		t.Fatalf("viewer prepared a task deletion: %v", err)
+	}
+	if _, err := DeleteTask(context.Background(), app, viewer.Id, created.ID); !errors.Is(err, ErrTaskWriteDenied) {
+		t.Fatalf("viewer deleted a task: %v", err)
+	}
+
+	deleted, err := DeleteTask(context.Background(), app, member.Id, created.ID)
+	if err != nil || !deleted.OK || deleted.Action != "deleted" || deleted.Name != "Delete me" {
+		t.Fatalf("unexpected deletion result: %#v, %v", deleted, err)
+	}
+	if _, err := app.FindRecordById(boardTasksCollection, created.ID); err == nil {
+		t.Fatal("task still exists after deletion")
+	}
+	logs, err := app.FindRecordsByFilter(boardTaskOperationLogs, "task_id = {:task}", "created", 0, 0, dbx.Params{"task": created.ID})
+	if err != nil || len(logs) != 2 || logs[1].GetString("action") != "delete" || logs[1].GetString("actor") != member.Id {
+		t.Fatalf("expected create and member delete logs: %#v, %v", logs, err)
+	}
+}
+
 func TestOwnerCommandsWriteProjectActivity(t *testing.T) {
 	app, err := tests.NewTestApp()
 	if err != nil {

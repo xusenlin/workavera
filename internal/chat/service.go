@@ -29,6 +29,8 @@ type activeRun struct {
 	history []workagent.StreamChunk
 	notify  chan struct{}
 	done    bool
+
+	approvals map[string]*pendingApproval
 }
 
 func newService(app core.App, runner workagent.Runner) *service {
@@ -96,6 +98,7 @@ func newActiveRun(id, ownerID, conversationID string, cancel context.CancelFunc)
 		conversationID: conversationID,
 		cancel:         cancel,
 		notify:         make(chan struct{}),
+		approvals:      make(map[string]*pendingApproval),
 	}
 }
 
@@ -130,5 +133,6 @@ func (r *activeRun) finish() {
 		return
 	}
 	r.done = true
+	r.approvals = make(map[string]*pendingApproval)
 	close(r.notify)
 }

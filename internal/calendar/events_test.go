@@ -97,6 +97,40 @@ func TestUpdateEventRequiresOwnerAndValidatesPatch(t *testing.T) {
 	}
 }
 
+func TestDeleteEventRequiresOwnerAndDeletesRecurringSeries(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(app.Cleanup)
+	owner := createCalendarTestUser(t, app, "delete-event-owner@example.com")
+	other := createCalendarTestUser(t, app, "delete-event-other@example.com")
+	created, err := CreateEvent(context.Background(), app, owner.Id, CreateEventCommand{
+		Title: "Weekly review", StartAt: "2026-07-13T09:00:00Z", EndAt: "2026-07-13T10:00:00Z",
+		RecurrenceFrequency: "weekly", RecurrenceInterval: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := GetDeletableEvent(context.Background(), app, owner.Id, created.Event.ID)
+	if err != nil || target.Title != "Weekly review" || target.RecurrenceFrequency != "weekly" {
+		t.Fatalf("unexpected deletion target: %#v, %v", target, err)
+	}
+	if _, err := GetDeletableEvent(context.Background(), app, other.Id, created.Event.ID); err == nil {
+		t.Fatal("non-owner prepared a private event deletion")
+	}
+	if _, err := DeleteEvent(context.Background(), app, other.Id, created.Event.ID); err == nil {
+		t.Fatal("non-owner deleted a private event")
+	}
+	deleted, err := DeleteEvent(context.Background(), app, owner.Id, created.Event.ID)
+	if err != nil || !deleted.OK || deleted.Action != "deleted" || deleted.Event.Title != "Weekly review" {
+		t.Fatalf("unexpected deletion result: %#v, %v", deleted, err)
+	}
+	if _, err := app.FindRecordById(eventsCollection, created.Event.ID); err == nil {
+		t.Fatal("calendar event still exists after deletion")
+	}
+}
+
 func createCalendarTestUser(t *testing.T, app core.App, email string) *core.Record {
 	t.Helper()
 	collection, err := app.FindCollectionByNameOrId("users")

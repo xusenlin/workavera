@@ -50,6 +50,43 @@ type blockingRunner struct {
 	release chan struct{}
 }
 
+type approvalRunner struct {
+	started chan struct{}
+}
+
+func (runner *approvalRunner) Stream(ctx context.Context, request workagent.Request, emit workagent.EmitFunc) (workagent.Result, error) {
+	if err := emit(ctx, workagent.StreamChunk{Type: "start-step"}); err != nil {
+		return workagent.Result{}, err
+	}
+	if err := emit(ctx, workagent.StreamChunk{Type: "tool-input-available", ToolCallID: "call-1", ToolName: "sensitive_action", Input: map[string]any{"targetId": "target-1"}, Dynamic: true}); err != nil {
+		return workagent.Result{}, err
+	}
+	close(runner.started)
+	approved, err := request.Approval(ctx, workagent.ApprovalRequest{
+		ToolCallID: "call-1",
+		ToolName:   "sensitive_action",
+		Title:      "Delete task?",
+		Summary:    "Delete Test task.",
+		Target:     map[string]any{"id": "task-1", "name": "Test task"},
+		Details:    []workagent.ApprovalDetail{{Label: "Project", Value: "Test project"}},
+		Presentation: workagent.ApprovalPresentation{
+			ConfirmLabel:   "Delete",
+			ConfirmVariant: "destructive",
+			PendingMessage: "Deleting task…",
+		},
+	})
+	if err != nil {
+		return workagent.Result{}, err
+	}
+	if err := emit(ctx, workagent.StreamChunk{Type: "tool-output-available", ToolCallID: "call-1", Output: map[string]any{"ok": approved}, Dynamic: true}); err != nil {
+		return workagent.Result{}, err
+	}
+	if err := emit(ctx, workagent.StreamChunk{Type: "finish-step"}); err != nil {
+		return workagent.Result{}, err
+	}
+	return workagent.Result{FinishReason: "stop", StepCount: 1}, nil
+}
+
 func (runner *blockingRunner) Stream(ctx context.Context, _ workagent.Request, emit workagent.EmitFunc) (workagent.Result, error) {
 	for _, chunk := range []workagent.StreamChunk{
 		{Type: "start-step"},
@@ -80,8 +117,10 @@ func (runner *blockingRunner) Stream(ctx context.Context, _ workagent.Request, e
 
 type chatTestServer struct {
 	app     *tests.TestApp
+	service *service
 	handler http.Handler
 	token   string
+	ownerID string
 	modelID string
 }
 
@@ -143,7 +182,8 @@ func newChatTestServerWithRunner(t *testing.T, runner workagent.Runner) *chatTes
 		t.Fatal(err)
 	}
 
-	register(app, newService(app, runner))
+	service := newService(app, runner)
+	register(app, service)
 	router, err := apis.NewRouter(app)
 	if err != nil {
 		t.Fatal(err)
@@ -156,7 +196,7 @@ func newChatTestServerWithRunner(t *testing.T, runner workagent.Runner) *chatTes
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &chatTestServer{app: app, handler: handler, token: token, modelID: model.Id}
+	return &chatTestServer{app: app, service: service, handler: handler, token: token, ownerID: user.Id, modelID: model.Id}
 }
 
 // createConversation creates a conversation via the PocketBase built-in Records API.
@@ -285,6 +325,87 @@ func TestActiveRunCanReplayHistoryAndContinueStreaming(t *testing.T) {
 	completed := server.request(t, http.MethodGet, "/api/chat/runs/00000000-0000-4000-8000-000000000001/stream", "")
 	if completed.Code != http.StatusNoContent {
 		t.Fatalf("expected completed run to return 204, got %d", completed.Code)
+	}
+}
+
+func TestApprovalResponseEndpointResolvesPendingDecisionOnce(t *testing.T) {
+	server := newChatTestServer(t)
+	runCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	run := newActiveRun("approval-run", server.ownerID, "conversation-1", cancel)
+	if !server.service.registerRun(run) {
+		t.Fatal("could not register approval test run")
+	}
+	defer server.service.removeRun(run)
+
+	ready := make(chan string, 1)
+	decisionDone := make(chan approvalDecision, 1)
+	go func() {
+		_, decision, err := run.awaitApproval(runCtx, workagent.ApprovalRequest{ToolCallID: "call-1", ToolName: "board_delete_task"}, func(approvalID string) {
+			ready <- approvalID
+		})
+		if err == nil {
+			decisionDone <- decision
+		}
+	}()
+	approvalID := <-ready
+
+	missing := server.request(t, http.MethodPost, "/api/chat/runs/approval-run/approvals/"+approvalID, `{}`)
+	if missing.Code != http.StatusBadRequest {
+		t.Fatalf("missing decision: %d %s", missing.Code, missing.Body.String())
+	}
+	response := server.request(t, http.MethodPost, "/api/chat/runs/approval-run/approvals/"+approvalID, `{"approved":false}`)
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("respond approval: %d %s", response.Code, response.Body.String())
+	}
+	if decision := <-decisionDone; decision.Approved {
+		t.Fatalf("unexpected approval decision: %#v", decision)
+	}
+	duplicate := server.request(t, http.MethodPost, "/api/chat/runs/approval-run/approvals/"+approvalID, `{"approved":true}`)
+	if duplicate.Code != http.StatusConflict {
+		t.Fatalf("duplicate decision: %d %s", duplicate.Code, duplicate.Body.String())
+	}
+}
+
+func TestApprovalEventsStreamAndResumeTheAgentRun(t *testing.T) {
+	runner := &approvalRunner{started: make(chan struct{})}
+	server := newChatTestServerWithRunner(t, runner)
+	conversationID := server.createConversation(t)
+	streamDone := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		streamDone <- server.streamMessage(t, conversationID)
+	}()
+	<-runner.started
+
+	run := server.service.findRun("00000000-0000-4000-8000-000000000001", server.ownerID)
+	if run == nil {
+		t.Fatal("approval run was not registered")
+	}
+	index := 0
+	approvalID := ""
+	for approvalID == "" {
+		chunks, _, notify := run.readFrom(index)
+		for _, chunk := range chunks {
+			if chunk.Type == "tool-approval-request" {
+				approvalID = chunk.ApprovalID
+				break
+			}
+		}
+		index += len(chunks)
+		if approvalID == "" {
+			<-notify
+		}
+	}
+
+	response := server.request(t, http.MethodPost, "/api/chat/runs/00000000-0000-4000-8000-000000000001/approvals/"+approvalID, `{"approved":true}`)
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("approve tool: %d %s", response.Code, response.Body.String())
+	}
+	stream := <-streamDone
+	for _, expected := range []string{`"type":"data-approval"`, `"type":"tool-approval-request"`, `"type":"tool-approval-response"`, `"approved":true`, `"confirmLabel":"Delete"`, `"confirmVariant":"destructive"`, `"label":"Project"`, `"type":"tool-output-available"`} {
+		if !strings.Contains(stream.Body.String(), expected) {
+			t.Fatalf("approval stream missing %s: %s", expected, stream.Body.String())
+		}
 	}
 }
 

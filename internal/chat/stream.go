@@ -209,6 +209,39 @@ func (s *service) executeRun(ctx context.Context, run *activeRun, conversation *
 		Messages:     history,
 		Model:        model,
 		ActorID:      user.Id,
+		Approval: func(approvalCtx context.Context, request workagent.ApprovalRequest) (bool, error) {
+			approvalID, decision, err := run.awaitApproval(approvalCtx, request, func(approvalID string) {
+				s.publishAndPersist(run, reducer, workagent.StreamChunk{
+					Type: "data-approval",
+					ID:   approvalID,
+					Data: map[string]any{
+						"approvalId":   approvalID,
+						"toolCallId":   request.ToolCallID,
+						"toolName":     request.ToolName,
+						"title":        request.Title,
+						"summary":      request.Summary,
+						"target":       request.Target,
+						"details":      request.Details,
+						"presentation": request.Presentation,
+					},
+				})
+				s.publishAndPersist(run, reducer, workagent.StreamChunk{
+					Type:       "tool-approval-request",
+					ApprovalID: approvalID,
+					ToolCallID: request.ToolCallID,
+				})
+			})
+			if err != nil {
+				return false, err
+			}
+			approved := decision.Approved
+			s.publishAndPersist(run, reducer, workagent.StreamChunk{
+				Type:       "tool-approval-response",
+				ApprovalID: approvalID,
+				Approved:   &approved,
+			})
+			return approved, nil
+		},
 	}, func(_ context.Context, chunk workagent.StreamChunk) error {
 		reducer.Apply(chunk)
 		run.publish(chunk)

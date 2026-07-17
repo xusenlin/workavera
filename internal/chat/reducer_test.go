@@ -1,6 +1,8 @@
 package chat
 
 import (
+	"context"
+	"errors"
 	"testing"
 
 	workagent "github.com/xusenlin/workavera/internal/agent"
@@ -83,6 +85,61 @@ func TestMessageReducerPersistsReasoningProviderMetadata(t *testing.T) {
 	data, _ := anthropicMeta["data"].(map[string]any)
 	if data["signature"] != "sig_abc" {
 		t.Fatalf("expected signature sig_abc, got %#v", data)
+	}
+}
+
+func TestMessageReducerTracksToolApproval(t *testing.T) {
+	reducer := newMessageReducer("message-1")
+	approved := false
+	for _, chunk := range []workagent.StreamChunk{
+		{Type: "tool-input-available", ToolCallID: "call-1", ToolName: "board_delete_task", Input: map[string]any{"taskId": "task-1"}},
+		{Type: "data-approval", ID: "approval-1", Data: map[string]any{"toolCallId": "call-1", "title": "Delete task?"}},
+		{Type: "tool-approval-request", ApprovalID: "approval-1", ToolCallID: "call-1"},
+		{Type: "tool-approval-response", ApprovalID: "approval-1", Approved: &approved},
+	} {
+		reducer.Apply(chunk)
+	}
+
+	message := reducer.Snapshot()
+	if len(message.Parts) != 2 || message.Parts[0]["state"] != "approval-responded" {
+		t.Fatalf("unexpected approval parts: %#v", message.Parts)
+	}
+	approval, _ := message.Parts[0]["approval"].(map[string]any)
+	if approval["id"] != "approval-1" || approval["approved"] != false {
+		t.Fatalf("unexpected approval response: %#v", approval)
+	}
+	if message.Parts[1]["type"] != "data-approval" {
+		t.Fatalf("approval presentation data was not persisted: %#v", message.Parts[1])
+	}
+}
+
+func TestActiveRunApprovalCanOnlyBeResolvedOnce(t *testing.T) {
+	runCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	run := newActiveRun("run-1", "owner-1", "conversation-1", cancel)
+	approvalReady := make(chan string, 1)
+	decisionDone := make(chan approvalDecision, 1)
+	go func() {
+		_, decision, err := run.awaitApproval(runCtx, workagent.ApprovalRequest{
+			ToolCallID: "call-1",
+			ToolName:   "board_delete_task",
+		}, func(approvalID string) {
+			approvalReady <- approvalID
+		})
+		if err == nil {
+			decisionDone <- decision
+		}
+	}()
+
+	approvalID := <-approvalReady
+	if err := run.respondApproval(approvalID, approvalDecision{Approved: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := run.respondApproval(approvalID, approvalDecision{Approved: false}); !errors.Is(err, errApprovalNotPending) {
+		t.Fatalf("second response should conflict, got %v", err)
+	}
+	if decision := <-decisionDone; !decision.Approved {
+		t.Fatalf("unexpected decision: %#v", decision)
 	}
 }
 

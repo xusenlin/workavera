@@ -107,6 +107,13 @@ type UpdateTaskCommand struct {
 	DocIDs      *[]string
 }
 
+type TaskDeleteTarget struct {
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	ProjectID   string `json:"projectId"`
+	ProjectName string `json:"projectName"`
+}
+
 func ListVisibleTemplates(ctx context.Context, app core.App, actorID string) ([]TemplateSummary, error) {
 	if err := requireActiveActor(ctx, app, actorID); err != nil {
 		return nil, err
@@ -591,6 +598,61 @@ func UpdateTask(ctx context.Context, app core.App, actorID string, command Updat
 			}
 		}
 		result = MutationResult{OK: true, Action: "updated", ResourceType: "task", ID: record.Id, Name: record.GetString("title"), ProjectID: project.Id}
+		return nil
+	})
+	return result, err
+}
+
+// GetDeletableTask resolves a task for a human-readable approval prompt and
+// verifies that the actor can currently edit tasks in its project.
+func GetDeletableTask(ctx context.Context, app core.App, actorID, taskID string) (TaskDeleteTarget, error) {
+	if err := requireActiveActor(ctx, app, actorID); err != nil {
+		return TaskDeleteTarget{}, err
+	}
+	record, err := app.FindRecordById(boardTasksCollection, strings.TrimSpace(taskID))
+	if err != nil {
+		return TaskDeleteTarget{}, errors.New("task not found")
+	}
+	project, err := requireTaskWriter(app, actorID, record.GetString("project"))
+	if err != nil {
+		return TaskDeleteTarget{}, err
+	}
+	return TaskDeleteTarget{
+		ID:          record.Id,
+		Title:       record.GetString("title"),
+		ProjectID:   project.Id,
+		ProjectName: project.GetString("name"),
+	}, nil
+}
+
+// DeleteTask re-reads and re-authorizes the target immediately before the
+// mutation so an approval cannot outlive a permission or target change.
+func DeleteTask(ctx context.Context, app core.App, actorID, taskID string) (MutationResult, error) {
+	if err := requireActiveActor(ctx, app, actorID); err != nil {
+		return MutationResult{}, err
+	}
+	var result MutationResult
+	err := app.RunInTransaction(func(tx core.App) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		record, err := tx.FindRecordById(boardTasksCollection, strings.TrimSpace(taskID))
+		if err != nil {
+			return errors.New("task not found")
+		}
+		project, err := requireTaskWriter(tx, actorID, record.GetString("project"))
+		if err != nil {
+			return err
+		}
+		task := record.Fresh()
+		if err := tx.Delete(record); err != nil {
+			return err
+		}
+		actor, _ := tx.FindRecordById("users", actorID)
+		if err := saveBoardTaskOperationLog(tx, actor, task, "delete", map[string]any{}); err != nil {
+			return err
+		}
+		result = MutationResult{OK: true, Action: "deleted", ResourceType: "task", ID: task.Id, Name: task.GetString("title"), ProjectID: project.Id}
 		return nil
 	})
 	return result, err

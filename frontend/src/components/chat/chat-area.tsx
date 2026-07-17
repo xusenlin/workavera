@@ -106,7 +106,11 @@ function ActiveChat({ conversation }: { conversation: ChatConversation }) {
             />
           ) : (
             messages.map((message) => (
-              <ChatMessageItem key={message.id} message={message} />
+              <ChatMessageItem
+                key={message.id}
+                message={message}
+                activeRunId={runtimeState.activeRunId}
+              />
             ))
           )}
           {(error || runtimeState.recoveryError) && (

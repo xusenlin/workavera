@@ -7,6 +7,7 @@ type Request struct {
 	Messages     []Message
 	Model        ModelConfig
 	ActorID      string
+	Approval     ApprovalHandler
 }
 
 type EmitFunc func(context.Context, StreamChunk) error

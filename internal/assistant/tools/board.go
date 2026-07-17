@@ -6,6 +6,7 @@ import (
 
 	"charm.land/fantasy"
 	"github.com/pocketbase/pocketbase/core"
+	workagent "github.com/xusenlin/workavera/internal/agent"
 	"github.com/xusenlin/workavera/internal/board"
 )
 
@@ -83,6 +84,10 @@ type boardUpdateTaskInput struct {
 	AssigneeIDs *[]string `json:"assigneeIds,omitempty" description:"Optional replacement assignee user IDs; pass an empty array to clear"`
 	DocumentIDs *[]string `json:"documentIds,omitempty" description:"Optional replacement linked document IDs, each belonging to the same project; pass an empty array to clear"`
 	dueDateSet  bool
+}
+
+type boardDeleteTaskInput struct {
+	TaskID string `json:"taskId" description:"Task ID returned by board_search_tasks"`
 }
 
 func (input *boardUpdateTaskInput) UnmarshalJSON(data []byte) error {
@@ -250,6 +255,52 @@ func newBoardUpdateTaskTool(app core.App, actorID string) fantasy.AgentTool {
 		func(ctx context.Context, input boardUpdateTaskInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
 			result, err := board.UpdateTask(ctx, app, actorID, board.UpdateTaskCommand{TaskID: input.TaskID, Title: input.Title, Description: normalizeEscapedTextPtr(input.Description), StateID: input.StateID, Priority: input.Priority, DueDate: input.DueDate, DueDateSet: input.dueDateSet, LabelIDs: input.LabelIDs, AssigneeIDs: input.AssigneeIDs, DocIDs: input.DocumentIDs})
 			return boardToolResult(app, actorID, "update task", result, err)
+		},
+	)
+}
+
+func newBoardDeleteTaskTool(app core.App, actorID string) fantasy.AgentTool {
+	return fantasy.NewAgentTool(
+		"board_delete_task",
+		"Permanently delete one Board task only when explicitly requested. Call board_search_tasks first and use an exact returned task ID. This action always pauses for user approval before deletion. If approval is denied, do not retry unless the user explicitly asks again.",
+		func(ctx context.Context, input boardDeleteTaskInput, call fantasy.ToolCall) (fantasy.ToolResponse, error) {
+			target, err := board.GetDeletableTask(ctx, app, actorID, input.TaskID)
+			if err != nil {
+				return boardToolResult(app, actorID, "prepare delete task", nil, err)
+			}
+			approved, err := workagent.RequireApproval(ctx, workagent.ApprovalRequest{
+				ToolCallID: call.ID,
+				ToolName:   call.Name,
+				Title:      "Delete task?",
+				Summary:    "Permanently delete “" + target.Title + "” from “" + target.ProjectName + "”.",
+				Target: map[string]any{
+					"type": "board_task",
+					"id":   target.ID,
+					"name": target.Title,
+				},
+				Details: []workagent.ApprovalDetail{
+					{Label: "Project", Value: target.ProjectName},
+				},
+				Presentation: workagent.ApprovalPresentation{
+					ConfirmLabel:   "Delete",
+					ConfirmVariant: "destructive",
+					PendingMessage: "Deleting task…",
+					SuccessMessage: "Task deleted.",
+					DeniedMessage:  "Task deletion cancelled.",
+					FailureMessage: "The task could not be deleted.",
+				},
+			})
+			if err != nil {
+				return fantasy.ToolResponse{}, err
+			}
+			if !approved {
+				return boardToolResult(app, actorID, "delete task", map[string]any{
+					"ok": false, "action": "denied", "resourceType": "task", "id": target.ID,
+					"name": target.Title, "projectId": target.ProjectID, "reason": "user_denied",
+				}, nil)
+			}
+			result, err := board.DeleteTask(ctx, app, actorID, input.TaskID)
+			return boardToolResult(app, actorID, "delete task", result, err)
 		},
 	)
 }
