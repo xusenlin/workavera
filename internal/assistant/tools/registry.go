@@ -3,6 +3,9 @@ package tools
 import (
 	"charm.land/fantasy"
 	"github.com/pocketbase/pocketbase/core"
+
+	workagent "github.com/xusenlin/workavera/internal/agent"
+	"github.com/xusenlin/workavera/internal/preferences"
 )
 
 // Factory owns application dependencies and creates actor-scoped Fantasy
@@ -59,4 +62,22 @@ func (f *Factory) ForActor(actorID string) []fantasy.AgentTool {
 		newDocsReplaceTool(f.app, actorID),
 		newDocsWriteChunkTool(f.app, actorID),
 	}
+}
+
+// ForChat returns the normal actor tools plus Chat-only memory tools when the
+// user's memory preference is enabled. MCP deliberately continues to call
+// ForActor, so memory tools are never exposed through API keys.
+func (f *Factory) ForChat(scope workagent.ToolScope) []fantasy.AgentTool {
+	tools := f.ForActor(scope.ActorID)
+	if f.app == nil {
+		return tools
+	}
+	preference, err := preferences.Get(f.app, scope.ActorID)
+	if err != nil || !preference.MemoryEnabled {
+		return tools
+	}
+	return append(tools,
+		newMemoryUpsertTool(f.app, scope, preference.MemoryAutoCapture),
+		newMemoryForgetTool(f.app, scope),
+	)
 }

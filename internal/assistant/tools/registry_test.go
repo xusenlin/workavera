@@ -5,6 +5,14 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/pocketbase/dbx"
+	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tests"
+
+	workagent "github.com/xusenlin/workavera/internal/agent"
+	"github.com/xusenlin/workavera/internal/preferences"
+	_ "github.com/xusenlin/workavera/migrations"
 )
 
 func TestFactoryRegistersOnlyProductionTools(t *testing.T) {
@@ -54,6 +62,57 @@ func TestFactoryRegistersOnlyProductionTools(t *testing.T) {
 	}
 	if names["board_delete_project"] {
 		t.Fatalf("project deletion must not be registered: %#v", names)
+	}
+}
+
+func TestMemoryToolsAreChatOnlyAndPreferenceGated(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer app.Cleanup()
+	users, err := app.FindCollectionByNameOrId("users")
+	if err != nil {
+		t.Fatal(err)
+	}
+	user := core.NewRecord(users)
+	user.SetEmail("memory-tools@example.com")
+	user.SetPassword("password123")
+	user.Set("name", "Memory Tools")
+	if err := app.Save(user); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := preferences.Ensure(app, user.Id); err != nil {
+		t.Fatal(err)
+	}
+	factory := NewFactory(app)
+
+	base := map[string]bool{}
+	for _, tool := range factory.ForActor(user.Id) {
+		base[tool.Info().Name] = true
+	}
+	if base["system_memory_upsert"] || base["system_memory_forget"] {
+		t.Fatalf("memory tools leaked into the base/MCP registry: %v", base)
+	}
+	disabled := factory.ForChat(workagent.ToolScope{ActorID: user.Id})
+	if len(disabled) != len(base) {
+		t.Fatalf("disabled Chat memory added tools: %d vs %d", len(disabled), len(base))
+	}
+
+	preference, err := app.FindFirstRecordByFilter(preferences.CollectionName, "owner = {:owner}", dbx.Params{"owner": user.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	preference.Set("memory_enabled", true)
+	if err := app.Save(preference); err != nil {
+		t.Fatal(err)
+	}
+	chatNames := map[string]bool{}
+	for _, tool := range factory.ForChat(workagent.ToolScope{ActorID: user.Id}) {
+		chatNames[tool.Info().Name] = true
+	}
+	if !chatNames["system_memory_upsert"] || !chatNames["system_memory_forget"] {
+		t.Fatalf("enabled Chat memory tools are missing: %v", chatNames)
 	}
 }
 

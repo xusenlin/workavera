@@ -79,12 +79,12 @@ The demo user is seeded only when the `users` collection is empty, so upgrades d
 - **Dashboard** shows counts for active projects, open tasks, the next seven days, and unread Reading items, together with due tasks, upcoming events and deadlines, recently updated Docs/Chat/Reading records, and quick links.
 - **Reading** saves external URLs and notes with project, tags, read status, pins, archive, configurable summary language, and AI-generated summaries. Its paginated library can be searched and filtered by status or project, with mark-all-read and separate archive restore and delete controls.
 - **Contacts** provides a searchable contact list, detailed profiles, and personal favorites; Chat can search a bounded, non-sensitive contact projection.
-- **Chat** streams model output, reasoning, and tool calls into durable conversations. Runs continue across browser disconnects and can be resumed or stopped. A context-usage indicator tracks token and cache details, and long conversations are automatically compacted into a summary near the model's context limit without altering the visible history.
+- **Chat** streams model output, reasoning, and tool calls into durable conversations. Runs continue across browser disconnects and can be resumed or stopped. A context-usage indicator tracks token and cache details, and long conversations are automatically compacted into a summary near the model's context limit without altering the visible history. Optional private long-term memory carries user-approved facts and preferences across conversations; it is disabled by default, independently controls automatic capture, and can be reviewed or edited at any time.
 - **Docs** stores private and project documents with BlockNote rich editing, source/fullscreen modes, Markdown/HTML export, explicit versions, conflict detection, pins, archive, and AI editing. Documents are Markdown or self-contained interactive HTML apps rendered in a sandboxed preview.
 - **Board** manages independent project workflows, labels, roles, tasks, activity history, due dates, and same-project document links. Ten bilingual workflow templates are included.
 - **Calendar** combines personal events with visible Board deadlines, supports recurrence and system-timezone scheduling, and produces in-app reminders.
 - **Notifications** provides realtime model-share requests, task-due notices, and calendar reminders with record deep links. The paginated inbox supports search, read-state and type filters, pins, archive/restore, and permanent delete.
-- **Settings and Profile** manage model configurations, model sharing, per-user appearance, profile fields, and avatars.
+- **Settings and Profile** manage model configurations, model sharing, per-user appearance, Chat memory controls and saved memories, profile fields, and avatars.
 
 ## Development
 
@@ -109,6 +109,7 @@ All tasks are defined in [`Taskfile.yml`](./Taskfile.yml); frontend-only command
 | Board | [Board PRD](./doc/board-prd.md) | [Board PRD](./doc/board-prd.zh-CN.md) |
 | Calendar | [Calendar PRD](./doc/calendar-prd.md) | [Calendar PRD](./doc/calendar-prd.zh-CN.md) |
 | Chat | [Chat PRD and Fantasy architecture](./doc/chat-fantasy-plan.md) | [Chat PRD 与 Fantasy 架构](./doc/chat-fantasy-plan.zh-CN.md) |
+| Chat Memory | [Chat Memory PRD](./doc/chat-memory-prd.md) | [Chat 记忆 PRD](./doc/chat-memory-prd.zh-CN.md) |
 | Docs | [Docs PRD](./doc/docs-prd.md) | [Docs PRD](./doc/docs-prd.zh-CN.md) |
 
 ## Changelog

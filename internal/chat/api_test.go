@@ -13,6 +13,8 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tests"
 	workagent "github.com/xusenlin/workavera/internal/agent"
+	workmemory "github.com/xusenlin/workavera/internal/memory"
+	"github.com/xusenlin/workavera/internal/preferences"
 	_ "github.com/xusenlin/workavera/migrations"
 )
 
@@ -267,6 +269,96 @@ func TestChatStreamPersistsUIMessageAndUsesProtocol(t *testing.T) {
 	}
 	if result[1].Metadata["runId"] != "00000000-0000-4000-8000-000000000001" {
 		t.Fatalf("run id was not persisted: %#v", result[1].Metadata)
+	}
+}
+
+func TestMemoryUndoEndpointRevertsMemoryAndPersistsToolState(t *testing.T) {
+	server := newChatTestServer(t)
+	conversationID := server.createConversation(t)
+	preference, err := preferences.Ensure(server.app, server.ownerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	preferenceRecord, err := server.app.FindRecordById(preferences.CollectionName, preference.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	preferenceRecord.Set("memory_enabled", true)
+	if err := server.app.Save(preferenceRecord); err != nil {
+		t.Fatal(err)
+	}
+
+	messages, err := server.app.FindCollectionByNameOrId(messagesCollection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	userMessage := core.NewRecord(messages)
+	userMessage.Set("conversation", conversationID)
+	userMessage.Set("sequence", 0)
+	userMessage.Set("role", "user")
+	userMessage.Set("status", "complete")
+	userMessage.Set("model_config", server.modelID)
+	userMessage.Set("parts", []workagent.Part{{"type": "text", "text": "Remember that I prefer concise replies."}})
+	if err := server.app.Save(userMessage); err != nil {
+		t.Fatal(err)
+	}
+	result, err := workmemory.Upsert(server.app, server.ownerID, conversationID, userMessage.Id, workmemory.UpsertInput{
+		Category: "preference",
+		Content:  "The user prefers concise replies.",
+		Origin:   "explicit",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assistantMessage := core.NewRecord(messages)
+	assistantMessage.Set("conversation", conversationID)
+	assistantMessage.Set("sequence", 1)
+	assistantMessage.Set("role", "assistant")
+	assistantMessage.Set("status", "complete")
+	assistantMessage.Set("model_config", server.modelID)
+	assistantMessage.Set("parts", []workagent.Part{{
+		"type":       "dynamic-tool",
+		"toolCallId": "memory-call-1",
+		"toolName":   "system_memory_upsert",
+		"state":      "output-available",
+		"input":      map[string]any{"category": "preference", "content": result.Memory.Content, "origin": "explicit"},
+		"output":     result,
+	}})
+	if err := server.app.Save(assistantMessage); err != nil {
+		t.Fatal(err)
+	}
+
+	response := server.request(t, http.MethodPost, "/api/chat/messages/"+assistantMessage.Id+"/memory-actions/memory-call-1/undo", "")
+	if response.Code != http.StatusOK {
+		t.Fatalf("undo memory: %d %s", response.Code, response.Body.String())
+	}
+	var undone workmemory.UpsertResult
+	if err := json.Unmarshal(response.Body.Bytes(), &undone); err != nil {
+		t.Fatal(err)
+	}
+	if undone.Action != "undone" || undone.OriginalAction != "created" || undone.UndoneAt == "" {
+		t.Fatalf("unexpected undo response: %#v", undone)
+	}
+	if _, err := server.app.FindRecordById(workmemory.CollectionName, result.Memory.ID); err == nil {
+		t.Fatal("created memory still exists after undo")
+	}
+
+	persisted, err := server.app.FindRecordById(messagesCollection, assistantMessage.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts, err := decodeStoredParts(persisted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var persistedResult workmemory.UpsertResult
+	if len(parts) != 1 || decodeMemoryUpsertResult(parts[0]["output"], &persistedResult) != nil || persistedResult.Action != "undone" {
+		t.Fatalf("tool output was not persisted as undone: %#v", parts)
+	}
+
+	duplicate := server.request(t, http.MethodPost, "/api/chat/messages/"+assistantMessage.Id+"/memory-actions/memory-call-1/undo", "")
+	if duplicate.Code != http.StatusOK {
+		t.Fatalf("idempotent undo: %d %s", duplicate.Code, duplicate.Body.String())
 	}
 }
 

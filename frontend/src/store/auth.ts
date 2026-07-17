@@ -5,13 +5,6 @@ import { validateAvatarFile } from "@/lib/avatar"
 import { pb } from "@/lib/pocketbase"
 
 export type UserStatus = "online" | "away" | "busy" | "offline"
-export type Theme = "system" | "light" | "dark"
-
-const THEME_VALUES: Theme[] = ["system", "light", "dark"]
-
-function toTheme(value: string | undefined): Theme {
-  return THEME_VALUES.includes(value as Theme) ? (value as Theme) : "system"
-}
 
 type UserRecord = RecordModel & {
   name: string
@@ -21,7 +14,6 @@ type UserRecord = RecordModel & {
   title?: string
   bio?: string
   status?: UserStatus
-  theme?: string
 }
 
 export type User = {
@@ -33,7 +25,6 @@ export type User = {
   title?: string
   bio?: string
   status?: UserStatus
-  theme: Theme
 }
 
 export type ProfileUpdate = {
@@ -53,7 +44,6 @@ type AuthState = {
   login: (email: string, password: string) => Promise<void>
   logout: () => void
   updateProfile: (profile: ProfileUpdate) => Promise<User>
-  updateTheme: (theme: Theme) => Promise<void>
   updatePassword: (
     currentPassword: string,
     newPassword: string
@@ -72,7 +62,6 @@ function toUser(record: UserRecord): User {
     title: record.title || undefined,
     bio: record.bio || undefined,
     status: record.status || undefined,
-    theme: toTheme(record.theme),
   }
 }
 
@@ -173,21 +162,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return updatedUser
     } catch (error) {
       throw new Error(errorMessage(error, "Could not save your profile"), {
-        cause: error,
-      })
-    }
-  },
-
-  updateTheme: async (theme) => {
-    const user = get().user
-    if (!user || user.theme === theme) return
-    // Optimistically reflect the choice; the caller applies it to the UI.
-    set({ user: { ...user, theme } })
-    try {
-      await pb.collection("users").update<UserRecord>(user.id, { theme })
-    } catch (error) {
-      set({ user: { ...user } })
-      throw new Error(errorMessage(error, "Could not save your theme"), {
         cause: error,
       })
     }

@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import * as React from "react"
 
-import { useAuthStore } from "@/store/auth"
+import { usePreferencesStore } from "@/store/preferences"
 
 type Theme = "dark" | "light" | "system"
 type ResolvedTheme = "dark" | "light"
@@ -170,7 +170,10 @@ export function ThemeProvider({
                 : "dark"
 
         localStorage.setItem(storageKey, nextTheme)
-        void useAuthStore.getState().updateTheme(nextTheme).catch(() => {})
+        void usePreferencesStore
+          .getState()
+          .updateTheme(nextTheme)
+          .catch(() => {})
         return nextTheme
       })
     }

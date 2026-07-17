@@ -30,7 +30,7 @@ func effectiveMaxOutputTokens(config ModelConfig) int64 {
 // FantasyRunner adapts Fantasy to the application's AI SDK UI compatible
 // stream protocol. PocketBase and application-domain services stay outside
 // this package and are supplied through an actor-scoped tool factory.
-type FantasyToolFactory func(actorID string) []fantasy.AgentTool
+type FantasyToolFactory func(scope ToolScope) []fantasy.AgentTool
 
 type FantasyRunner struct {
 	toolFactory FantasyToolFactory
@@ -80,7 +80,11 @@ func (r *FantasyRunner) Stream(ctx context.Context, request Request, emit EmitFu
 		fantasy.WithMaxOutputTokens(effectiveMaxOutputTokens(request.Model)),
 	}
 	if r.toolFactory != nil {
-		opts = append(opts, fantasy.WithTools(r.toolFactory(request.ActorID)...))
+		opts = append(opts, fantasy.WithTools(r.toolFactory(ToolScope{
+			ActorID:        request.ActorID,
+			ConversationID: request.ConversationID,
+			UserMessageID:  request.UserMessageID,
+		})...))
 	}
 	if request.SystemPrompt != "" {
 		opts = append(opts, fantasy.WithSystemPrompt(request.SystemPrompt))

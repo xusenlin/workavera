@@ -19,6 +19,7 @@ import {
 import { ApiKeysCard } from "@/components/api-keys-card"
 import { ModelCopyDialog } from "@/components/model-copy-dialog"
 import { ModelSheet } from "@/components/model-sheet"
+import { MemorySettingsCard } from "@/components/memory-settings-card"
 import { useTheme } from "@/components/theme-provider"
 import {
   AlertDialog,
@@ -57,7 +58,7 @@ import {
 } from "@/store/llm-settings"
 import { cn } from "@/lib/utils"
 import { formatTokenSize } from "@/lib/token-size"
-import { useAuthStore } from "@/store/auth"
+import { usePreferencesStore } from "@/store/preferences"
 
 export function SettingsPage() {
   const models = useLlmSettingsStore((state) => state.models)
@@ -349,6 +350,8 @@ export function SettingsPage() {
 
       <ApiKeysCard />
 
+      <MemorySettingsCard />
+
       <AppearanceCard />
 
       <ModelSheet
@@ -417,7 +420,7 @@ const THEME_OPTIONS = [
 
 function AppearanceCard() {
   const { theme, setTheme } = useTheme()
-  const persistTheme = useAuthStore((state) => state.updateTheme)
+  const persistTheme = usePreferencesStore((state) => state.updateTheme)
 
   const changeTheme = async (value: "light" | "dark" | "system") => {
     const previous = theme

@@ -67,12 +67,12 @@ docker run -p 8090:8090 -v workavera-data:/app/pb_data ghcr.io/xusenlin/workaver
 - **Dashboard** 展示活动项目数、未完成任务数、未来七天事项数和未读 Reading 数量，并提供最近到期任务、即将发生的事件与任务截止事项、最近更新的 Docs/Chat/Reading 记录和快捷入口。
 - **Reading** 保存外部网址和笔记，支持关联项目、标签、阅读状态、置顶、归档、总结语言设置和 AI 总结。分页资料库支持搜索及按状态、项目筛选、全部标记为已读，并提供独立的归档恢复与删除操作。
 - **Contacts** 提供可搜索的联系人列表、详细资料和个人收藏；Chat 仅搜索有数量限制且不包含敏感字段的联系人摘要。
-- **Chat** 将模型输出、推理和工具调用流式写入持久化会话；浏览器断开后运行继续，可恢复连接或停止。输入框旁的上下文指示器展示 token 与缓存明细；长会话接近模型上下文上限时自动压缩为摘要，不改动可见历史。
+- **Chat** 将模型输出、推理和工具调用流式写入持久化会话；浏览器断开后运行继续，可恢复连接或停止。输入框旁的上下文指示器展示 token 与缓存明细；长会话接近模型上下文上限时自动压缩为摘要，不改动可见历史。可选的私有长期记忆能够跨会话复用用户允许保存的事实和偏好；该功能默认关闭，自动记录拥有独立开关，用户可随时查看和修改记忆。
 - **Docs** 管理个人与项目文档，提供 BlockNote 富文本、源码/全屏模式、Markdown/HTML 导出、明确版本、冲突检测、置顶、归档和 AI 编辑。文档分为 Markdown 与自包含交互式 HTML 应用两种，后者在沙箱中预览。
 - **Board** 管理独立的项目流程、标签、角色、任务、活动记录、截止日期和同项目文档关联，并内置十套中英文流程模板。
 - **Calendar** 合并个人事件与可见的 Board 截止事项，支持重复和系统时区调度，并生成站内提醒。
 - **Notifications** 实时提供模型分享请求、任务到期通知和日历提醒，并支持记录深链接。分页收件箱支持搜索、已读状态与通知类型筛选、置顶、归档恢复和永久删除。
-- **Settings 与 Profile** 管理模型配置、模型分享、用户级外观、个人资料和头像。
+- **Settings 与 Profile** 管理模型配置、模型分享、用户级外观、Chat 记忆开关与已保存记忆、个人资料和头像。
 
 ## 开发
 
@@ -97,6 +97,7 @@ task release    # 交叉编译发布压缩包到 dist/
 | Board | [Board PRD](./doc/board-prd.md) | [Board PRD](./doc/board-prd.zh-CN.md) |
 | Calendar | [Calendar PRD](./doc/calendar-prd.md) | [Calendar PRD](./doc/calendar-prd.zh-CN.md) |
 | Chat | [Chat PRD and Fantasy architecture](./doc/chat-fantasy-plan.md) | [Chat PRD 与 Fantasy 架构](./doc/chat-fantasy-plan.zh-CN.md) |
+| Chat Memory | [Chat Memory PRD](./doc/chat-memory-prd.md) | [Chat 记忆 PRD](./doc/chat-memory-prd.zh-CN.md) |
 | Docs | [Docs PRD](./doc/docs-prd.md) | [Docs PRD](./doc/docs-prd.zh-CN.md) |
 
 ## 更新日志

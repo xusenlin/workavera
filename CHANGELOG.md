@@ -5,6 +5,37 @@ All notable changes to Workavera are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.0.8] - 2026-07-18
+
+### Added
+
+- Chat now supports private, cross-conversation long-term memory under explicit
+  user control. Memory is off by default; users can enable saved-memory use and
+  separately opt in to automatic capture from Settings.
+- Settings includes a memory manager for creating, searching, filtering,
+  editing, activating, deactivating, and deleting memories. Each user can keep
+  up to 50 concise memories across preference, personal, work, goal, and
+  constraint categories.
+- Authenticated Chat runs can use the internal `system_memory_upsert` and
+  `system_memory_forget` tools. The server enforces ownership, capture consent,
+  content policy, limits, and trusted conversation/message provenance; memory
+  tools are not exposed through MCP.
+- Dedicated Chat cards show explicit saves, automatic saves, unchanged
+  memories, and forgotten memories. Created or updated memories can be undone;
+  the server atomically reverts the memory and persists the original card as
+  undone without overwriting a memory changed later.
+
+### Changed
+
+- Each Chat run receives the complete active saved-memory set as the
+  authoritative current state. Historical memory tool calls remain visible as
+  past events, while current user messages and the current saved-memory set
+  take precedence over stale history.
+- Account-level appearance and memory controls now live together in a private
+  user-preferences record. Existing themes are migrated without changing the
+  user's selection, and new accounts default to the system theme with memory
+  fully disabled.
+
 ## [0.0.7] - 2026-07-17
 
 ### Added
@@ -191,7 +222,8 @@ First public release.
 - **AI Micro Apps** for self-contained HTML tools with sandboxed preview.
 - **Dashboard**, realtime **Notifications**, and **Settings** with per-user model configurations and model sharing.
 
-[0.0.7]: https://github.com/xusenlin/workavera/compare/v0.0.6...HEAD
+[0.0.8]: https://github.com/xusenlin/workavera/compare/v0.0.7...HEAD
+[0.0.7]: https://github.com/xusenlin/workavera/compare/v0.0.6...v0.0.7
 [0.0.6]: https://github.com/xusenlin/workavera/compare/v0.0.5...v0.0.6
 [0.0.5]: https://github.com/xusenlin/workavera/compare/v0.0.4...v0.0.5
 [0.0.4]: https://github.com/xusenlin/workavera/compare/v0.0.3...v0.0.4

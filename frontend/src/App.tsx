@@ -7,12 +7,16 @@ import { clearChatRuntimes } from "@/lib/chat-runtime"
 import { AppRouter } from "@/router"
 import { useAuthStore } from "@/store/auth"
 import { useChatRunsStore } from "@/store/chat-runs"
+import { useMemoriesStore } from "@/store/memories"
+import { usePreferencesStore } from "@/store/preferences"
 
 export function App() {
   const initialized = useAuthStore((state) => state.initialized)
   const initialize = useAuthStore((state) => state.initialize)
   const userId = useAuthStore((state) => state.user?.id ?? null)
-  const userTheme = useAuthStore((state) => state.user?.theme)
+  const initializePreferences = usePreferencesStore((state) => state.initialize)
+  const clearPreferences = usePreferencesStore((state) => state.clear)
+  const userTheme = usePreferencesStore((state) => state.preferences?.theme)
   const previousUserId = useRef(userId)
   const { setTheme } = useTheme()
 
@@ -26,11 +30,20 @@ export function App() {
   }, [userTheme, setTheme])
 
   useEffect(() => {
+    if (userId) {
+      void initializePreferences()
+    } else {
+      clearPreferences()
+    }
+  }, [clearPreferences, initializePreferences, userId])
+
+  useEffect(() => {
     if (previousUserId.current !== userId) {
       if (previousUserId.current !== null) {
         clearChatRuntimes()
         useChatRunsStore.getState().clear()
       }
+      useMemoriesStore.getState().clear()
       previousUserId.current = userId
     }
   }, [userId])

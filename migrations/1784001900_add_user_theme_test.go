@@ -14,13 +14,13 @@ func TestAddUserThemeMigration(t *testing.T) {
 	}
 	defer app.Cleanup()
 
-	users, err := app.FindCollectionByNameOrId(usersCollectionName)
+	preferences, err := app.FindCollectionByNameOrId(userPreferencesCollection)
 	if err != nil {
 		t.Fatal(err)
 	}
-	field, ok := users.Fields.GetByName("theme").(*core.SelectField)
+	field, ok := preferences.Fields.GetByName("theme").(*core.SelectField)
 	if !ok {
-		t.Fatal("users must expose a theme preference field")
+		t.Fatal("user preferences must expose a theme field")
 	}
 	if field.MaxSelect != 1 {
 		t.Fatalf("theme must be single-select, got MaxSelect=%d", field.MaxSelect)

@@ -15,7 +15,7 @@ const maxPinnedConversations = 6
 
 func Register(app core.App) {
 	toolFactory := assistanttools.NewFactory(app)
-	service := newService(app, workagent.NewFantasyRunner(toolFactory.ForActor))
+	service := newService(app, workagent.NewFantasyRunner(toolFactory.ForChat))
 	register(app, service)
 }
 
@@ -26,6 +26,7 @@ func register(app core.App, service *service) {
 		}
 		group := event.Router.Group("/api/chat").Bind(apis.RequireAuth("users"))
 		group.GET("/conversations/{id}/messages", service.listMessages)
+		group.POST("/messages/{messageId}/memory-actions/{toolCallId}/undo", service.undoMemoryAction)
 		group.POST("/stream", service.stream)
 		group.GET("/runs/{id}/stream", service.resumeRun)
 		group.POST("/runs/{id}/approvals/{approvalId}", service.respondApproval)

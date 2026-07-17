@@ -37,6 +37,7 @@ import {
   CalendarMutationToolCard,
 } from "./calendar-tool-output"
 import { ApprovalToolCard } from "./approval-tool-card"
+import { MemoryToolCard } from "./memory-tool-output"
 
 const boardMutationToolNames = new Set([
   "board_create_project",
@@ -150,6 +151,19 @@ function MessageParts({
         }
         if (calendarMutationToolNames.has(part.toolName)) {
           return <CalendarMutationToolCard key={part.toolCallId} part={part} />
+        }
+        if (
+          part.toolName === "system_memory_upsert" ||
+          part.toolName === "system_memory_forget"
+        ) {
+          return (
+            <MemoryToolCard
+              key={part.toolCallId}
+              part={part}
+              messageId={message.id}
+              runActive={message.metadata?.runId === activeRunId}
+            />
+          )
         }
         return (
           <Tool

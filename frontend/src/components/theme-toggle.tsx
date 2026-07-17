@@ -8,11 +8,11 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { useTheme } from "@/components/theme-provider"
-import { useAuthStore } from "@/store/auth"
+import { usePreferencesStore } from "@/store/preferences"
 
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme()
-  const updateTheme = useAuthStore((state) => state.updateTheme)
+  const updateTheme = usePreferencesStore((state) => state.updateTheme)
 
   const isDark =
     theme === "dark" ||

@@ -19,7 +19,9 @@ import (
 	"github.com/xusenlin/workavera/internal/docs"
 	"github.com/xusenlin/workavera/internal/llm"
 	"github.com/xusenlin/workavera/internal/mcpserver"
+	"github.com/xusenlin/workavera/internal/memory"
 	"github.com/xusenlin/workavera/internal/notifications"
+	"github.com/xusenlin/workavera/internal/preferences"
 	"github.com/xusenlin/workavera/internal/reading"
 	_ "github.com/xusenlin/workavera/migrations"
 )
@@ -39,6 +41,8 @@ func main() {
 	llm.Register(app)
 	mcpserver.Register(app, version)
 	notifications.Register(app)
+	preferences.Register(app)
+	memory.Register(app)
 	chat.Register(app)
 
 	migratecmd.MustRegister(app, app.RootCmd, migratecmd.Config{
