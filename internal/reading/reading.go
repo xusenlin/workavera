@@ -89,6 +89,30 @@ func Register(app core.App) {
 		event.Router.POST("/api/reading/items/{id}/pin", pinItem).Bind(apis.RequireAuth("users"))
 		return event.Next()
 	})
+	app.OnRecordUpdateRequest(itemsCollection).BindFunc(validateItemUpdate)
+}
+
+func validateItemUpdate(event *core.RecordRequestEvent) error {
+	if event.Record.GetString("status") == "archived" {
+		event.Record.Set("pinned", false)
+		return event.Next()
+	}
+	if !event.Record.GetBool("pinned") || event.Record.Original().GetBool("pinned") {
+		return event.Next()
+	}
+
+	ownerID := event.Record.GetString("owner")
+	count, err := event.App.CountRecords(itemsCollection, dbx.And(
+		dbx.HashExp{"owner": ownerID, "pinned": true},
+		dbx.Not(dbx.HashExp{"status": "archived"}),
+	))
+	if err != nil {
+		return event.BadRequestError("Could not verify pinned reading item limit.", err)
+	}
+	if int(count) >= maxPinnedItems {
+		return event.BadRequestError(ErrPinLimit.Error(), nil)
+	}
+	return event.Next()
 }
 
 func summarizeItem(event *core.RequestEvent) error {
@@ -138,7 +162,10 @@ func SetPinned(ctx context.Context, app core.App, actorID, itemID string, pinned
 	if record.GetBool("pinned") {
 		return nil
 	}
-	count, err := app.CountRecords(itemsCollection, dbx.HashExp{"owner": actorID, "pinned": true, "status !=": "archived"})
+	count, err := app.CountRecords(itemsCollection, dbx.And(
+		dbx.HashExp{"owner": actorID, "pinned": true},
+		dbx.Not(dbx.HashExp{"status": "archived"}),
+	))
 	if err != nil {
 		return err
 	}

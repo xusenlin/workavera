@@ -59,6 +59,7 @@ func Create(ctx context.Context, app core.App, input CreateInput) (*core.Record,
 	record.Set("body", strings.TrimSpace(input.Body))
 	record.Set("data", input.Data)
 	record.Set("dedupe_key", input.DedupeKey)
+	record.Set("status", "active")
 	if err := app.Save(record); err != nil {
 		// A concurrent scheduler may have inserted the same unique key.
 		existing, findErr := app.FindRecordsByFilter(CollectionName, "dedupe_key = {:key}", "", 1, 0, dbx.Params{"key": input.DedupeKey})
@@ -103,7 +104,7 @@ func markRead(event *core.RequestEvent) error {
 }
 
 func markAllRead(event *core.RequestEvent) error {
-	records, err := event.App.FindRecordsByFilter(CollectionName, "recipient = {:recipient} && read_at = ''", "", 0, 0, dbx.Params{"recipient": event.Auth.Id})
+	records, err := event.App.FindRecordsByFilter(CollectionName, "recipient = {:recipient} && status = 'active' && read_at = ''", "", 0, 0, dbx.Params{"recipient": event.Auth.Id})
 	if err != nil {
 		return event.InternalServerError("Could not load notifications.", err)
 	}

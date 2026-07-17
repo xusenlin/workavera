@@ -5,8 +5,9 @@ import { create } from "zustand"
 import { pb } from "@/lib/pocketbase"
 
 export type ReadingStatus = "unread" | "read" | "archived"
+export type ReadingStatusFilter = "all" | Exclude<ReadingStatus, "archived">
 
-type ReadingItemRecord = RecordModel & {
+export type ReadingItemRecord = RecordModel & {
   owner: string
   project?: string
   url: string
@@ -63,18 +64,33 @@ export type ReadingItemInput = {
   summaryLanguage?: string
 }
 
-type ReadingState = {
+type ReadingListFilters = {
+  query: string
+  statusFilter: ReadingStatusFilter
+  projectFilter: string
+}
+
+type ReadingState = ReadingListFilters & {
   items: ReadingItem[]
   openedItem: ReadingItem | null
   projects: ReadingProject[]
+  page: number
+  totalPages: number
+  totalItems: number
   loading: boolean
   saving: boolean
   summarizing: boolean
   error: string | null
-  fetchItems: () => Promise<void>
+  fetchItems: (
+    page?: number,
+    filters?: Partial<ReadingListFilters>
+  ) => Promise<void>
   fetchProjects: () => Promise<void>
+  setQuery: (query: string) => Promise<void>
+  setStatusFilter: (statusFilter: ReadingStatusFilter) => Promise<void>
+  setProjectFilter: (projectFilter: string) => Promise<void>
   openItem: (id: string) => Promise<ReadingItem | null>
-  clearOpenedItem: () => void
+  rememberOpenedItem: (item: ReadingItem | null) => void
   addItem: (input: ReadingItemInput) => Promise<ReadingItem>
   updateItem: (id: string, patch: Partial<ReadingItemInput>) => Promise<void>
   togglePin: (id: string, pinned: boolean) => Promise<void>
@@ -82,7 +98,9 @@ type ReadingState = {
   summarizeItem: (id: string) => Promise<void>
 }
 
-function errorMessage(error: unknown, fallback: string) {
+let fetchItemsSequence = 0
+
+export function readingErrorMessage(error: unknown, fallback: string) {
   if (!(error instanceof ClientResponseError)) {
     return error instanceof Error ? error.message : fallback
   }
@@ -105,7 +123,7 @@ function stringArray(value: unknown): string[] {
   return value.filter((item): item is string => typeof item === "string")
 }
 
-function toReadingItem(record: ReadingItemRecord): ReadingItem {
+export function toReadingItem(record: ReadingItemRecord): ReadingItem {
   return {
     id: record.id,
     ownerId: record.owner,
@@ -144,35 +162,75 @@ function toRecord(input: Partial<ReadingItemInput>) {
   return record
 }
 
-function upsertById(items: ReadingItem[], next: ReadingItem) {
-  const exists = items.some((item) => item.id === next.id)
-  if (!exists) return [next, ...items]
-  return items.map((item) => (item.id === next.id ? next : item))
+function readingListFilter({
+  query,
+  statusFilter,
+  projectFilter,
+}: ReadingListFilters) {
+  const clauses = ['status != "archived"']
+  const params: Record<string, string> = {}
+  if (statusFilter !== "all") {
+    clauses.push("status = {:status}")
+    params.status = statusFilter
+  }
+  if (projectFilter !== "all") {
+    clauses.push("project = {:project}")
+    params.project = projectFilter
+  }
+  if (query.trim()) {
+    clauses.push(
+      "(title ~ {:query} || url ~ {:query} || description ~ {:query} || summary ~ {:query} || tags ~ {:query} || key_points ~ {:query})"
+    )
+    params.query = query.trim()
+  }
+  return pb.filter(clauses.join(" && "), params)
 }
 
 export const useReadingStore = create<ReadingState>((set, get) => ({
   items: [],
   openedItem: null,
   projects: [],
+  query: "",
+  statusFilter: "all",
+  projectFilter: "all",
+  page: 1,
+  totalPages: 1,
+  totalItems: 0,
   loading: false,
   saving: false,
   summarizing: false,
   error: null,
 
-  fetchItems: async () => {
-    set({ loading: true, error: null })
+  fetchItems: async (page = get().page, filterOverrides = {}) => {
+    const sequence = ++fetchItemsSequence
+    const filters = {
+      query: filterOverrides.query ?? get().query,
+      statusFilter: filterOverrides.statusFilter ?? get().statusFilter,
+      projectFilter: filterOverrides.projectFilter ?? get().projectFilter,
+    }
+    set({ loading: true, error: null, page, ...filters })
     try {
-      const records = await pb
+      const result = await pb
         .collection("reading_items")
-        .getFullList<ReadingItemRecord>({
-          sort: "-updated",
+        .getList<ReadingItemRecord>(page, 20, {
+          sort: "-pinned,-updated",
+          filter: readingListFilter(filters),
           requestKey: null,
         })
-      set({ items: records.map(toReadingItem), loading: false })
+      if (sequence !== fetchItemsSequence) return
+      set({
+        items: result.items.map(toReadingItem),
+        page,
+        totalPages: Math.max(1, result.totalPages),
+        totalItems: result.totalItems,
+      })
     } catch (error) {
-      const message = errorMessage(error, "Could not load reading items")
-      set({ loading: false, error: message })
+      if (sequence !== fetchItemsSequence) return
+      const message = readingErrorMessage(error, "Could not load reading items")
+      set({ error: message })
       toast.error(message)
+    } finally {
+      if (sequence === fetchItemsSequence) set({ loading: false })
     }
   },
 
@@ -192,9 +250,15 @@ export const useReadingStore = create<ReadingState>((set, get) => ({
         })),
       })
     } catch (error) {
-      toast.error(errorMessage(error, "Could not load projects"))
+      toast.error(readingErrorMessage(error, "Could not load projects"))
     }
   },
+
+  setQuery: async (query) => get().fetchItems(1, { query }),
+  setStatusFilter: async (statusFilter) =>
+    get().fetchItems(1, { statusFilter }),
+  setProjectFilter: async (projectFilter) =>
+    get().fetchItems(1, { projectFilter }),
 
   openItem: async (id) => {
     const itemId = id.trim()
@@ -213,12 +277,12 @@ export const useReadingStore = create<ReadingState>((set, get) => ({
       return item
     } catch (error) {
       set({ openedItem: null })
-      toast.error(errorMessage(error, "Could not open reading item"))
+      toast.error(readingErrorMessage(error, "Could not open reading item"))
       return null
     }
   },
 
-  clearOpenedItem: () => set({ openedItem: null }),
+  rememberOpenedItem: (item) => set({ openedItem: item }),
 
   addItem: async (input) => {
     const ownerId = pb.authStore.record?.id
@@ -233,14 +297,13 @@ export const useReadingStore = create<ReadingState>((set, get) => ({
           ...toRecord(input),
         })
       const item = toReadingItem(record)
-      set((state) => ({
-        items: upsertById(state.items, item),
-        saving: false,
-      }))
+      set({ openedItem: item })
+      await get().fetchItems(1)
+      set({ saving: false })
       toast.success("Reading item added")
       return item
     } catch (error) {
-      const message = errorMessage(error, "Could not add reading item")
+      const message = readingErrorMessage(error, "Could not add reading item")
       set({ saving: false, error: message })
       toast.error(message)
       throw new Error(message, { cause: error })
@@ -255,15 +318,19 @@ export const useReadingStore = create<ReadingState>((set, get) => ({
         .update<ReadingItemRecord>(id, toRecord(patch))
       const item = toReadingItem(record)
       set((state) => ({
-        items: state.items.some((current) => current.id === id)
-          ? upsertById(state.items, item)
-          : state.items,
+        items: state.items.map((current) =>
+          current.id === id ? item : current
+        ),
         openedItem: state.openedItem?.id === id ? item : state.openedItem,
-        saving: false,
       }))
+      await get().fetchItems()
+      set({ saving: false })
       toast.success("Reading item updated")
     } catch (error) {
-      const message = errorMessage(error, "Could not update reading item")
+      const message = readingErrorMessage(
+        error,
+        "Could not update reading item"
+      )
       set({ saving: false, error: message })
       toast.error(message)
       throw new Error(message, { cause: error })
@@ -274,14 +341,21 @@ export const useReadingStore = create<ReadingState>((set, get) => ({
     set({ saving: true, error: null })
     try {
       await pb.collection("reading_items").delete(id)
+      const currentPage = get().page
       set((state) => ({
-        items: state.items.filter((item) => item.id !== id),
         openedItem: state.openedItem?.id === id ? null : state.openedItem,
-        saving: false,
       }))
+      await get().fetchItems(currentPage)
+      if (get().items.length === 0 && currentPage > 1 && get().totalItems > 0) {
+        await get().fetchItems(currentPage - 1)
+      }
+      set({ saving: false })
       toast.success("Reading item deleted")
     } catch (error) {
-      const message = errorMessage(error, "Could not delete reading item")
+      const message = readingErrorMessage(
+        error,
+        "Could not delete reading item"
+      )
       set({ saving: false, error: message })
       toast.error(message)
       throw new Error(message, { cause: error })
@@ -290,21 +364,18 @@ export const useReadingStore = create<ReadingState>((set, get) => ({
 
   togglePin: async (id, pinned) => {
     try {
-      await pb.send(`/api/reading/items/${id}/pin`, {
-        method: "POST",
-        body: { pinned },
-      })
+      const record = await pb
+        .collection("reading_items")
+        .update<ReadingItemRecord>(id, { pinned })
+      const item = toReadingItem(record)
       set((state) => ({
-        items: state.items.map((item) =>
-          item.id === id ? { ...item, pinned } : item
-        ),
-        openedItem:
-          state.openedItem?.id === id
-            ? { ...state.openedItem, pinned }
-            : state.openedItem,
+        openedItem: state.openedItem?.id === id ? item : state.openedItem,
       }))
+      await get().fetchItems()
     } catch (error) {
-      toast.error(errorMessage(error, "Could not update pin"))
+      const message = readingErrorMessage(error, "Could not update pin")
+      toast.error(message)
+      throw new Error(message, { cause: error })
     }
   },
 
@@ -339,7 +410,7 @@ export const useReadingStore = create<ReadingState>((set, get) => ({
         summarizing: false,
       }))
     } catch (error) {
-      const message = errorMessage(
+      const message = readingErrorMessage(
         error,
         "Could not fetch and summarize the article"
       )

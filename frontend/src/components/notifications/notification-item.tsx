@@ -2,6 +2,7 @@ import { HugeiconsIcon } from "@hugeicons/react"
 import {
   Calendar03Icon,
   KanbanIcon,
+  Pin02Icon,
   Share08Icon,
 } from "@hugeicons/core-free-icons"
 
@@ -19,11 +20,13 @@ export function NotificationItem({
   notification,
   selected = false,
   compact = false,
+  className,
   onClick,
 }: {
   notification: AppNotification
   selected?: boolean
   compact?: boolean
+  className?: string
   onClick: () => void
 }) {
   return (
@@ -33,7 +36,8 @@ export function NotificationItem({
       className={cn(
         "flex w-full cursor-pointer gap-3 rounded-lg p-3 text-left transition-colors hover:bg-muted/70",
         selected && "bg-muted",
-        compact && "rounded-none border-b last:border-b-0"
+        compact && "rounded-none border-b last:border-b-0",
+        className
       )}
     >
       <span className="relative mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
@@ -47,8 +51,17 @@ export function NotificationItem({
         )}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="line-clamp-1 text-sm font-medium">
-          {notification.title}
+        <span className="flex items-center gap-1.5">
+          {notification.pinned && (
+            <HugeiconsIcon
+              icon={Pin02Icon}
+              strokeWidth={2}
+              className="size-3 shrink-0 text-muted-foreground"
+            />
+          )}
+          <span className="line-clamp-1 text-sm font-medium">
+            {notification.title}
+          </span>
         </span>
         {notification.body && (
           <span className="mt-0.5 line-clamp-2 block text-xs leading-relaxed text-muted-foreground">

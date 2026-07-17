@@ -57,7 +57,7 @@ func TestReadingItemsMigration(t *testing.T) {
 	if items.CreateRule == nil || *items.CreateRule != `@request.auth.id != "" && @request.body.owner = @request.auth.id && @request.body.pinned != true` {
 		t.Fatalf("unexpected create rule: %v", items.CreateRule)
 	}
-	if items.UpdateRule == nil || *items.UpdateRule != `owner = @request.auth.id && @request.body.owner:changed = false && (@request.body.pinned:changed = false || @request.body.pinned = false)` {
+	if items.UpdateRule == nil || *items.UpdateRule != readingItemsOwnerUpdateRule {
 		t.Fatalf("unexpected update rule: %v", items.UpdateRule)
 	}
 	if items.DeleteRule == nil || *items.DeleteRule != `owner = @request.auth.id` {

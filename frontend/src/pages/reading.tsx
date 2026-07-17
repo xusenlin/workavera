@@ -47,6 +47,13 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination"
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -67,12 +74,17 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import {
   READING_STATUS_META,
+  readingErrorMessage,
+  toReadingItem,
   useReadingStore,
   type ReadingItem,
+  type ReadingItemRecord,
   type ReadingStatus,
+  type ReadingStatusFilter,
 } from "@/store/reading"
 import { cn } from "@/lib/utils"
 import { formatRelativeTime } from "@/lib/chat-utils"
+import { pb } from "@/lib/pocketbase"
 import {
   requestedRecordId,
   workspaceRecordUrl,
@@ -118,9 +130,9 @@ export function ReadingPage() {
   const [searchParams] = useSearchParams()
   const requestedReadingId = requestedRecordId(searchParams)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [query, setQuery] = useState("")
-  const [statusFilter, setStatusFilter] = useState<string>(ALL)
-  const [projectFilter, setProjectFilter] = useState<string>(ALL)
+  const [searchInput, setSearchInput] = useState(
+    () => useReadingStore.getState().query
+  )
   const [addOpen, setAddOpen] = useState(false)
   const [addForm, setAddForm] = useState<ItemForm>(emptyForm)
   const [detailForm, setDetailForm] = useState<ItemForm>(emptyForm)
@@ -132,13 +144,22 @@ export function ReadingPage() {
   const items = useReadingStore((s) => s.items)
   const openedItem = useReadingStore((s) => s.openedItem)
   const projects = useReadingStore((s) => s.projects)
+  const query = useReadingStore((s) => s.query)
+  const statusFilter = useReadingStore((s) => s.statusFilter)
+  const projectFilter = useReadingStore((s) => s.projectFilter)
+  const page = useReadingStore((s) => s.page)
+  const totalPages = useReadingStore((s) => s.totalPages)
+  const totalItems = useReadingStore((s) => s.totalItems)
   const loading = useReadingStore((s) => s.loading)
   const saving = useReadingStore((s) => s.saving)
   const summarizing = useReadingStore((s) => s.summarizing)
   const fetchItems = useReadingStore((s) => s.fetchItems)
   const fetchProjects = useReadingStore((s) => s.fetchProjects)
+  const setQuery = useReadingStore((s) => s.setQuery)
+  const setStatusFilter = useReadingStore((s) => s.setStatusFilter)
+  const setProjectFilter = useReadingStore((s) => s.setProjectFilter)
   const openItem = useReadingStore((s) => s.openItem)
-  const clearOpenedItem = useReadingStore((s) => s.clearOpenedItem)
+  const rememberOpenedItem = useReadingStore((s) => s.rememberOpenedItem)
   const addItem = useReadingStore((s) => s.addItem)
   const updateItem = useReadingStore((s) => s.updateItem)
   const deleteItem = useReadingStore((s) => s.deleteItem)
@@ -150,21 +171,25 @@ export function ReadingPage() {
       setSelectedId(item?.id ?? null)
       setDetailForm(item ? toForm(item) : emptyForm)
       setSummarizeError(null)
-      if (!item || items.some((current) => current.id === item.id)) {
-        clearOpenedItem()
-      }
-      navigate(
-        item ? workspaceRecordUrl("reading", item.id) : "/reading",
-        { replace: true }
-      )
+      rememberOpenedItem(item)
+      navigate(item ? workspaceRecordUrl("reading", item.id) : "/reading", {
+        replace: true,
+      })
     },
-    [clearOpenedItem, items, navigate]
+    [navigate, rememberOpenedItem]
   )
 
   useEffect(() => {
-    void fetchItems()
-    void fetchProjects()
+    void Promise.resolve().then(() =>
+      Promise.all([fetchItems(1), fetchProjects()])
+    )
   }, [fetchItems, fetchProjects])
+
+  useEffect(() => {
+    if (searchInput === query) return
+    const timer = window.setTimeout(() => void setQuery(searchInput), 250)
+    return () => window.clearTimeout(timer)
+  }, [query, searchInput, setQuery])
 
   useEffect(() => {
     if (loading || requestedReadingId === selectedId) return
@@ -183,9 +208,7 @@ export function ReadingPage() {
       }
     }
     if (selectedId) return
-    const visibleItems = items.filter((item) => item.status !== "archived")
-    const firstItem =
-      visibleItems.find((item) => item.pinned) ?? visibleItems[0]
+    const firstItem = items.find((item) => item.pinned) ?? items[0]
     if (firstItem) {
       void Promise.resolve().then(() => selectItem(firstItem))
     }
@@ -204,29 +227,10 @@ export function ReadingPage() {
     [projects]
   )
 
-  const filteredItems = useMemo(() => {
-    const normalized = query.trim().toLowerCase()
-    return items.filter((item) => {
-      if (item.status === "archived") return false
-      if (statusFilter !== ALL && item.status !== statusFilter) return false
-      if (projectFilter !== ALL && item.projectId !== projectFilter)
-        return false
-      if (!normalized) return true
-      return [
-        item.title,
-        item.url,
-        item.description,
-        item.summary,
-        ...item.tags,
-        ...item.keyPoints,
-      ]
-        .filter((v): v is string => Boolean(v))
-        .some((v) => v.toLowerCase().includes(normalized))
-    })
-  }, [items, projectFilter, query, statusFilter])
-
-  const pinnedItems = filteredItems.filter((i) => i.pinned)
-  const recentItems = filteredItems.filter((i) => !i.pinned)
+  const pinnedItems = items.filter((i) => i.pinned)
+  const recentItems = items.filter((i) => !i.pinned)
+  const hasActiveFilters =
+    Boolean(query.trim()) || statusFilter !== ALL || projectFilter !== ALL
 
   const selectedItem =
     items.find((i) => i.id === selectedId) ??
@@ -242,6 +246,7 @@ export function ReadingPage() {
   const handleSave = async () => {
     if (!selectedItem) return
     await updateItem(selectedItem.id, fromForm(detailForm))
+    if (detailForm.status === "archived") selectItem(null)
   }
 
   const handleSummarize = async () => {
@@ -255,7 +260,9 @@ export function ReadingPage() {
       const next = useReadingStore
         .getState()
         .items.find((i) => i.id === selectedItem.id)
+      const opened = useReadingStore.getState().openedItem
       if (next) setDetailForm(toForm(next))
+      else if (opened?.id === selectedItem.id) setDetailForm(toForm(opened))
       toast.success("Article fetched and summarized", { id: toastId })
     } catch (error) {
       const message =
@@ -277,7 +284,7 @@ export function ReadingPage() {
   }
 
   const handleTogglePin = async (item: ReadingItem) => {
-    await togglePin(item.id, !item.pinned)
+    await togglePin(item.id, !item.pinned).catch(() => undefined)
   }
 
   return (
@@ -286,7 +293,12 @@ export function ReadingPage() {
       <aside className="flex h-full w-80 shrink-0 flex-col border-r bg-sidebar">
         <div className="flex flex-col gap-2 border-b p-3">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold">Reading</span>
+            <div>
+              <span className="text-sm font-semibold">Reading</span>
+              <p className="text-xs text-muted-foreground">
+                {totalItems} {hasActiveFilters ? "matching" : "active"}
+              </p>
+            </div>
             <div className="flex items-center gap-1">
               <Button
                 variant="ghost"
@@ -321,14 +333,19 @@ export function ReadingPage() {
               className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
             />
             <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Search reading items..."
               className="h-8 pl-8 text-sm"
             />
           </div>
           <div className="flex gap-2">
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <Select
+              value={statusFilter}
+              onValueChange={(value) =>
+                void setStatusFilter(value as ReadingStatusFilter)
+              }
+            >
               <SelectTrigger className="h-8 flex-1 text-xs">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
@@ -338,7 +355,10 @@ export function ReadingPage() {
                 <SelectItem value="read">Read</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={projectFilter} onValueChange={setProjectFilter}>
+            <Select
+              value={projectFilter}
+              onValueChange={(value) => void setProjectFilter(value)}
+            >
               <SelectTrigger className="h-8 flex-1 text-xs">
                 <SelectValue placeholder="Project" />
               </SelectTrigger>
@@ -426,6 +446,39 @@ export function ReadingPage() {
             </div>
           )}
         </div>
+        {!loading && totalPages > 0 && (
+          <Pagination className="justify-end px-2 py-1">
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  text="Prev"
+                  onClick={() => void fetchItems(Math.max(1, page - 1))}
+                  className={
+                    page <= 1 || loading
+                      ? "pointer-events-none opacity-50"
+                      : "cursor-pointer"
+                  }
+                />
+              </PaginationItem>
+              <span className="flex items-center px-2 text-xs text-muted-foreground">
+                {page} / {Math.max(1, totalPages)}
+              </span>
+              <PaginationItem>
+                <PaginationNext
+                  text="Next"
+                  onClick={() =>
+                    void fetchItems(Math.min(totalPages, page + 1))
+                  }
+                  className={
+                    page >= totalPages || loading
+                      ? "pointer-events-none opacity-50"
+                      : "cursor-pointer"
+                  }
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        )}
       </aside>
 
       {/* Right panel */}
@@ -669,9 +722,9 @@ function ReadingListItem({
             {item.title}
           </span>
         </div>
-        {item.description && (
-          <span className="line-clamp-1 text-xs text-muted-foreground">
-            {item.description}
+        {(item.description || item.summary) && (
+          <span className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+            {item.description || item.summary}
           </span>
         )}
       </button>
@@ -733,83 +786,186 @@ function ArchivedItemsDialog({
   onOpenChange: (open: boolean) => void
   projectNames: Record<string, string>
 }) {
-  const items = useReadingStore((s) => s.items)
+  const [items, setItems] = useState<ReadingItem[]>([])
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [loading, setLoading] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<ReadingItem | null>(null)
   const updateItem = useReadingStore((s) => s.updateItem)
   const deleteItem = useReadingStore((s) => s.deleteItem)
-  const archived = items.filter((i) => i.status === "archived")
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const result = await pb
+        .collection("reading_items")
+        .getList<ReadingItemRecord>(page, 10, {
+          filter: 'status = "archived"',
+          sort: "-updated",
+          requestKey: null,
+        })
+      setItems(result.items.map(toReadingItem))
+      setTotalPages(Math.max(1, result.totalPages))
+    } catch (error) {
+      toast.error(
+        readingErrorMessage(error, "Could not load archived reading items")
+      )
+    } finally {
+      setLoading(false)
+    }
+  }, [page])
+
+  useEffect(() => {
+    if (!open) return
+    void Promise.resolve().then(load)
+  }, [load, open])
 
   const unarchive = async (item: ReadingItem) => {
     await updateItem(item.id, { status: "unread" })
+    await load()
     toast.success("Restored.")
   }
 
-  const remove = async (item: ReadingItem) => {
-    await deleteItem(item.id)
+  const remove = async () => {
+    if (!deleteTarget) return
+    await deleteItem(deleteTarget.id)
+    setDeleteTarget(null)
+    await load()
     toast.success("Deleted.")
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Archived reading items</DialogTitle>
-        </DialogHeader>
-        <div className="max-h-96 space-y-1 overflow-y-auto">
-          {archived.length === 0 ? (
-            <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
-              No archived items.
-            </div>
-          ) : (
-            archived.map((item) => (
-              <div
-                key={item.id}
-                className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{item.title}</p>
-                  <div className="flex items-center gap-1">
-                    {item.projectId && projectNames[item.projectId] && (
-                      <Badge variant="outline" className="px-1.5 text-[10px]">
-                        {projectNames[item.projectId]}
-                      </Badge>
-                    )}
-                    <span className="text-xs text-muted-foreground">
-                      {formatRelativeTime(item.updatedAt)}
-                    </span>
+    <>
+      <Dialog
+        open={open}
+        onOpenChange={(nextOpen) => {
+          if (nextOpen) setPage(1)
+          onOpenChange(nextOpen)
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Archived reading items</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-96 space-y-1 overflow-y-auto">
+            {loading ? (
+              <div className="flex justify-center py-10">
+                <div className="size-5 animate-spin rounded-full border-2 border-muted border-t-foreground" />
+              </div>
+            ) : items.length === 0 ? (
+              <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+                No archived items.
+              </div>
+            ) : (
+              items.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{item.title}</p>
+                    <div className="flex items-center gap-1">
+                      {item.projectId && projectNames[item.projectId] && (
+                        <Badge variant="outline" className="px-1.5 text-[10px]">
+                          {projectNames[item.projectId]}
+                        </Badge>
+                      )}
+                      <span className="text-xs text-muted-foreground">
+                        {formatRelativeTime(item.updatedAt)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => void unarchive(item)}
+                      aria-label="Restore"
+                    >
+                      <HugeiconsIcon
+                        icon={ArchiveRestoreIcon}
+                        strokeWidth={2}
+                        className="size-4"
+                      />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => setDeleteTarget(item)}
+                      aria-label="Delete"
+                    >
+                      <HugeiconsIcon
+                        icon={Delete02Icon}
+                        strokeWidth={2}
+                        className="size-4 text-destructive"
+                      />
+                    </Button>
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => unarchive(item)}
-                    aria-label="Restore"
-                  >
-                    <HugeiconsIcon
-                      icon={ArchiveRestoreIcon}
-                      strokeWidth={2}
-                      className="size-4"
-                    />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => remove(item)}
-                    aria-label="Delete"
-                  >
-                    <HugeiconsIcon
-                      icon={Delete02Icon}
-                      strokeWidth={2}
-                      className="size-4 text-destructive"
-                    />
-                  </Button>
-                </div>
-              </div>
-            ))
+              ))
+            )}
+          </div>
+          {!loading && items.length > 0 && (
+            <Pagination className="justify-end pt-2">
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    text="Prev"
+                    onClick={() => setPage((value) => Math.max(1, value - 1))}
+                    className={
+                      page <= 1 || loading
+                        ? "pointer-events-none opacity-50"
+                        : "cursor-pointer"
+                    }
+                  />
+                </PaginationItem>
+                <span className="flex items-center px-2 text-xs text-muted-foreground">
+                  {page} / {totalPages}
+                </span>
+                <PaginationItem>
+                  <PaginationNext
+                    text="Next"
+                    onClick={() =>
+                      setPage((value) => Math.min(totalPages, value + 1))
+                    }
+                    className={
+                      page >= totalPages || loading
+                        ? "pointer-events-none opacity-50"
+                        : "cursor-pointer"
+                    }
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
           )}
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+      <AlertDialog
+        open={deleteTarget !== null}
+        onOpenChange={(nextOpen) => !nextOpen && setDeleteTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete reading item permanently?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              “{deleteTarget?.title}” will be permanently deleted. This action
+              cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => void remove()}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }
 

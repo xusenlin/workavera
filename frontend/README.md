@@ -89,6 +89,11 @@ src/
   ```
 
 - Keep feature components inside their existing module directories.
+- Reuse shared UI primitives for stable presentation patterns such as
+  pagination, selects, menus, and confirmation dialogs, while keeping
+  permissions, queries, and record actions in feature-specific stores or page
+  services. Extract cross-feature list behavior only when those domain rules
+  genuinely match.
 - Use the shared `workspaceRecordUrl` helper for record deep links.
 - Keep PocketBase access in established stores or page services and preserve owner/member rules enforced by the backend.
 - Do not edit `dist` or `node_modules` directly.

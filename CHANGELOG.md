@@ -16,11 +16,20 @@ and versions follow [Semantic Versioning](https://semver.org/).
 - The `board_delete_task` and `calendar_delete_event` tools now require this
   approval before deleting data; approval cards show the affected item and
   warn when deleting a recurring calendar series.
+- Notifications can now be searched and filtered by read state and type, with
+  pinning, paginated active and archived lists, restore, and permanent delete.
+- Reading now has server-side search, status and project filters, paginated
+  active and archived lists, restore, and permanent delete.
 
 ### Changed
 
 - Document lists now return metadata only and fetch full content when a
   document is selected, reducing duplicate transfers for large HTML documents.
+- Notifications and Reading use PocketBase collection list and CRUD APIs for
+  their standard record operations; only domain workflows such as bulk-read,
+  model-share responses, and article summarization keep custom endpoints.
+- Reading list previews show the description when present, otherwise the
+  summary, and clamp the preview to two lines.
 
 ### Fixed
 

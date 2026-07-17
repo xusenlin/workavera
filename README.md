@@ -77,13 +77,13 @@ The demo user is seeded only when the `users` collection is empty, so upgrades d
 ## Product areas
 
 - **Dashboard** shows counts for active projects, open tasks, the next seven days, and unread Reading items, together with due tasks, upcoming events and deadlines, recently updated Docs/Chat/Reading records, and quick links.
-- **Reading** saves external URLs and notes with project, tags, read status, pins, archive, configurable summary language, and AI-generated summaries.
+- **Reading** saves external URLs and notes with project, tags, read status, pins, archive, configurable summary language, and AI-generated summaries. Its paginated library can be searched and filtered by status or project, with separate archive restore and delete controls.
 - **Contacts** provides a searchable contact list, detailed profiles, and personal favorites; Chat can search a bounded, non-sensitive contact projection.
 - **Chat** streams model output, reasoning, and tool calls into durable conversations. Runs continue across browser disconnects and can be resumed or stopped. A context-usage indicator tracks token and cache details, and long conversations are automatically compacted into a summary near the model's context limit without altering the visible history.
 - **Docs** stores private and project documents with BlockNote rich editing, source/fullscreen modes, Markdown/HTML export, explicit versions, conflict detection, pins, archive, and AI editing. Documents are Markdown or self-contained interactive HTML apps rendered in a sandboxed preview.
 - **Board** manages independent project workflows, labels, roles, tasks, activity history, due dates, and same-project document links. Ten bilingual workflow templates are included.
 - **Calendar** combines personal events with visible Board deadlines, supports recurrence and system-timezone scheduling, and produces in-app reminders.
-- **Notifications** provides realtime model-share requests, task-due notices, and calendar reminders with record deep links.
+- **Notifications** provides realtime model-share requests, task-due notices, and calendar reminders with record deep links. The paginated inbox supports search, read-state and type filters, pins, archive/restore, and permanent delete.
 - **Settings and Profile** manage model configurations, model sharing, per-user appearance, profile fields, and avatars.
 
 ## Development
