@@ -5,6 +5,16 @@ All notable changes to Workavera are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.0.7] - Unreleased
+
+### Removed
+
+- **The deprecated `ai_micro_apps` collection and every remaining AI Micro
+  Apps record and file are permanently deleted by migration**, completing the
+  removal announced in 0.0.6. If you still need any of that data, export it
+  from the PocketBase admin UI **before** upgrading to this version — after
+  the migration runs there is no way to recover it.
+
 ## [0.0.6] - 2026-07-17
 
 ### ⚠️ Breaking: AI Micro Apps module removed
@@ -132,6 +142,7 @@ First public release.
 - **AI Micro Apps** for self-contained HTML tools with sandboxed preview.
 - **Dashboard**, realtime **Notifications**, and **Settings** with per-user model configurations and model sharing.
 
+[0.0.7]: https://github.com/xusenlin/workavera/compare/v0.0.6...HEAD
 [0.0.6]: https://github.com/xusenlin/workavera/compare/v0.0.5...v0.0.6
 [0.0.5]: https://github.com/xusenlin/workavera/compare/v0.0.4...v0.0.5
 [0.0.4]: https://github.com/xusenlin/workavera/compare/v0.0.3...v0.0.4

@@ -1,0 +1,56 @@
+package migrations
+
+import (
+	"github.com/pocketbase/pocketbase/core"
+	m "github.com/pocketbase/pocketbase/migrations"
+	"github.com/pocketbase/pocketbase/tools/types"
+)
+
+func init() {
+	m.Register(deleteAIMicroAppsCollection, recreateAIMicroAppsCollection)
+}
+
+// deleteAIMicroAppsCollection permanently removes the ai_micro_apps
+// collection, its records, and their stored HTML/thumbnail files. The module
+// was absorbed into Docs in 0.0.6, which kept the collection as a one-version
+// recovery buffer and announced this deletion for 0.0.7.
+func deleteAIMicroAppsCollection(app core.App) error {
+	collection, err := app.FindCollectionByNameOrId(aiMicroAppsCollection)
+	if err != nil {
+		// Already gone (or never created); nothing to delete.
+		return nil
+	}
+	return app.Delete(collection)
+}
+
+// recreateAIMicroAppsCollection restores only the empty collection schema so
+// the migration chain stays reversible. The deleted records and files cannot
+// be recovered.
+func recreateAIMicroAppsCollection(app core.App) error {
+	users, err := app.FindCollectionByNameOrId(usersCollectionName)
+	if err != nil {
+		return err
+	}
+
+	apps := core.NewBaseCollection(aiMicroAppsCollection)
+	apps.Fields.Add(
+		&core.TextField{Name: "name", Required: true, Max: 120, Presentable: true},
+		&core.TextField{Name: "description", Max: 1000},
+		&core.RelationField{Name: "owner", CollectionId: users.Id, MaxSelect: 1, Required: true, CascadeDelete: true},
+		&core.FileField{Name: "html_file", Required: true, MaxSelect: 1, MaxSize: 2 * 1024 * 1024, MimeTypes: []string{"text/html"}, Protected: true},
+		&core.FileField{Name: "thumbnail", MaxSelect: 1, MaxSize: 2 * 1024 * 1024, MimeTypes: []string{"image/png", "image/jpeg", "image/webp"}, Thumbs: []string{"320x180", "640x360"}},
+		&core.SelectField{Name: "status", Required: true, MaxSelect: 1, Values: []string{"draft", "published", "archived"}},
+		&core.BoolField{Name: "pinned"},
+		&core.AutodateField{Name: "created", OnCreate: true},
+		&core.AutodateField{Name: "updated", OnCreate: true, OnUpdate: true},
+	)
+	apps.AddIndex("idx_ai_micro_apps_owner_updated", false, "owner, updated", "")
+	apps.AddIndex("idx_ai_micro_apps_owner_pinned_updated", false, "owner, pinned, updated", "")
+	apps.ListRule = types.Pointer(`@request.auth.id != "" && owner = @request.auth.id`)
+	apps.ViewRule = apps.ListRule
+	apps.CreateRule = types.Pointer(`@request.auth.id != "" && @request.body.pinned != true`)
+	apps.UpdateRule = types.Pointer(`owner = @request.auth.id && @request.body.owner:changed = false && (@request.body.pinned:changed = false || @request.body.pinned = false)`)
+	apps.DeleteRule = types.Pointer(`owner = @request.auth.id`)
+
+	return app.Save(apps)
+}
