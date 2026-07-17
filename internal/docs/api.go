@@ -41,7 +41,7 @@ func uploadAssetRequest(event *core.RequestEvent) error {
 }
 
 func pinnedRequest(event *core.RequestEvent) error {
-	documents, err := ListPinned(event.Request.Context(), event.App, event.Auth.Id)
+	documents, err := ListPinned(event.Request.Context(), event.App, event.Auth.Id, event.Request.URL.Query().Get("query"))
 	if err != nil {
 		return requestError(event, err)
 	}

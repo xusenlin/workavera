@@ -78,6 +78,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { extractErrorMessage, isRequestAbort } from "@/lib/error"
+import { htmlPreviewSrcDoc } from "@/lib/html-preview"
 import { pb } from "@/lib/pocketbase"
 import { cn } from "@/lib/utils"
 import {
@@ -97,6 +98,29 @@ type DocRecord = RecordModel & {
   revision: number
   last_edited_by: string
   updated: string
+}
+
+type DocumentListRecord = RecordModel & {
+  title: string
+  kind: DocKind
+  owner: string
+  project: string
+  revision: number
+}
+
+type ArchivedDocumentListRecord = RecordModel & {
+  title: string
+  owner: string
+  revision: number
+}
+
+type PinnedDocumentSummary = {
+  id: string
+  title: string
+  kind: DocKind
+  ownerId: string
+  projectId?: string
+  revision: number
 }
 
 type DocumentResult = {
@@ -132,8 +156,10 @@ export function DocsPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const requestedDocId = requestedRecordId(searchParams)
-  const [documents, setDocuments] = useState<DocRecord[]>([])
-  const [pinnedDocuments, setPinnedDocuments] = useState<DocumentResult[]>([])
+  const [documents, setDocuments] = useState<DocumentListRecord[]>([])
+  const [pinnedDocuments, setPinnedDocuments] = useState<
+    PinnedDocumentSummary[]
+  >([])
   const [projects, setProjects] = useState<Project[]>([])
   const [editableProjects, setEditableProjects] = useState<Project[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -179,16 +205,12 @@ export function DocsPage() {
   const loadList = useCallback(
     async (targetPage = page) => {
       const actorId = pb.authStore.record?.id ?? ""
-      const escapedQuery = query.trim().replaceAll('"', '\\"')
-      const pinned = await pb.send<DocumentResult[]>("/api/docs-pinned", {})
-      const queryLower = query.trim().toLowerCase()
-      const visiblePinned = queryLower
-        ? pinned.filter(
-            (doc) =>
-              doc.title.toLowerCase().includes(queryLower) ||
-              doc.content.toLowerCase().includes(queryLower)
-          )
-        : pinned
+      const normalizedQuery = query.trim()
+      const escapedQuery = normalizedQuery.replaceAll('"', '\\"')
+      const pinnedPath = normalizedQuery
+        ? `/api/docs-pinned?query=${encodeURIComponent(normalizedQuery)}`
+        : "/api/docs-pinned"
+      const pinned = await pb.send<PinnedDocumentSummary[]>(pinnedPath, {})
       const filters = ['status = "draft"']
       if (escapedQuery) {
         filters.push(
@@ -197,10 +219,13 @@ export function DocsPage() {
       }
       for (const doc of pinned) filters.push(`id != "${doc.id}"`)
       const [docResult, projectRecords, memberships] = await Promise.all([
-        pb.collection("docs").getList<DocRecord>(targetPage, DOCS_PAGE_SIZE, {
-          sort: "-updated",
-          filter: filters.join(" && "),
-        }),
+        pb
+          .collection("docs")
+          .getList<DocumentListRecord>(targetPage, DOCS_PAGE_SIZE, {
+            sort: "-updated",
+            filter: filters.join(" && "),
+            fields: "id,title,kind,owner,project,revision",
+          }),
         pb
           .collection("board_projects")
           .getFullList<RecordModel & { name: string; owner: string }>({
@@ -219,10 +244,10 @@ export function DocsPage() {
           .filter((membership) => membership.role !== "viewer")
           .map((membership) => membership.project)
       )
-      setPinnedDocuments(visiblePinned)
+      setPinnedDocuments(pinned)
       setDocuments(docResult.items)
       setTotalPages(Math.max(1, docResult.totalPages))
-      setTotalItems(docResult.totalItems + visiblePinned.length)
+      setTotalItems(docResult.totalItems + pinned.length)
       setProjects(projectRecords.map(({ id, name }) => ({ id, name })))
       setEditableProjects(
         projectRecords
@@ -752,7 +777,7 @@ export function DocsPage() {
                 <iframe
                   key={persisted.id}
                   title={`${draftTitle || "HTML document"} preview`}
-                  srcDoc={draftContent}
+                  srcDoc={htmlPreviewSrcDoc(draftContent)}
                   sandbox="allow-scripts allow-forms allow-popups allow-modals allow-downloads"
                   referrerPolicy="no-referrer"
                   className="min-h-0 w-full flex-1 bg-white"
@@ -1030,17 +1055,21 @@ function ArchivedDocumentsDialog({
   onOpenChange: (open: boolean) => void
   onChanged: () => Promise<void>
 }) {
-  const [items, setItems] = useState<DocRecord[]>([])
+  const [items, setItems] = useState<ArchivedDocumentListRecord[]>([])
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [loading, setLoading] = useState(true)
-  const [deleteTarget, setDeleteTarget] = useState<DocRecord | null>(null)
+  const [deleteTarget, setDeleteTarget] =
+    useState<ArchivedDocumentListRecord | null>(null)
 
   const load = useCallback(async () => {
-    const result = await pb.collection("docs").getList<DocRecord>(page, 10, {
-      filter: 'status = "archived"',
-      sort: "-updated",
-    })
+    const result = await pb
+      .collection("docs")
+      .getList<ArchivedDocumentListRecord>(page, 10, {
+        filter: 'status = "archived"',
+        sort: "-updated",
+        fields: "id,title,owner,revision",
+      })
     setItems(result.items)
     setTotalPages(Math.max(1, result.totalPages))
   }, [page])

@@ -47,6 +47,20 @@ type Document struct {
 	Updated      string `json:"updated"`
 }
 
+type DocumentSummary struct {
+	ID           string `json:"id"`
+	Title        string `json:"title"`
+	Kind         string `json:"kind"`
+	OwnerID      string `json:"ownerId"`
+	ProjectID    string `json:"projectId,omitempty"`
+	ProjectName  string `json:"projectName,omitempty"`
+	Status       string `json:"status"`
+	Revision     int    `json:"revision"`
+	LastEditedBy string `json:"lastEditedBy"`
+	Created      string `json:"created"`
+	Updated      string `json:"updated"`
+}
+
 type Version struct {
 	ID        string `json:"id"`
 	Revision  int    `json:"revision"`
@@ -413,7 +427,7 @@ func MoveToProject(ctx context.Context, app core.App, actorID, id, projectID str
 	return Get(ctx, app, actorID, id)
 }
 
-func ListPinned(ctx context.Context, app core.App, actorID string) ([]Document, error) {
+func ListPinned(ctx context.Context, app core.App, actorID, query string) ([]DocumentSummary, error) {
 	if err := requireActor(ctx, app, actorID); err != nil {
 		return nil, err
 	}
@@ -421,12 +435,19 @@ func ListPinned(ctx context.Context, app core.App, actorID string) ([]Document, 
 	if err != nil {
 		return nil, err
 	}
-	result := make([]Document, 0, len(pins))
+	query = strings.ToLower(strings.TrimSpace(query))
+	result := make([]DocumentSummary, 0, len(pins))
 	for _, pin := range pins {
 		record, err := accessibleRecord(app, actorID, pin.GetString("doc"))
-		if err == nil && record.GetString("status") == "draft" {
-			result = append(result, documentForRecord(app, record))
+		if err != nil || record.GetString("status") != "draft" {
+			continue
 		}
+		if query != "" &&
+			!strings.Contains(strings.ToLower(record.GetString("title")), query) &&
+			!strings.Contains(strings.ToLower(record.GetString("content")), query) {
+			continue
+		}
+		result = append(result, documentSummaryForRecord(app, record))
 	}
 	return result, nil
 }
@@ -640,6 +661,11 @@ func requireActor(ctx context.Context, app core.App, actorID string) error {
 }
 
 func documentForRecord(app core.App, record *core.Record) Document {
+	summary := documentSummaryForRecord(app, record)
+	return Document{ID: summary.ID, Title: summary.Title, Kind: summary.Kind, Content: record.GetString("content"), OwnerID: summary.OwnerID, ProjectID: summary.ProjectID, ProjectName: summary.ProjectName, Status: summary.Status, Revision: summary.Revision, LastEditedBy: summary.LastEditedBy, Created: summary.Created, Updated: summary.Updated}
+}
+
+func documentSummaryForRecord(app core.App, record *core.Record) DocumentSummary {
 	projectID := record.GetString("project")
 	projectName := ""
 	if projectID != "" {
@@ -651,7 +677,7 @@ func documentForRecord(app core.App, record *core.Record) Document {
 	if kind == "" {
 		kind = KindMarkdown
 	}
-	return Document{ID: record.Id, Title: record.GetString("title"), Kind: kind, Content: record.GetString("content"), OwnerID: record.GetString("owner"), ProjectID: projectID, ProjectName: projectName, Status: record.GetString("status"), Revision: record.GetInt("revision"), LastEditedBy: record.GetString("last_edited_by"), Created: record.GetString("created"), Updated: record.GetString("updated")}
+	return DocumentSummary{ID: record.Id, Title: record.GetString("title"), Kind: kind, OwnerID: record.GetString("owner"), ProjectID: projectID, ProjectName: projectName, Status: record.GetString("status"), Revision: record.GetInt("revision"), LastEditedBy: record.GetString("last_edited_by"), Created: record.GetString("created"), Updated: record.GetString("updated")}
 }
 
 func versionForRecord(record *core.Record, includeContent bool) Version {

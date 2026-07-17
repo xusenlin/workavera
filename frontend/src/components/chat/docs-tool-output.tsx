@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/collapsible"
 import { Badge } from "@/components/ui/badge"
 import { ToolInput } from "@/components/chat/tool-input"
+import { htmlPreviewSrcDoc } from "@/lib/html-preview"
 import { cn } from "@/lib/utils"
 import { workspaceRecordUrl } from "@/lib/workspace-navigation"
 
@@ -430,7 +431,7 @@ export function DocsItemToolCard({ part }: { part: DynamicToolUIPart }) {
                 <CollapsibleContent className="mt-1 overflow-hidden rounded-md border">
                   <iframe
                     title={`${doc.title} preview`}
-                    srcDoc={doc.content}
+                    srcDoc={htmlPreviewSrcDoc(doc.content)}
                     sandbox="allow-scripts allow-forms allow-popups allow-modals"
                     referrerPolicy="no-referrer"
                     className="h-80 w-full bg-white"

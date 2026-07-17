@@ -3,6 +3,7 @@ package docs
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -123,9 +124,45 @@ func TestPinsArePerUserAndLimitedToSix(t *testing.T) {
 			t.Fatalf("expected pin limit, got %v", err)
 		}
 	}
-	pinned, err := ListPinned(context.Background(), app, actor.Id)
+	pinned, err := ListPinned(context.Background(), app, actor.Id, "")
 	if err != nil || len(pinned) != 6 {
 		t.Fatalf("unexpected pins: %#v, %v", pinned, err)
+	}
+}
+
+func TestListPinnedSearchesContentWithoutReturningIt(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(app.Cleanup)
+	actor := createTestUser(t, app, "pin-search@example.com")
+
+	documents := []CreateInput{
+		{Title: "Needle in title", Content: "ordinary"},
+		{Title: "Content match", Content: "hidden needle text"},
+		{Title: "Unrelated", Content: "ordinary"},
+	}
+	for _, input := range documents {
+		doc, err := Create(context.Background(), app, actor.Id, input)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := SetPinned(context.Background(), app, actor.Id, doc.ID, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	pinned, err := ListPinned(context.Background(), app, actor.Id, "needle")
+	if err != nil || len(pinned) != 2 {
+		t.Fatalf("unexpected filtered pins: %#v, %v", pinned, err)
+	}
+	payload, err := json.Marshal(pinned)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(payload), `"content"`) || strings.Contains(string(payload), "hidden needle text") {
+		t.Fatalf("pinned summaries leaked content: %s", payload)
 	}
 }
 

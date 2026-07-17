@@ -7,6 +7,16 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [0.0.7] - Unreleased
 
+### Changed
+
+- Document lists now return metadata only and fetch full content when a
+  document is selected, reducing duplicate transfers for large HTML documents.
+
+### Fixed
+
+- HTML document previews now keep anchor links inside the rendered document
+  instead of navigating the sandboxed frame to an empty application page.
+
 ### Removed
 
 - **The deprecated `ai_micro_apps` collection and every remaining AI Micro
