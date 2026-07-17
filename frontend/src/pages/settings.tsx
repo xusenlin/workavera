@@ -16,6 +16,7 @@ import {
   ComputerIcon,
 } from "@hugeicons/core-free-icons"
 
+import { ApiKeysCard } from "@/components/api-keys-card"
 import { ModelCopyDialog } from "@/components/model-copy-dialog"
 import { ModelSheet } from "@/components/model-sheet"
 import { useTheme } from "@/components/theme-provider"
@@ -345,6 +346,8 @@ export function SettingsPage() {
           )}
         </CardContent>
       </Card>
+
+      <ApiKeysCard />
 
       <AppearanceCard />
 

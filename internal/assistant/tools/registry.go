@@ -16,6 +16,20 @@ func NewFactory(app core.App) *Factory {
 	return &Factory{app: app}
 }
 
+// destructiveTools lists tools that call agent.RequireApproval before
+// mutating. Keep in sync when adding new approval-gated tools so API-key
+// surfaces can filter them by scope.
+var destructiveTools = map[string]bool{
+	"board_delete_task":     true,
+	"calendar_delete_event": true,
+}
+
+// IsDestructive reports whether the named tool performs an approval-gated
+// destructive action.
+func IsDestructive(name string) bool {
+	return destructiveTools[name]
+}
+
 func (f *Factory) ForActor(actorID string) []fantasy.AgentTool {
 	return []fantasy.AgentTool{
 		newContactsSearchTool(f.app, actorID),

@@ -51,6 +51,15 @@ func withApprovalHandler(ctx context.Context, handler ApprovalHandler) context.C
 	return context.WithValue(ctx, approvalContextKey{}, handler)
 }
 
+// WithAutoApprove makes RequireApproval succeed without user interaction.
+// It is meant for surfaces such as API-key access where the key's scope is
+// the pre-authorization; never use it for interactive chat runs.
+func WithAutoApprove(ctx context.Context) context.Context {
+	return withApprovalHandler(ctx, func(context.Context, ApprovalRequest) (bool, error) {
+		return true, nil
+	})
+}
+
 // RequireApproval pauses the current tool call until the run's approval
 // handler returns a decision or the run context is cancelled.
 func RequireApproval(ctx context.Context, request ApprovalRequest) (bool, error) {

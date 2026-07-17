@@ -9,6 +9,16 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Workavera now exposes its assistant tools to third-party MCP clients such
+  as Claude Code and Cursor through a Streamable HTTP endpoint at `/api/mcp`,
+  authenticated with per-user `sk-wa-` API keys. The server advertises
+  scope-aware usage instructions to connecting clients during initialization.
+- API keys can be created from Settings with an optional expiration and a
+  clearly marked opt-in for destructive operations; keys without that scope
+  never see the delete tools, while scoped keys run them without interactive
+  approval. The full key is shown once at creation together with a
+  copy-paste-ready MCP client configuration, and keys can be revoked at any
+  time by deleting them. Only a SHA-256 hash of the key is stored.
 - Destructive assistant tools can now pause a running chat for explicit user
   approval, stream a reusable approval card to the frontend, and resume after
   the user approves or rejects the request. Rejections are recorded in the
