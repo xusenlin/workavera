@@ -18,7 +18,7 @@ type calendarGetScheduleInput struct {
 	Dates []string `json:"dates" description:"One or more calendar dates in YYYY-MM-DD format; maximum 31 unique dates"`
 }
 
-type calendarCreateEventInput struct {
+type calendarCreateEventItem struct {
 	Title                 string `json:"title" description:"Event title"`
 	Description           string `json:"description,omitempty" description:"Optional event description"`
 	StartAt               string `json:"startAt" description:"Start local date-time in the configured system timezone, formatted as YYYY-MM-DDTHH:MM:SS"`
@@ -31,7 +31,11 @@ type calendarCreateEventInput struct {
 	ReminderMinutesBefore *int   `json:"reminderMinutesBefore,omitempty" description:"Reminder lead time: -1 for none, or 0, 5, 10, 30, 60, 1440 minutes; defaults to -1"`
 }
 
-type calendarUpdateEventInput struct {
+type calendarCreateEventInput struct {
+	Items []calendarCreateEventItem `json:"items" description:"One to 50 personal events to create"`
+}
+
+type calendarUpdateEventItem struct {
 	EventID               string  `json:"eventId" description:"Existing personal event ID returned by calendar_get_schedule or calendar_create_event"`
 	Title                 *string `json:"title,omitempty" description:"Optional replacement event title"`
 	Description           *string `json:"description,omitempty" description:"Optional replacement description; pass an empty string to clear"`
@@ -43,6 +47,10 @@ type calendarUpdateEventInput struct {
 	RecurrenceFrequency   *string `json:"recurrenceFrequency,omitempty" description:"Optional replacement repeat frequency: none, daily, weekly, monthly, or yearly"`
 	RecurrenceInterval    *int    `json:"recurrenceInterval,omitempty" description:"Optional positive whole-number repeat interval"`
 	ReminderMinutesBefore *int    `json:"reminderMinutesBefore,omitempty" description:"Optional reminder lead time: -1, 0, 5, 10, 30, 60, or 1440 minutes"`
+}
+
+type calendarUpdateEventInput struct {
+	Items []calendarUpdateEventItem `json:"items" description:"One to 50 personal event patches"`
 }
 
 type calendarDeleteEventInput struct {
@@ -66,21 +74,23 @@ func newCalendarCreateEventTool(app core.App, actorID string) fantasy.AgentTool 
 		"Create a personal Calendar event owned by the current user only when explicitly requested. This creates only calendar_events, never Board tasks. Obtain explicit date and time details from the user before calling it. All date-times use the administrator-configured system timezone.",
 		func(ctx context.Context, input calendarCreateEventInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
 			location := configs.SystemLocation(app)
-			startAt, err := calendarLocalDateTime(input.StartAt, location)
-			if err != nil {
-				return calendarToolResult(app, actorID, "create event", nil, fmt.Errorf("invalid startAt: %w", err))
-			}
-			endAt, err := calendarLocalDateTime(input.EndAt, location)
-			if err != nil {
-				return calendarToolResult(app, actorID, "create event", nil, fmt.Errorf("invalid endAt: %w", err))
-			}
-			result, err := workcalendar.CreateEvent(ctx, app, actorID, workcalendar.CreateEventCommand{
-				Title: input.Title, Description: normalizeEscapedText(input.Description), StartAt: startAt, EndAt: endAt,
-				AllDay: input.AllDay, Location: input.Location, Color: input.Color,
-				RecurrenceFrequency: input.RecurrenceFrequency, RecurrenceInterval: input.RecurrenceInterval,
-				ReminderMinutesBefore: input.ReminderMinutesBefore,
+			result, err := executeBatch(input.Items, func(_ int, item calendarCreateEventItem) (any, error) {
+				startAt, err := calendarLocalDateTime(item.StartAt, location)
+				if err != nil {
+					return nil, fmt.Errorf("invalid startAt: %w", err)
+				}
+				endAt, err := calendarLocalDateTime(item.EndAt, location)
+				if err != nil {
+					return nil, fmt.Errorf("invalid endAt: %w", err)
+				}
+				return workcalendar.CreateEvent(ctx, app, actorID, workcalendar.CreateEventCommand{
+					Title: item.Title, Description: normalizeEscapedText(item.Description), StartAt: startAt, EndAt: endAt,
+					AllDay: item.AllDay, Location: item.Location, Color: item.Color,
+					RecurrenceFrequency: item.RecurrenceFrequency, RecurrenceInterval: item.RecurrenceInterval,
+					ReminderMinutesBefore: item.ReminderMinutesBefore,
+				})
 			})
-			return calendarToolResult(app, actorID, "create event", result, err)
+			return batchToolResponse(result, err)
 		},
 	)
 }
@@ -91,21 +101,23 @@ func newCalendarUpdateEventTool(app core.App, actorID string) fantasy.AgentTool 
 		"Patch an existing personal Calendar event only when explicitly requested. Call calendar_get_schedule first and use an event ID it returned. Omitted fields remain unchanged; editing a repeating event updates the entire series. All date-times use the administrator-configured system timezone. This tool cannot edit Board tasks.",
 		func(ctx context.Context, input calendarUpdateEventInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
 			location := configs.SystemLocation(app)
-			startAt, err := optionalCalendarLocalDateTime(input.StartAt, location)
-			if err != nil {
-				return calendarToolResult(app, actorID, "update event", nil, fmt.Errorf("invalid startAt: %w", err))
-			}
-			endAt, err := optionalCalendarLocalDateTime(input.EndAt, location)
-			if err != nil {
-				return calendarToolResult(app, actorID, "update event", nil, fmt.Errorf("invalid endAt: %w", err))
-			}
-			result, err := workcalendar.UpdateEvent(ctx, app, actorID, workcalendar.UpdateEventCommand{
-				EventID: input.EventID, Title: input.Title, Description: normalizeEscapedTextPtr(input.Description), StartAt: startAt,
-				EndAt: endAt, AllDay: input.AllDay, Location: input.Location,
-				Color: input.Color, RecurrenceFrequency: input.RecurrenceFrequency,
-				RecurrenceInterval: input.RecurrenceInterval, ReminderMinutesBefore: input.ReminderMinutesBefore,
+			result, err := executeBatch(input.Items, func(_ int, item calendarUpdateEventItem) (any, error) {
+				startAt, err := optionalCalendarLocalDateTime(item.StartAt, location)
+				if err != nil {
+					return nil, fmt.Errorf("invalid startAt: %w", err)
+				}
+				endAt, err := optionalCalendarLocalDateTime(item.EndAt, location)
+				if err != nil {
+					return nil, fmt.Errorf("invalid endAt: %w", err)
+				}
+				return workcalendar.UpdateEvent(ctx, app, actorID, workcalendar.UpdateEventCommand{
+					EventID: item.EventID, Title: item.Title, Description: normalizeEscapedTextPtr(item.Description), StartAt: startAt,
+					EndAt: endAt, AllDay: item.AllDay, Location: item.Location,
+					Color: item.Color, RecurrenceFrequency: item.RecurrenceFrequency,
+					RecurrenceInterval: item.RecurrenceInterval, ReminderMinutesBefore: item.ReminderMinutesBefore,
+				})
 			})
-			return calendarToolResult(app, actorID, "update event", result, err)
+			return batchToolResponse(result, err)
 		},
 	)
 }

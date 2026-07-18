@@ -1,8 +1,5 @@
 import { HugeiconsIcon } from "@hugeicons/react"
-import {
-  ChevronDownIcon,
-  LayoutGridIcon,
-} from "@hugeicons/core-free-icons"
+import { ChevronDownIcon, LayoutGridIcon } from "@hugeicons/core-free-icons"
 import {
   CheckCircleIcon,
   CircleIcon,
@@ -164,7 +161,7 @@ export function BoardTemplatesToolCard({
 
   return (
     <Collapsible
-      defaultOpen={true}
+      defaultOpen={false}
       className="group not-prose mb-4 w-full rounded-md border"
     >
       <CollapsibleTrigger
@@ -225,12 +222,12 @@ export function BoardTemplatesToolCard({
             className="gap-2"
           >
             <div className="relative">
-              <TabsList className="flex h-auto w-full flex-nowrap overflow-x-auto justify-start [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <TabsList className="flex h-auto w-full [scrollbar-width:none] flex-nowrap justify-start overflow-x-auto [&::-webkit-scrollbar]:hidden">
                 {templates.map((template) => (
                   <TabsTrigger
                     key={template.id}
                     value={template.id}
-                    className="flex-none whitespace-nowrap text-xs"
+                    className="flex-none text-xs whitespace-nowrap"
                   >
                     {template.name}
                   </TabsTrigger>

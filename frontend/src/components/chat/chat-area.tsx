@@ -109,7 +109,10 @@ function ActiveChat({ conversation }: { conversation: ChatConversation }) {
               <ChatMessageItem
                 key={message.id}
                 message={message}
-                activeRunId={runtimeState.activeRunId}
+                runActive={
+                  message.metadata?.runId === runtimeState.activeRunId &&
+                  runtimeState.activeRunId !== null
+                }
               />
             ))
           )}

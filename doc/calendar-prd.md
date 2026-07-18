@@ -117,16 +117,18 @@ The frontend loads owned events, visible due-dated tasks, and the system timezon
 
 ### `calendar_create_event`
 
-- Creates an event owned by the current user after an explicit request.
+- Creates one to 50 events owned by the current user after an explicit request; a single event uses a one-item `items` array.
 - Requires local start and end values in the configured system timezone.
 - Applies the same color, recurrence, interval, reminder, and time validation as the UI.
 
 ### `calendar_update_event`
 
-- Patches an owned event identified through schedule lookup.
+- Patches one to 50 owned events identified through schedule lookup using the required `items` array.
 - Omitted fields remain unchanged; empty description or location clears the field.
 - Updates the whole repeating series.
 - Cannot modify Board tasks.
+
+Create and update batches execute in order, return per-event success or failure, and continue after an individual failure. Legacy top-level single-event inputs are not accepted.
 
 No Calendar deletion tool is registered.
 
@@ -141,3 +143,4 @@ No Calendar deletion tool is registered.
 - Eligible event reminders and task-due reminders create one deduplicated in-app notification per recipient and occurrence/date.
 - Two sessions for the same user receive realtime event and notification updates.
 - Assistant schedule results match the UI's timezone, recurrence, visibility, and completion rules.
+- Assistant event mutations support one-item and multi-item batches up to 50 records and report accurate mixed-success results.

@@ -27,6 +27,18 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Chat now memoizes historical messages and settled tool cards so streaming
+  updates rerender only the active assistant response. Every tool card starts
+  collapsed, and collapsed details are unmounted rather than merely hidden,
+  keeping long conversations responsive during streaming and refresh replay.
+- Board state, label, member, task-create, and task-update mutations; Calendar
+  event create/update; Reading upsert; and Docs move now accept a required
+  `items` array with one to 50 records. A one-record mutation uses a one-item
+  array; legacy top-level single-record inputs are no longer accepted.
+- Batch mutations execute records sequentially with per-record success or
+  failure results, continue after individual failures, and render as one Chat
+  card with total, succeeded, and failed counts plus expandable record details.
+  Previously stored single-record tool results remain readable in history.
 - Each Chat run receives the complete active saved-memory set as the
   authoritative current state. Historical memory tool calls remain visible as
   past events, while current user messages and the current saved-memory set

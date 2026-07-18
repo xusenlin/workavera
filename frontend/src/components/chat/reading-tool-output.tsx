@@ -26,6 +26,9 @@ import { Badge } from "@/components/ui/badge"
 import { ToolInput } from "@/components/chat/tool-input"
 import { cn } from "@/lib/utils"
 import { workspaceRecordUrl } from "@/lib/workspace-navigation"
+import { parseBatchToolResult } from "@/lib/tool-batch"
+
+import { BatchToolResultSummary } from "./batch-tool-result"
 
 type ReadingItem = {
   id: string
@@ -87,7 +90,11 @@ function parseItem(output: unknown): ReadingItem | null {
   if (typeof output === "string") {
     try {
       const parsed = JSON.parse(output)
-      if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+      if (
+        typeof parsed === "object" &&
+        parsed !== null &&
+        !Array.isArray(parsed)
+      ) {
         return parsed as ReadingItem
       }
     } catch {
@@ -122,7 +129,7 @@ export function ReadingSearchToolCard({ part }: { part: DynamicToolUIPart }) {
 
   return (
     <Collapsible
-      defaultOpen={true}
+      defaultOpen={false}
       className="group not-prose mb-4 w-full rounded-md border"
     >
       <CollapsibleTrigger
@@ -249,18 +256,15 @@ export function ReadingSearchToolCard({ part }: { part: DynamicToolUIPart }) {
 
 // ── Single-item card (upsert / get / summarize) ──────────────
 
-const itemToolMeta: Record<
-  string,
-  { label: string; icon: typeof Edit01Icon }
-> = {
-  reading_upsert: { label: "Reading Item", icon: Edit01Icon },
-  reading_get: { label: "Reading Item", icon: File02Icon },
-  reading_summarize: { label: "Summarize Reading", icon: MagicWand01Icon },
-}
+const itemToolMeta: Record<string, { label: string; icon: typeof Edit01Icon }> =
+  {
+    reading_upsert: { label: "Reading Item", icon: Edit01Icon },
+    reading_get: { label: "Reading Item", icon: File02Icon },
+    reading_summarize: { label: "Summarize Reading", icon: MagicWand01Icon },
+  }
 
 export function ReadingItemToolCard({ part }: { part: DynamicToolUIPart }) {
   const navigate = useNavigate()
-  const item = parseItem(part.output)
   const isError = part.state === "output-error"
   const isLoading =
     part.state === "input-streaming" || part.state === "input-available"
@@ -270,10 +274,12 @@ export function ReadingItemToolCard({ part }: { part: DynamicToolUIPart }) {
   }
   const isSummarize = part.toolName === "reading_summarize"
   const isUpsert = part.toolName === "reading_upsert"
+  const batch = isUpsert ? parseBatchToolResult<ReadingItem>(part.output) : null
+  const item = batch ? null : parseItem(part.output)
 
   return (
     <Collapsible
-      defaultOpen={true}
+      defaultOpen={false}
       className="group not-prose mb-4 w-full rounded-md border"
     >
       <CollapsibleTrigger
@@ -293,6 +299,7 @@ export function ReadingItemToolCard({ part }: { part: DynamicToolUIPart }) {
           />
           <span className="text-sm font-medium">{meta.label}</span>
           {getStatusBadge(part.state)}
+          {batch && <Badge variant="outline">{batch.total}</Badge>}
         </div>
         <HugeiconsIcon
           icon={ChevronDownIcon}
@@ -330,6 +337,13 @@ export function ReadingItemToolCard({ part }: { part: DynamicToolUIPart }) {
           </div>
         )}
 
+        {part.state === "output-available" && batch && (
+          <BatchToolResultSummary
+            batch={batch}
+            getLabel={(result) => result.title || result.id}
+          />
+        )}
+
         {part.state === "output-available" && item && (
           <div className="space-y-3 rounded-md border bg-card px-3 py-2">
             {/* Title + status + URL */}
@@ -339,8 +353,7 @@ export function ReadingItemToolCard({ part }: { part: DynamicToolUIPart }) {
                   <span
                     className="size-2 shrink-0 rounded-full"
                     style={{
-                      backgroundColor:
-                        STATUS_COLORS[item.status] ?? "#64748b",
+                      backgroundColor: STATUS_COLORS[item.status] ?? "#64748b",
                     }}
                   />
                   <button
@@ -426,7 +439,7 @@ export function ReadingItemToolCard({ part }: { part: DynamicToolUIPart }) {
                   Show full article
                 </CollapsibleTrigger>
                 <CollapsibleContent className="mt-1 max-h-60 overflow-y-auto rounded-md border bg-muted/20 p-2.5 text-xs leading-relaxed text-muted-foreground">
-                  <pre className="whitespace-pre-wrap font-sans">
+                  <pre className="font-sans whitespace-pre-wrap">
                     {item.contentText}
                   </pre>
                 </CollapsibleContent>
@@ -435,7 +448,7 @@ export function ReadingItemToolCard({ part }: { part: DynamicToolUIPart }) {
           </div>
         )}
 
-        {part.state === "output-available" && !item && (
+        {part.state === "output-available" && !batch && !item && (
           <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
             Reading item not found
           </div>

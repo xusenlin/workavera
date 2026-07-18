@@ -194,7 +194,7 @@ Mutation tools:
 - `board_create_task`
 - `board_update_task`
 
-`board_get_project` returns the caller's role and `canEditProject`, `canManageWorkflow`, `canManageMembers`, and `canEditTasks` capabilities. Existing data must be read before mutation so the assistant uses real IDs and the latest state. Task updates use patch semantics; empty arrays clear assignees, labels, or documents, and a null due date clears the deadline.
+`board_get_project` returns the caller's role and `canEditProject`, `canManageWorkflow`, `canManageMembers`, and `canEditTasks` capabilities. Existing data must be read before mutation so the assistant uses real IDs and the latest state. State, label, member, task-create, and task-update tools require an `items` array containing one to 50 records; a single mutation is represented by one item, and legacy top-level single-record inputs are rejected. Each item is executed in order and reports its own result, so one invalid item does not hide or discard successful siblings. Task updates use patch semantics; empty arrays clear assignees, labels, or documents, and a null due date clears the deadline.
 
 No AI deletion or ownership-transfer tool is registered. The assistant must direct users to Board for destructive actions.
 
@@ -209,3 +209,4 @@ No AI deletion or ownership-transfer tool is registered. The assistant must dire
 - Two sessions see Board record changes through PocketBase realtime.
 - Refreshing the page restores data from PocketBase rather than local storage.
 - Chat can query and perform permitted non-destructive Board mutations while honoring current roles and revisions.
+- Chat can create or patch one to 50 Board records in one mutation call, including a one-item batch, and mixed-success results retain ordered per-item outcomes.

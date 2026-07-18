@@ -194,7 +194,7 @@ Board 订阅 `board_projects`、`board_project_states`、`board_project_members`
 - `board_create_task`
 - `board_update_task`
 
-`board_get_project` 返回调用者角色，以及 `canEditProject`、`canManageWorkflow`、`canManageMembers` 和 `canEditTasks` 能力。修改已有数据前必须先读取详情，以使用真实 ID 和最新状态。任务更新采用 patch 语义；空数组清空负责人、标签或文档，空截止日期清除截止时间。
+`board_get_project` 返回调用者角色，以及 `canEditProject`、`canManageWorkflow`、`canManageMembers` 和 `canEditTasks` 能力。修改已有数据前必须先读取详情，以使用真实 ID 和最新状态。状态、标签、成员、任务创建和任务更新工具要求通过 `items` 数组提交 1 至 50 条记录；单条写入使用一个元素，旧的顶层单记录输入会被拒绝。服务端按顺序执行并返回逐条结果，因此某条无效记录不会隐藏或撤销同批次中已成功的记录。任务更新采用 patch 语义；空数组清空负责人、标签或文档，空截止日期清除截止时间。
 
 系统不注册 AI 删除工具或所有权转移工具。破坏性操作必须由用户前往 Board 完成。
 
@@ -209,3 +209,4 @@ Board 订阅 `board_projects`、`board_project_states`、`board_project_members`
 - 两个登录会话可通过 PocketBase realtime 看到 Board 记录变化。
 - 刷新页面后从 PocketBase 恢复数据，不依赖本地存储。
 - Chat 可以查询 Board 并执行允许的非破坏性操作，同时遵守实时角色和权限。
+- Chat 可在一次调用中创建或修改 1 至 50 条 Board 记录，单元素批次正常工作，部分成功时保留有序的逐条结果。

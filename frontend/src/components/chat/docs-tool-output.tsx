@@ -28,6 +28,9 @@ import { ToolInput } from "@/components/chat/tool-input"
 import { htmlPreviewSrcDoc } from "@/lib/html-preview"
 import { cn } from "@/lib/utils"
 import { workspaceRecordUrl } from "@/lib/workspace-navigation"
+import { parseBatchToolResult } from "@/lib/tool-batch"
+
+import { BatchToolResultSummary } from "./batch-tool-result"
 
 type Doc = {
   id: string
@@ -142,7 +145,7 @@ export function DocsSearchToolCard({ part }: { part: DynamicToolUIPart }) {
 
   return (
     <Collapsible
-      defaultOpen={true}
+      defaultOpen={false}
       className="group not-prose mb-4 w-full rounded-md border"
     >
       <CollapsibleTrigger
@@ -275,6 +278,7 @@ export function DocsItemToolCard({ part }: { part: DynamicToolUIPart }) {
     icon: File02Icon,
   }
   const isUpsert = part.toolName === "docs_upsert"
+  const isMove = part.toolName === "docs_move"
   const isReplace = part.toolName === "docs_replace"
   const isWriteChunk = part.toolName === "docs_write_chunk"
 
@@ -286,8 +290,11 @@ export function DocsItemToolCard({ part }: { part: DynamicToolUIPart }) {
   let changed: boolean | undefined
   let matches: number | undefined
   let chunkResult: WriteChunkResult | null = null
+  const moveBatch = isMove ? parseBatchToolResult<Doc>(part.output) : null
   const isWrapped = isUpsert || isReplace
-  if (isWriteChunk) {
+  if (moveBatch) {
+    // Batch moves render through the shared summary below.
+  } else if (isWriteChunk) {
     const parsed = typeof raw === "string" ? safeParse(raw) : raw
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
       chunkResult = parsed as WriteChunkResult
@@ -313,7 +320,7 @@ export function DocsItemToolCard({ part }: { part: DynamicToolUIPart }) {
 
   return (
     <Collapsible
-      defaultOpen={true}
+      defaultOpen={false}
       className="group not-prose mb-4 w-full rounded-md border"
     >
       <CollapsibleTrigger
@@ -333,6 +340,7 @@ export function DocsItemToolCard({ part }: { part: DynamicToolUIPart }) {
           />
           <span className="text-sm font-medium">{meta.label}</span>
           {getStatusBadge(part.state)}
+          {moveBatch && <Badge variant="outline">{moveBatch.total}</Badge>}
         </div>
         <HugeiconsIcon
           icon={ChevronDownIcon}
@@ -365,6 +373,13 @@ export function DocsItemToolCard({ part }: { part: DynamicToolUIPart }) {
           <div className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
             {part.errorText || "Tool execution failed"}
           </div>
+        )}
+
+        {part.state === "output-available" && moveBatch && (
+          <BatchToolResultSummary
+            batch={moveBatch}
+            getLabel={(result) => result.title || result.id}
+          />
         )}
 
         {part.state === "output-available" && doc && (
@@ -507,11 +522,14 @@ export function DocsItemToolCard({ part }: { part: DynamicToolUIPart }) {
           </div>
         )}
 
-        {part.state === "output-available" && !doc && !chunkResult && (
-          <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-            Document not found
-          </div>
-        )}
+        {part.state === "output-available" &&
+          !moveBatch &&
+          !doc &&
+          !chunkResult && (
+            <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+              Document not found
+            </div>
+          )}
       </CollapsibleContent>
     </Collapsible>
   )

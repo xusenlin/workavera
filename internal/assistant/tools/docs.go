@@ -31,10 +31,14 @@ type docsUpsertInput struct {
 	BaseRevision int    `json:"baseRevision,omitempty" description:"Revision returned by docs_get; required when updating. The save fails if it is stale."`
 }
 
-type docsMoveInput struct {
+type docsMoveItem struct {
 	ID            string `json:"id" description:"Document ID returned by docs_search or docs_get"`
 	Destination   string `json:"destination" enum:"my_documents,folder,project" description:"Target location type"`
 	DestinationID string `json:"destinationId,omitempty" description:"Folder or project ID. Omit only when destination is my_documents."`
+}
+
+type docsMoveInput struct {
+	Items []docsMoveItem `json:"items" description:"One to 50 document moves"`
 }
 
 type docsWriteChunkInput struct {
@@ -89,8 +93,10 @@ func newDocsListFoldersTool(app core.App, actorID string) fantasy.AgentTool {
 
 func newDocsMoveTool(app core.App, actorID string) fantasy.AgentTool {
 	return fantasy.NewAgentTool("docs_move", "Move a document only when the user explicitly asks to organize or move it. Personal documents can move to My documents, an existing personal folder, or an editable project. Project documents cannot move back or across projects.", func(ctx context.Context, input docsMoveInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
-		result, err := workdocs.Move(ctx, app, actorID, input.ID, workdocs.MoveInput{Destination: input.Destination, DestinationID: input.DestinationID})
-		return docsToolResponse(result, err)
+		result, err := executeBatch(input.Items, func(_ int, item docsMoveItem) (any, error) {
+			return workdocs.Move(ctx, app, actorID, item.ID, workdocs.MoveInput{Destination: item.Destination, DestinationID: item.DestinationID})
+		})
+		return batchToolResponse(result, err)
 	})
 }
 

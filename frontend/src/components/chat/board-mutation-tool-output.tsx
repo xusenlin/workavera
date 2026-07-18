@@ -27,6 +27,9 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { workspaceRecordUrl } from "@/lib/workspace-navigation"
+import { parseBatchToolResult } from "@/lib/tool-batch"
+
+import { BatchToolResultSummary } from "./batch-tool-result"
 
 type BoardMutationResult = {
   ok?: boolean
@@ -38,10 +41,7 @@ type BoardMutationResult = {
 }
 
 /** Maps each mutation tool name to a display label and icon. */
-const toolMeta: Record<
-  string,
-  { label: string; icon: typeof Edit01Icon }
-> = {
+const toolMeta: Record<string, { label: string; icon: typeof Edit01Icon }> = {
   board_create_project: { label: "Create Project", icon: PlusSignIcon },
   board_update_project: { label: "Update Project", icon: Edit01Icon },
   board_upsert_state: { label: "Upsert State", icon: Layers01Icon },
@@ -91,16 +91,13 @@ function parseResult(output: unknown): BoardMutationResult | null {
 }
 
 /** Long input values that should be truncated instead of shown in full. */
-const longKeys = new Set([
-  "html",
-  "content",
-  "find",
-  "replace",
-  "description",
-])
+const longKeys = new Set(["html", "content", "find", "replace", "description"])
 
 function formatValue(key: string, value: unknown): string {
   if (Array.isArray(value)) {
+    if (value.some((item) => item && typeof item === "object")) {
+      return `${value.length} ${value.length === 1 ? "item" : "items"}`
+    }
     return value.length === 0 ? "[]" : value.join(", ")
   }
   if (typeof value === "string") {
@@ -119,9 +116,7 @@ function formatInput(input: unknown): { key: string; value: string }[] {
   return Object.entries(input as Record<string, unknown>)
     .filter(([, v]) => v !== undefined && v !== "")
     .map(([key, value]) => ({
-      key: key
-        .replace(/([A-Z])/g, " $1")
-        .replace(/^./, (c) => c.toUpperCase()),
+      key: key.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase()),
       value: formatValue(key, value),
     }))
 }
@@ -134,7 +129,8 @@ function actionText(result: BoardMutationResult): string {
 
 export function BoardMutationToolCard({ part }: { part: DynamicToolUIPart }) {
   const navigate = useNavigate()
-  const result = parseResult(part.output)
+  const batch = parseBatchToolResult<BoardMutationResult>(part.output)
+  const result = batch ? null : parseResult(part.output)
   const loading =
     part.state === "input-streaming" || part.state === "input-available"
   const failed = part.state === "output-error" || result?.ok === false
@@ -150,7 +146,7 @@ export function BoardMutationToolCard({ part }: { part: DynamicToolUIPart }) {
 
   return (
     <Collapsible
-      defaultOpen={true}
+      defaultOpen={false}
       className="group not-prose mb-4 w-full rounded-md border"
     >
       <CollapsibleTrigger
@@ -174,6 +170,7 @@ export function BoardMutationToolCard({ part }: { part: DynamicToolUIPart }) {
           />
           <span className="text-sm font-medium">{meta.label}</span>
           {getStatusBadge(part.state)}
+          {batch && <Badge variant="outline">{batch.total}</Badge>}
         </div>
         <HugeiconsIcon
           icon={ChevronDownIcon}
@@ -220,6 +217,13 @@ export function BoardMutationToolCard({ part }: { part: DynamicToolUIPart }) {
         )}
 
         {/* Success result */}
+        {part.state === "output-available" && batch && (
+          <BatchToolResultSummary
+            batch={batch}
+            getLabel={(item) => item.name || item.id}
+          />
+        )}
+
         {!loading && !failed && result && (
           <div className="flex items-center justify-between gap-2 rounded-md border bg-card px-3 py-2">
             <div className="flex min-w-0 items-center gap-2">

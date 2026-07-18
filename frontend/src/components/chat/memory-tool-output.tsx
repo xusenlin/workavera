@@ -9,11 +9,21 @@ import {
   Settings02Icon,
   Undo03Icon,
 } from "@hugeicons/core-free-icons"
-import { CheckCircleIcon, ClockIcon, XCircleIcon } from "lucide-react"
+import {
+  CheckCircleIcon,
+  ChevronDownIcon,
+  ClockIcon,
+  XCircleIcon,
+} from "lucide-react"
 import type { DynamicToolUIPart } from "ai"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
 import { pb } from "@/lib/pocketbase"
 import { useMemoriesStore, type MemoryCategory } from "@/store/memories"
 
@@ -111,8 +121,11 @@ export function MemoryToolCard({
   }
 
   return (
-    <div className="not-prose mb-4 w-full rounded-xl border bg-muted/10 p-3">
-      <div className="flex items-start gap-3">
+    <Collapsible
+      defaultOpen={false}
+      className="group not-prose mb-4 w-full rounded-xl border bg-muted/10"
+    >
+      <CollapsibleTrigger className="flex w-full items-start gap-3 p-3 text-left">
         <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
           <HugeiconsIcon
             icon={forget ? Delete02Icon : Brain02Icon}
@@ -120,56 +133,58 @@ export function MemoryToolCard({
             className="size-4"
           />
         </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium">{title}</span>
-            {loading && <ClockIcon className="size-3.5 animate-pulse" />}
-            {failed && <XCircleIcon className="size-3.5 text-destructive" />}
-            {!loading && !failed && (
-              <CheckCircleIcon className="size-3.5 text-green-600" />
-            )}
-            {result?.memory.category && (
-              <Badge variant="secondary" className="capitalize">
-                {result.memory.category}
-              </Badge>
-            )}
-          </div>
-          {result?.memory.content && !failed && (
-            <p className="mt-1 text-sm text-muted-foreground">
-              {result.memory.content}
-            </p>
-          )}
-          {failed && part.state === "output-error" && (
-            <p className="mt-1 text-xs text-destructive">{part.errorText}</p>
-          )}
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+          <span className="text-sm font-medium">{title}</span>
+          {loading && <ClockIcon className="size-3.5 animate-pulse" />}
+          {failed && <XCircleIcon className="size-3.5 text-destructive" />}
           {!loading && !failed && (
-            <div className="mt-3 flex items-center justify-end gap-1">
-              {!forget &&
-                !runActive &&
-                result &&
-                ["created", "updated"].includes(result.action) && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => void undo()}
-                    disabled={undoing}
-                  >
-                    <HugeiconsIcon icon={Undo03Icon} strokeWidth={2} />
-                    {undoing ? "Undoing..." : "Undo"}
-                  </Button>
-                )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => navigate("/settings?manage=memory")}
-              >
-                <HugeiconsIcon icon={Settings02Icon} strokeWidth={2} />
-                Manage
-              </Button>
-            </div>
+            <CheckCircleIcon className="size-3.5 text-green-600" />
+          )}
+          {result?.memory.category && (
+            <Badge variant="secondary" className="capitalize">
+              {result.memory.category}
+            </Badge>
           )}
         </div>
-      </div>
-    </div>
+        <ChevronDownIcon className="mt-2 size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+      </CollapsibleTrigger>
+
+      <CollapsibleContent className="space-y-3 px-3 pb-3 pl-14 outline-none">
+        {result?.memory.content && !failed && (
+          <p className="text-sm text-muted-foreground">
+            {result.memory.content}
+          </p>
+        )}
+        {failed && part.state === "output-error" && (
+          <p className="text-xs text-destructive">{part.errorText}</p>
+        )}
+        {!loading && !failed && (
+          <div className="flex items-center justify-end gap-1">
+            {!forget &&
+              !runActive &&
+              result &&
+              ["created", "updated"].includes(result.action) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void undo()}
+                  disabled={undoing}
+                >
+                  <HugeiconsIcon icon={Undo03Icon} strokeWidth={2} />
+                  {undoing ? "Undoing..." : "Undo"}
+                </Button>
+              )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate("/settings?manage=memory")}
+            >
+              <HugeiconsIcon icon={Settings02Icon} strokeWidth={2} />
+              Manage
+            </Button>
+          </div>
+        )}
+      </CollapsibleContent>
+    </Collapsible>
   )
 }

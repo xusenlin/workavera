@@ -1,11 +1,13 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
 	"slices"
 	"strings"
 	"testing"
 
+	"charm.land/fantasy"
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tests"
@@ -120,19 +122,66 @@ func TestMemoryToolsAreChatOnlyAndPreferenceGated(t *testing.T) {
 
 func TestBoardUpdateTaskInputTracksNullableDueDate(t *testing.T) {
 	var clear boardUpdateTaskInput
-	if err := json.Unmarshal([]byte(`{"taskId":"task-1","dueDate":null}`), &clear); err != nil {
+	if err := json.Unmarshal([]byte(`{"items":[{"taskId":"task-1","dueDate":null}]}`), &clear); err != nil {
 		t.Fatal(err)
 	}
-	if !clear.dueDateSet || clear.DueDate != nil {
+	if len(clear.Items) != 1 || !clear.Items[0].dueDateSet || clear.Items[0].DueDate != nil {
 		t.Fatalf("null dueDate must be an explicit clear: %#v", clear)
 	}
 
 	var omitted boardUpdateTaskInput
-	if err := json.Unmarshal([]byte(`{"taskId":"task-1"}`), &omitted); err != nil {
+	if err := json.Unmarshal([]byte(`{"items":[{"taskId":"task-1"}]}`), &omitted); err != nil {
 		t.Fatal(err)
 	}
-	if omitted.dueDateSet {
+	if len(omitted.Items) != 1 || omitted.Items[0].dueDateSet {
 		t.Fatalf("omitted dueDate must remain unchanged: %#v", omitted)
+	}
+}
+
+func TestBatchMutationToolsExposeOnlyArrayInputs(t *testing.T) {
+	tests := []struct {
+		name       string
+		tool       fantasy.AgentTool
+		properties []string
+	}{
+		{"board_upsert_state", newBoardUpsertStateTool(nil, "actor-1"), []string{"projectId", "items"}},
+		{"board_upsert_label", newBoardUpsertLabelTool(nil, "actor-1"), []string{"projectId", "items"}},
+		{"board_upsert_member", newBoardUpsertMemberTool(nil, "actor-1"), []string{"projectId", "items"}},
+		{"board_create_task", newBoardCreateTaskTool(nil, "actor-1"), []string{"projectId", "items"}},
+		{"board_update_task", newBoardUpdateTaskTool(nil, "actor-1"), []string{"items"}},
+		{"calendar_create_event", newCalendarCreateEventTool(nil, "actor-1"), []string{"items"}},
+		{"calendar_update_event", newCalendarUpdateEventTool(nil, "actor-1"), []string{"items"}},
+		{"reading_upsert", newReadingUpsertTool(nil, "actor-1"), []string{"items"}},
+		{"docs_move", newDocsMoveTool(nil, "actor-1"), []string{"items"}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			info := test.tool.Info()
+			if !slices.Contains(info.Required, "items") {
+				t.Fatalf("items must be required: %#v", info.Required)
+			}
+			if len(info.Parameters) != len(test.properties) {
+				t.Fatalf("unexpected top-level input properties: %#v", info.Parameters)
+			}
+			for _, property := range test.properties {
+				if _, ok := info.Parameters[property]; !ok {
+					t.Fatalf("missing input property %q: %#v", property, info.Parameters)
+				}
+			}
+		})
+	}
+}
+
+func TestBoardUpdateTaskRejectsLegacySingleObjectInput(t *testing.T) {
+	response, err := newBoardUpdateTaskTool(nil, "actor-1").Run(context.Background(), fantasy.ToolCall{
+		ID: "call-1", Name: "board_update_task", Input: `{"taskId":"task-1","priority":"high"}`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !response.IsError || !strings.Contains(response.Content, "at least one") {
+		t.Fatalf("legacy input must be rejected: %#v", response)
 	}
 }
 
@@ -153,7 +202,7 @@ func TestDocsMoveRequiresExplicitUserRequest(t *testing.T) {
 	if !strings.Contains(info.Description, "explicitly asks") {
 		t.Fatalf("docs_move must require explicit user intent: %s", info.Description)
 	}
-	for _, field := range []string{"id", "destination"} {
+	for _, field := range []string{"items"} {
 		if !slices.Contains(info.Required, field) {
 			t.Fatalf("docs_move missing required field %q: %#v", field, info.Required)
 		}

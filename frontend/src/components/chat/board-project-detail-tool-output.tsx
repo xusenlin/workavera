@@ -1,8 +1,5 @@
 import { HugeiconsIcon } from "@hugeicons/react"
-import {
-  ChevronDownIcon,
-  ViewIcon,
-} from "@hugeicons/core-free-icons"
+import { ChevronDownIcon, ViewIcon } from "@hugeicons/core-free-icons"
 import {
   CheckCircleIcon,
   CircleIcon,
@@ -104,7 +101,11 @@ function parseProject(output: unknown): ProjectDetail | null {
   if (typeof output === "string") {
     try {
       const parsed = JSON.parse(output)
-      if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+      if (
+        typeof parsed === "object" &&
+        parsed !== null &&
+        !Array.isArray(parsed)
+      ) {
         return parsed as ProjectDetail
       }
     } catch {
@@ -133,7 +134,7 @@ function ParticipantChip({ participant }: { participant: ProjectParticipant }) {
       </Avatar>
       <span className="pr-1 text-xs font-medium">{participant.name}</span>
       {participant.role !== "owner" && (
-        <span className="text-[10px] capitalize text-muted-foreground">
+        <span className="text-[10px] text-muted-foreground capitalize">
           {participant.role}
         </span>
       )}
@@ -167,7 +168,7 @@ export function BoardProjectDetailToolCard({
 
   return (
     <Collapsible
-      defaultOpen={true}
+      defaultOpen={false}
       className="group not-prose mb-4 w-full rounded-md border"
     >
       <CollapsibleTrigger
@@ -219,9 +220,7 @@ export function BoardProjectDetailToolCard({
         {part.state === "output-available" && project && (
           <div
             className="cursor-pointer space-y-3 rounded-md border bg-card transition-colors hover:border-border/80 hover:bg-muted/50"
-            onClick={() =>
-              navigate(workspaceRecordUrl("board", project.id))
-            }
+            onClick={() => navigate(workspaceRecordUrl("board", project.id))}
           >
             <div className="px-3 py-2">
               {/* Name + archived + role + task count */}

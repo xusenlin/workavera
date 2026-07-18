@@ -1,6 +1,7 @@
 import {
   AlertTriangleIcon,
   CheckCircleIcon,
+  ChevronDownIcon,
   Loader2Icon,
   ShieldCheckIcon,
   XCircleIcon,
@@ -10,6 +11,11 @@ import { useState } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
 import { pb } from "@/lib/pocketbase"
 import { cn } from "@/lib/utils"
 import type { ToolApprovalData } from "@/types/chat"
@@ -111,28 +117,24 @@ export function ApprovalToolCard({
   const StatusIcon = destructive ? AlertTriangleIcon : ShieldCheckIcon
 
   return (
-    <div
+    <Collapsible
+      defaultOpen={false}
       className={cn(
-        "not-prose mb-4 w-full rounded-md border p-4",
+        "group not-prose mb-4 w-full rounded-md border",
         destructive ? "border-destructive/30 bg-destructive/5" : "bg-muted/20"
       )}
     >
-      <div className="flex items-start gap-3">
+      <CollapsibleTrigger className="flex w-full items-start gap-3 p-4 text-left">
         <StatusIcon
           className={cn(
             "mt-0.5 size-5 shrink-0",
             destructive ? "text-destructive" : "text-amber-600"
           )}
         />
-        <div className="min-w-0 flex-1 space-y-3">
+        <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <div className="text-sm font-medium">
-                {approval.title || "Approve tool action?"}
-              </div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                {approval.summary || "Review this action before it runs."}
-              </div>
+            <div className="text-sm font-medium">
+              {approval.title || "Approve tool action?"}
             </div>
             {awaiting && !expired && (
               <Badge variant="secondary">Awaiting approval</Badge>
@@ -147,95 +149,99 @@ export function ApprovalToolCard({
             {completed && <Badge variant="secondary">Completed</Badge>}
             {failed && <Badge variant="destructive">Failed</Badge>}
           </div>
-
-          {(approval.target?.name || approval.details?.length) && (
-            <div className="space-y-1 rounded-md border bg-background/70 px-3 py-2 text-xs">
-              {approval.target?.name && (
-                <div className="font-medium">{approval.target.name}</div>
-              )}
-              {approval.details?.map((detail, index) => (
-                <div
-                  key={`${detail.label ?? "detail"}-${index}`}
-                  className={cn(
-                    "flex gap-2",
-                    detail.tone === "destructive"
-                      ? "text-destructive"
-                      : "text-muted-foreground"
-                  )}
-                >
-                  {detail.label && (
-                    <span className="shrink-0 font-medium">
-                      {detail.label}:
-                    </span>
-                  )}
-                  <span className="min-w-0 break-words">
-                    {formatDetailValue(detail)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {awaiting && !expired && (
-            <div className="flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={submitting}
-                onClick={() => void respond(false)}
-              >
-                {submittingDecision === false && (
-                  <Loader2Icon className="animate-spin" />
-                )}
-                Reject
-              </Button>
-              <Button
-                type="button"
-                variant={confirmVariant}
-                size="sm"
-                disabled={submitting}
-                onClick={() => void respond(true)}
-              >
-                {submittingDecision === true && (
-                  <Loader2Icon className="animate-spin" />
-                )}
-                {presentation.confirmLabel || "Approve"}
-              </Button>
-            </div>
-          )}
-
-          {responded && approved && !completed && !failed && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Loader2Icon className="size-3.5 animate-spin" />
-              {presentation.pendingMessage || "Applying approved action…"}
-            </div>
-          )}
-          {denied && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <XCircleIcon className="size-3.5" />
-              {presentation.deniedMessage || "Action cancelled."}
-            </div>
-          )}
-          {completed && (
-            <div className="flex items-center gap-2 text-xs text-green-700 dark:text-green-400">
-              <CheckCircleIcon className="size-3.5" />
-              {presentation.successMessage || "Action completed."}
-            </div>
-          )}
-          {failed && (
-            <div className="text-xs text-destructive">
-              {part.state === "output-error" && part.errorText
-                ? part.errorText
-                : presentation.failureMessage ||
-                  "The approved action could not be completed."}
-            </div>
-          )}
-          {requestError && (
-            <div className="text-xs text-destructive">{requestError}</div>
-          )}
+          <div className="mt-1 text-xs text-muted-foreground">
+            {approval.summary || "Review this action before it runs."}
+          </div>
         </div>
-      </div>
-    </div>
+        <ChevronDownIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+      </CollapsibleTrigger>
+
+      <CollapsibleContent className="space-y-3 px-4 pb-4 pl-12 outline-none">
+        {(approval.target?.name || approval.details?.length) && (
+          <div className="space-y-1 rounded-md border bg-background/70 px-3 py-2 text-xs">
+            {approval.target?.name && (
+              <div className="font-medium">{approval.target.name}</div>
+            )}
+            {approval.details?.map((detail, index) => (
+              <div
+                key={`${detail.label ?? "detail"}-${index}`}
+                className={cn(
+                  "flex gap-2",
+                  detail.tone === "destructive"
+                    ? "text-destructive"
+                    : "text-muted-foreground"
+                )}
+              >
+                {detail.label && (
+                  <span className="shrink-0 font-medium">{detail.label}:</span>
+                )}
+                <span className="min-w-0 break-words">
+                  {formatDetailValue(detail)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {awaiting && !expired && (
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={submitting}
+              onClick={() => void respond(false)}
+            >
+              {submittingDecision === false && (
+                <Loader2Icon className="animate-spin" />
+              )}
+              Reject
+            </Button>
+            <Button
+              type="button"
+              variant={confirmVariant}
+              size="sm"
+              disabled={submitting}
+              onClick={() => void respond(true)}
+            >
+              {submittingDecision === true && (
+                <Loader2Icon className="animate-spin" />
+              )}
+              {presentation.confirmLabel || "Approve"}
+            </Button>
+          </div>
+        )}
+
+        {responded && approved && !completed && !failed && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Loader2Icon className="size-3.5 animate-spin" />
+            {presentation.pendingMessage || "Applying approved action…"}
+          </div>
+        )}
+        {denied && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <XCircleIcon className="size-3.5" />
+            {presentation.deniedMessage || "Action cancelled."}
+          </div>
+        )}
+        {completed && (
+          <div className="flex items-center gap-2 text-xs text-green-700 dark:text-green-400">
+            <CheckCircleIcon className="size-3.5" />
+            {presentation.successMessage || "Action completed."}
+          </div>
+        )}
+        {failed && (
+          <div className="text-xs text-destructive">
+            {part.state === "output-error" && part.errorText
+              ? part.errorText
+              : presentation.failureMessage ||
+                "The approved action could not be completed."}
+          </div>
+        )}
+        {requestError && (
+          <div className="text-xs text-destructive">{requestError}</div>
+        )}
+      </CollapsibleContent>
+    </Collapsible>
   )
 }

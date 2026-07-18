@@ -17,15 +17,19 @@ type readingSearchInput struct {
 	Limit     int    `json:"limit,omitempty" description:"Maximum number of results, default 10, max 20"`
 }
 
-type readingUpsertInput struct {
-	ID              string   `json:"id,omitempty" description:"Existing reading item ID. Omit to create a new item; provide to update an existing one."`
-	URL             string   `json:"url,omitempty" description:"Article URL (required when creating)"`
-	Title           *string  `json:"title,omitempty" description:"Article title. Required when creating; optional replacement when updating."`
-	Description     *string  `json:"description,omitempty" description:"Optional description; pass an empty string to clear it"`
+type readingUpsertItem struct {
+	ID              string    `json:"id,omitempty" description:"Existing reading item ID. Omit to create a new item; provide to update an existing one."`
+	URL             string    `json:"url,omitempty" description:"Article URL (required when creating)"`
+	Title           *string   `json:"title,omitempty" description:"Article title. Required when creating; optional replacement when updating."`
+	Description     *string   `json:"description,omitempty" description:"Optional description; pass an empty string to clear it"`
 	Tags            *[]string `json:"tags,omitempty" description:"Optional tags for categorization"`
-	Status          *string  `json:"status,omitempty" description:"Status: unread (default), read, or archived"`
-	ProjectID       *string  `json:"projectId,omitempty" description:"Optional Board project ID to associate this item with a board project"`
-	SummaryLanguage *string  `json:"summaryLanguage,omitempty" description:"Language for AI summary; default English"`
+	Status          *string   `json:"status,omitempty" description:"Status: unread (default), read, or archived"`
+	ProjectID       *string   `json:"projectId,omitempty" description:"Optional Board project ID to associate this item with a board project"`
+	SummaryLanguage *string   `json:"summaryLanguage,omitempty" description:"Language for AI summary; default English"`
+}
+
+type readingUpsertInput struct {
+	Items []readingUpsertItem `json:"items" description:"One to 50 reading items to create or update"`
 }
 
 type readingGetInput struct {
@@ -66,39 +70,28 @@ func newReadingUpsertTool(app core.App, actorID string) fantasy.AgentTool {
 		"reading_upsert",
 		"Create or update a reading item. Omit id to create a new item (url and title are required). Provide id to update an existing item; only non-nil fields change. Use to save links, mark items as read/archived, edit title, or update tags.",
 		func(ctx context.Context, input readingUpsertInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
-			var (
-				result reading.Item
-				err    error
-			)
-			if input.ID == "" {
-				result, err = reading.Create(ctx, app, actorID, reading.CreateInput{
-					URL:             input.URL,
-					Title:           deref(input.Title),
-					Description:     derefOrEmpty(input.Description),
-					Tags:            derefSlice(input.Tags),
-					Status:          derefOrEmpty(input.Status),
-					ProjectID:       derefOrEmpty(input.ProjectID),
-					SummaryLanguage: derefOrEmpty(input.SummaryLanguage),
+			result, err := executeBatch(input.Items, func(_ int, item readingUpsertItem) (any, error) {
+				if item.ID == "" {
+					return reading.Create(ctx, app, actorID, reading.CreateInput{
+						URL:             item.URL,
+						Title:           deref(item.Title),
+						Description:     derefOrEmpty(item.Description),
+						Tags:            derefSlice(item.Tags),
+						Status:          derefOrEmpty(item.Status),
+						ProjectID:       derefOrEmpty(item.ProjectID),
+						SummaryLanguage: derefOrEmpty(item.SummaryLanguage),
+					})
+				}
+				return reading.Update(ctx, app, actorID, item.ID, reading.UpdateInput{
+					Title:           item.Title,
+					Description:     item.Description,
+					Tags:            item.Tags,
+					Status:          item.Status,
+					ProjectID:       item.ProjectID,
+					SummaryLanguage: item.SummaryLanguage,
 				})
-			} else {
-				result, err = reading.Update(ctx, app, actorID, input.ID, reading.UpdateInput{
-					Title:           input.Title,
-					Description:     input.Description,
-					Tags:            input.Tags,
-					Status:          input.Status,
-					ProjectID:       input.ProjectID,
-					SummaryLanguage: input.SummaryLanguage,
-				})
-			}
-			if err != nil {
-				app.Logger().Error("assistant reading upsert tool failed", "actorId", actorID, "error", err)
-				return fantasy.NewTextErrorResponse("Failed to save reading item"), nil
-			}
-			data, err := json.Marshal(result)
-			if err != nil {
-				return fantasy.NewTextErrorResponse("Failed to serialize reading item"), nil
-			}
-			return fantasy.NewTextResponse(string(data)), nil
+			})
+			return batchToolResponse(result, err)
 		},
 	)
 }

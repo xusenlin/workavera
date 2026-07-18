@@ -200,7 +200,7 @@ Personal folders use PocketBase `/api/collections/doc_folders/records` CRUD, and
 - `docs_get`: returns complete current content, kind, revision, and project/folder location.
 - `docs_list_folders`: lists the current user's personal folders so IDs can be resolved before creating or moving.
 - `docs_upsert`: creates a document in My documents, a personal folder, or a project, or writes a complete replacement using `baseRevision`. Its `kind` is required; before creating, the Assistant briefly asks the user to choose simple, easily editable Markdown or rich, interactive HTML when no kind was specified.
-- `docs_move`: only when explicitly requested, moves a private document to My documents, an existing personal folder, or an editable project; project documents cannot be moved.
+- `docs_move`: only when explicitly requested, moves one to 50 private documents to My documents, existing personal folders, or editable projects through a required `items` array; a single move uses one item, project documents cannot be moved, and legacy top-level single-document input is rejected. Items execute in order with independent results.
 - `docs_replace`: replaces the first or all exact Markdown matches using `baseRevision`.
 - `docs_write_chunk`: writes oversized Markdown or HTML content in a replace/append sequence while recording one logical version.
 
@@ -221,4 +221,5 @@ The Assistant must call `docs_get` before updating, reuse the returned kind and 
 - Personal folders use PocketBase CRUD; folder deletion and document moves neither delete documents nor increase revision.
 - Attachment uploads enforce edit permission, media type, size, protected access, deduplication, and document cascade deletion.
 - Chat document mutations obey permissions and optimistic concurrency.
+- Chat can move a one-item or multi-item batch of up to 50 eligible documents, preserving ordered successes and failures.
 - Board tasks accept only same-project document links and survive linked-document deletion.

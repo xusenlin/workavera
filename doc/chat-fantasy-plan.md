@@ -19,6 +19,7 @@ Chat is Workavera's AI workspace entry point. It combines user-owned model confi
 - Reconstruct multi-step tool history correctly for subsequent model calls.
 - Keep provider credentials server-side and expose only safe message metadata and errors.
 - Provide custom UI cards and deep links for workspace tool results.
+- Keep long conversations responsive by isolating live-stream rerenders from settled historical messages and tool cards.
 
 ## 3. Non-goals
 
@@ -163,7 +164,9 @@ The actor-scoped production registry contains:
 - Reading: search, get, upsert, and summarize.
 - Docs: search, get, optimistic-concurrency upsert, exact-text replace, and chunked writes for long content (Markdown or self-contained HTML documents).
 
-Tool descriptions require explicit mutation intent, real IDs from prior reads, current revisions where applicable, and sequential writes to the same resource. Tool outputs render in module-specific UI cards and can open records through unified workspace deep links. Mock tools are excluded from the production registry.
+Tool descriptions require explicit mutation intent, real IDs from prior reads, current revisions where applicable, and sequential writes to the same resource. Supported mutation tools accept one to 50 records through a required `items` array and return ordered per-record results; a failed record does not discard successful siblings. The array contract applies to Board state/label/member/task create and task update, Calendar event create/update, Reading upsert, and Docs move. Legacy top-level single-record inputs are not accepted.
+
+Tool outputs render in module-specific UI cards and can open records through unified workspace deep links. Batch outputs share a summary contract with total, succeeded, and failed counts plus ordered record details. Persisted pre-batch outputs remain displayable as history, but are not valid inputs for new executions. Mock tools are excluded from the production registry.
 
 ## 10. Frontend experience
 
@@ -172,6 +175,8 @@ Tool descriptions require explicit mutation intent, real IDs from prior reads, c
 - The active conversation is addressed by the shared `record` query parameter.
 - AI SDK `Chat`/`useChat` owns live message state; Zustand owns the conversation directory.
 - The message renderer supports Markdown, code, reasoning, tool states, custom result cards, model attribution, and safe errors.
+- Historical message rows and settled tool cards are memoized. During a stream, only the active assistant response rerenders unless surrounding run or approval state changes.
+- Tool cards are collapsed by default in running, successful, failed, and approval states. Collapsed card bodies are not mounted, while expanding a batch card shows its input count and per-record outcomes.
 - Sending is disabled until a model exists and is selected.
 - A global run monitor subscribes to streaming assistant messages and lets users open or stop runs from other conversations.
 
@@ -186,3 +191,5 @@ Tool descriptions require explicit mutation intent, real IDs from prior reads, c
 - Only one run can modify a conversation at a time.
 - Workspace mutations occur only after explicit user intent and successful permission-aware tool execution.
 - Pinned limits, archive flows, deep links, and the active-run monitor behave consistently across refreshes.
+- A persisted conversation containing hundreds of tool calls can refresh and replay without mounting every card body, and a new stream does not rerender settled historical messages.
+- A valid one-item batch behaves like a single mutation; mixed-success batches preserve successes, identify failed indexes, and render accurate totals.

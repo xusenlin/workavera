@@ -123,7 +123,7 @@ export function ContactsToolCard({ part }: { part: ContactsToolPart }) {
 
   return (
     <Collapsible
-      defaultOpen={true}
+      defaultOpen={false}
       className="group not-prose mb-4 w-full rounded-md border"
     >
       <CollapsibleTrigger

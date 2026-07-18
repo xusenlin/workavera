@@ -39,8 +39,7 @@ type boardUpdateProjectInput struct {
 	Description *string `json:"description,omitempty" description:"Optional replacement description; pass an empty string to clear it"`
 }
 
-type boardUpsertStateInput struct {
-	ProjectID string   `json:"projectId" description:"Project ID; current user must be its owner"`
+type boardUpsertStateItem struct {
 	StateID   string   `json:"stateId,omitempty" description:"Existing state ID to update; omit to create"`
 	Name      *string  `json:"name,omitempty" description:"State name; required when creating"`
 	Color     *string  `json:"color,omitempty" description:"State color such as #3b82f6; required when creating"`
@@ -48,21 +47,33 @@ type boardUpsertStateInput struct {
 	SortOrder *float64 `json:"sortOrder,omitempty" description:"Optional ordering value. Omit it to append the state to the end automatically (recommended). Only set it to place the state at a specific position, using the sortOrder values from board_get_project as reference (e.g. a value between two existing states); never guess small numbers like 1 or negatives."`
 }
 
+type boardUpsertStateInput struct {
+	ProjectID string                 `json:"projectId" description:"Project ID; current user must be its owner"`
+	Items     []boardUpsertStateItem `json:"items" description:"One to 50 workflow states to create or update"`
+}
+
+type boardUpsertLabelItem struct {
+	LabelID string  `json:"labelId,omitempty" description:"Existing label ID to update; omit to create"`
+	Name    *string `json:"name,omitempty" description:"Label name; required when creating"`
+	Color   *string `json:"color,omitempty" description:"Label color such as #3b82f6; required when creating"`
+}
+
 type boardUpsertLabelInput struct {
-	ProjectID string  `json:"projectId" description:"Project ID; current user must be its owner"`
-	LabelID   string  `json:"labelId,omitempty" description:"Existing label ID to update; omit to create"`
-	Name      *string `json:"name,omitempty" description:"Label name; required when creating"`
-	Color     *string `json:"color,omitempty" description:"Label color such as #3b82f6; required when creating"`
+	ProjectID string                 `json:"projectId" description:"Project ID; current user must be its owner"`
+	Items     []boardUpsertLabelItem `json:"items" description:"One to 50 labels to create or update"`
+}
+
+type boardUpsertMemberItem struct {
+	UserID string `json:"userId" description:"Active user ID to add or update"`
+	Role   string `json:"role" description:"Member role: admin, member, or viewer"`
 }
 
 type boardUpsertMemberInput struct {
-	ProjectID string `json:"projectId" description:"Project ID; current user must be its owner"`
-	UserID    string `json:"userId" description:"Active user ID to add or update"`
-	Role      string `json:"role" description:"Member role: admin, member, or viewer"`
+	ProjectID string                  `json:"projectId" description:"Project ID; current user must be its owner"`
+	Items     []boardUpsertMemberItem `json:"items" description:"One to 50 project members to add or update"`
 }
 
-type boardCreateTaskInput struct {
-	ProjectID   string   `json:"projectId" description:"Project ID where the current user can edit tasks"`
+type boardCreateTaskItem struct {
 	StateID     string   `json:"stateId" description:"State ID belonging to the project"`
 	Title       string   `json:"title" description:"Task title"`
 	Description string   `json:"description,omitempty" description:"Optional task description"`
@@ -73,7 +84,12 @@ type boardCreateTaskInput struct {
 	DocumentIDs []string `json:"documentIds,omitempty" description:"Optional document IDs to link; each must belong to the same project"`
 }
 
-type boardUpdateTaskInput struct {
+type boardCreateTaskInput struct {
+	ProjectID string                `json:"projectId" description:"Project ID where the current user can edit tasks"`
+	Items     []boardCreateTaskItem `json:"items" description:"One to 50 tasks to create"`
+}
+
+type boardUpdateTaskItem struct {
 	TaskID      string    `json:"taskId" description:"Task ID"`
 	Title       *string   `json:"title,omitempty" description:"Optional replacement title"`
 	Description *string   `json:"description,omitempty" description:"Optional replacement description; pass an empty string to clear it"`
@@ -86,17 +102,21 @@ type boardUpdateTaskInput struct {
 	dueDateSet  bool
 }
 
+type boardUpdateTaskInput struct {
+	Items []boardUpdateTaskItem `json:"items" description:"One to 50 task patches"`
+}
+
 type boardDeleteTaskInput struct {
 	TaskID string `json:"taskId" description:"Task ID returned by board_search_tasks"`
 }
 
-func (input *boardUpdateTaskInput) UnmarshalJSON(data []byte) error {
-	type alias boardUpdateTaskInput
+func (input *boardUpdateTaskItem) UnmarshalJSON(data []byte) error {
+	type alias boardUpdateTaskItem
 	var decoded alias
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		return err
 	}
-	*input = boardUpdateTaskInput(decoded)
+	*input = boardUpdateTaskItem(decoded)
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
 		return err
@@ -209,8 +229,10 @@ func newBoardUpsertStateTool(app core.App, actorID string) fantasy.AgentTool {
 		"board_upsert_state",
 		"Create or update a project workflow state. Call board_get_project first and only use when capabilities.canManageWorkflow is true. Omit stateId to create; this tool cannot delete states.",
 		func(ctx context.Context, input boardUpsertStateInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
-			result, err := board.UpsertState(ctx, app, actorID, board.UpsertStateCommand{ProjectID: input.ProjectID, StateID: input.StateID, Name: input.Name, Color: input.Color, Category: input.Category, SortOrder: input.SortOrder})
-			return boardToolResult(app, actorID, "upsert state", result, err)
+			result, err := executeBatch(input.Items, func(_ int, item boardUpsertStateItem) (any, error) {
+				return board.UpsertState(ctx, app, actorID, board.UpsertStateCommand{ProjectID: input.ProjectID, StateID: item.StateID, Name: item.Name, Color: item.Color, Category: item.Category, SortOrder: item.SortOrder})
+			})
+			return batchToolResponse(result, err)
 		},
 	)
 }
@@ -220,8 +242,10 @@ func newBoardUpsertLabelTool(app core.App, actorID string) fantasy.AgentTool {
 		"board_upsert_label",
 		"Create or update a project label. Call board_get_project first and only use when capabilities.canManageWorkflow is true. Omit labelId to create; this tool cannot delete labels.",
 		func(ctx context.Context, input boardUpsertLabelInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
-			result, err := board.UpsertLabel(ctx, app, actorID, board.UpsertLabelCommand{ProjectID: input.ProjectID, LabelID: input.LabelID, Name: input.Name, Color: input.Color})
-			return boardToolResult(app, actorID, "upsert label", result, err)
+			result, err := executeBatch(input.Items, func(_ int, item boardUpsertLabelItem) (any, error) {
+				return board.UpsertLabel(ctx, app, actorID, board.UpsertLabelCommand{ProjectID: input.ProjectID, LabelID: item.LabelID, Name: item.Name, Color: item.Color})
+			})
+			return batchToolResponse(result, err)
 		},
 	)
 }
@@ -231,8 +255,10 @@ func newBoardUpsertMemberTool(app core.App, actorID string) fantasy.AgentTool {
 		"board_upsert_member",
 		"Add a collaborator or update their admin/member/viewer role. Call board_get_project first and only use when capabilities.canManageMembers is true. The project owner is not a membership and this tool cannot remove members.",
 		func(ctx context.Context, input boardUpsertMemberInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
-			result, err := board.UpsertMember(ctx, app, actorID, board.UpsertMemberCommand{ProjectID: input.ProjectID, UserID: input.UserID, Role: input.Role})
-			return boardToolResult(app, actorID, "upsert member", result, err)
+			result, err := executeBatch(input.Items, func(_ int, item boardUpsertMemberItem) (any, error) {
+				return board.UpsertMember(ctx, app, actorID, board.UpsertMemberCommand{ProjectID: input.ProjectID, UserID: item.UserID, Role: item.Role})
+			})
+			return batchToolResponse(result, err)
 		},
 	)
 }
@@ -242,8 +268,10 @@ func newBoardCreateTaskTool(app core.App, actorID string) fantasy.AgentTool {
 		"board_create_task",
 		"Create a task. Call board_get_project first, require capabilities.canEditTasks, and use only returned state, label, and participant IDs. Server authorization permits owner, admin, and member roles but denies viewers.",
 		func(ctx context.Context, input boardCreateTaskInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
-			result, err := board.CreateTask(ctx, app, actorID, board.CreateTaskCommand{ProjectID: input.ProjectID, StateID: input.StateID, Title: input.Title, Description: normalizeEscapedText(input.Description), Priority: input.Priority, DueDate: input.DueDate, LabelIDs: input.LabelIDs, AssigneeIDs: input.AssigneeIDs, DocIDs: input.DocumentIDs})
-			return boardToolResult(app, actorID, "create task", result, err)
+			result, err := executeBatch(input.Items, func(_ int, item boardCreateTaskItem) (any, error) {
+				return board.CreateTask(ctx, app, actorID, board.CreateTaskCommand{ProjectID: input.ProjectID, StateID: item.StateID, Title: item.Title, Description: normalizeEscapedText(item.Description), Priority: item.Priority, DueDate: item.DueDate, LabelIDs: item.LabelIDs, AssigneeIDs: item.AssigneeIDs, DocIDs: item.DocumentIDs})
+			})
+			return batchToolResponse(result, err)
 		},
 	)
 }
@@ -253,8 +281,10 @@ func newBoardUpdateTaskTool(app core.App, actorID string) fantasy.AgentTool {
 		"board_update_task",
 		"Patch an existing task without changing its project. Call board_get_project first, require capabilities.canEditTasks, and use only returned state, label, and participant IDs. Omitted fields stay unchanged; empty arrays clear relations; null dueDate clears it.",
 		func(ctx context.Context, input boardUpdateTaskInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
-			result, err := board.UpdateTask(ctx, app, actorID, board.UpdateTaskCommand{TaskID: input.TaskID, Title: input.Title, Description: normalizeEscapedTextPtr(input.Description), StateID: input.StateID, Priority: input.Priority, DueDate: input.DueDate, DueDateSet: input.dueDateSet, LabelIDs: input.LabelIDs, AssigneeIDs: input.AssigneeIDs, DocIDs: input.DocumentIDs})
-			return boardToolResult(app, actorID, "update task", result, err)
+			result, err := executeBatch(input.Items, func(_ int, item boardUpdateTaskItem) (any, error) {
+				return board.UpdateTask(ctx, app, actorID, board.UpdateTaskCommand{TaskID: item.TaskID, Title: item.Title, Description: normalizeEscapedTextPtr(item.Description), StateID: item.StateID, Priority: item.Priority, DueDate: item.DueDate, DueDateSet: item.dueDateSet, LabelIDs: item.LabelIDs, AssigneeIDs: item.AssigneeIDs, DocIDs: item.DocumentIDs})
+			})
+			return batchToolResponse(result, err)
 		},
 	)
 }

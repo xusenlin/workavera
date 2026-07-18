@@ -3,6 +3,7 @@ import {
   MessageContent,
   MessageResponse,
 } from "@/components/ai-elements/message"
+import { memo } from "react"
 import {
   Reasoning,
   ReasoningContent,
@@ -19,7 +20,11 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { formatRelativeTime } from "@/lib/chat-utils"
 import { cn } from "@/lib/utils"
-import type { ChatUIMessage } from "@/types/chat"
+import type {
+  ChatMessageMetadata,
+  ChatUIMessage,
+  ToolApprovalData,
+} from "@/types/chat"
 
 import { ContactsToolCard } from "./contacts-tool-output"
 import { BoardProjectsToolCard } from "./board-projects-tool-output"
@@ -68,12 +73,183 @@ const calendarMutationToolNames = new Set([
   "calendar_update_event",
 ])
 
+type DynamicToolPart = Extract<
+  ChatUIMessage["parts"][number],
+  { type: "dynamic-tool" }
+>
+
+type ToolCardProps = {
+  part: DynamicToolPart
+  approval?: ToolApprovalData
+  messageId: string
+  messageStatus?: ChatMessageMetadata["status"]
+  runId?: string
+  runActive: boolean
+}
+
+function sameApproval(
+  previous?: ToolApprovalData,
+  next?: ToolApprovalData
+): boolean {
+  if (previous === next) return true
+  if (!previous || !next) return false
+  if (
+    previous.approvalId !== next.approvalId ||
+    previous.toolCallId !== next.toolCallId ||
+    previous.toolName !== next.toolName ||
+    previous.title !== next.title ||
+    previous.summary !== next.summary ||
+    previous.target?.type !== next.target?.type ||
+    previous.target?.id !== next.target?.id ||
+    previous.target?.name !== next.target?.name ||
+    previous.presentation?.confirmLabel !== next.presentation?.confirmLabel ||
+    previous.presentation?.confirmVariant !==
+      next.presentation?.confirmVariant ||
+    previous.presentation?.pendingMessage !==
+      next.presentation?.pendingMessage ||
+    previous.presentation?.successMessage !==
+      next.presentation?.successMessage ||
+    previous.presentation?.deniedMessage !== next.presentation?.deniedMessage ||
+    previous.presentation?.failureMessage !== next.presentation?.failureMessage
+  ) {
+    return false
+  }
+
+  const previousDetails = previous.details ?? []
+  const nextDetails = next.details ?? []
+  return (
+    previousDetails.length === nextDetails.length &&
+    previousDetails.every((detail, index) => {
+      const nextDetail = nextDetails[index]
+      return (
+        detail.label === nextDetail.label &&
+        detail.value === nextDetail.value &&
+        detail.format === nextDetail.format &&
+        detail.tone === nextDetail.tone
+      )
+    })
+  )
+}
+
+function ToolCard({
+  part,
+  approval,
+  messageId,
+  messageStatus,
+  runId,
+  runActive,
+}: ToolCardProps) {
+  if (approval) {
+    return (
+      <ApprovalToolCard
+        part={part}
+        approval={approval}
+        runId={runId}
+        runActive={runActive}
+        messageStatus={messageStatus}
+      />
+    )
+  }
+  if (part.toolName === "contacts_search") {
+    return <ContactsToolCard part={part} />
+  }
+  if (part.toolName === "board_search_projects") {
+    return <BoardProjectsToolCard part={part} />
+  }
+  if (part.toolName === "board_get_project") {
+    return <BoardProjectDetailToolCard part={part} />
+  }
+  if (part.toolName === "board_search_tasks") {
+    return <TasksToolCard part={part} />
+  }
+  if (part.toolName === "board_list_templates") {
+    return <BoardTemplatesToolCard part={part} />
+  }
+  if (boardMutationToolNames.has(part.toolName)) {
+    return <BoardMutationToolCard part={part} />
+  }
+  if (part.toolName === "reading_search") {
+    return <ReadingSearchToolCard part={part} />
+  }
+  if (readingItemToolNames.has(part.toolName)) {
+    return <ReadingItemToolCard part={part} />
+  }
+  if (part.toolName === "docs_search") {
+    return <DocsSearchToolCard part={part} />
+  }
+  if (docItemToolNames.has(part.toolName)) {
+    return <DocsItemToolCard part={part} />
+  }
+  if (part.toolName === "calendar_get_schedule") {
+    return <CalendarScheduleToolCard part={part} />
+  }
+  if (calendarMutationToolNames.has(part.toolName)) {
+    return <CalendarMutationToolCard part={part} />
+  }
+  if (
+    part.toolName === "system_memory_upsert" ||
+    part.toolName === "system_memory_forget"
+  ) {
+    return (
+      <MemoryToolCard part={part} messageId={messageId} runActive={runActive} />
+    )
+  }
+  return (
+    <Tool defaultOpen={false}>
+      <ToolHeader
+        type="dynamic-tool"
+        toolName={part.toolName}
+        state={part.state}
+      />
+      <ToolContent>
+        {part.input !== undefined && <ToolInput input={part.input} />}
+        {(part.state === "output-available" ||
+          part.state === "output-error") && (
+          <ToolOutput
+            output={part.state === "output-available" ? part.output : undefined}
+            errorText={
+              part.state === "output-error" ? part.errorText : undefined
+            }
+          />
+        )}
+      </ToolContent>
+    </Tool>
+  )
+}
+
+const MemoizedToolCard = memo(ToolCard, (previous, next) => {
+  if (
+    previous.messageId !== next.messageId ||
+    previous.messageStatus !== next.messageStatus ||
+    previous.runId !== next.runId ||
+    previous.runActive !== next.runActive ||
+    !sameApproval(previous.approval, next.approval) ||
+    previous.part.toolCallId !== next.part.toolCallId ||
+    previous.part.toolName !== next.part.toolName ||
+    previous.part.state !== next.part.state
+  ) {
+    return false
+  }
+
+  if (previous.part === next.part) return true
+
+  // The AI SDK deep-clones the current message on every stream chunk. Tool
+  // parts in a settled protocol state are immutable, so keep their rendered
+  // card until the state or surrounding run metadata actually changes.
+  return (
+    next.part.state !== "input-streaming" &&
+    !("preliminary" in next.part && next.part.preliminary === true)
+  )
+})
+
+MemoizedToolCard.displayName = "MemoizedToolCard"
+
 function MessageParts({
   message,
-  activeRunId,
+  runActive,
 }: {
   message: ChatUIMessage
-  activeRunId: string | null
+  runActive: boolean
 }) {
   const approvals = new Map(
     message.parts
@@ -103,94 +279,16 @@ function MessageParts({
           </Reasoning>
         )
       case "dynamic-tool":
-        if (approvals.has(part.toolCallId)) {
-          return (
-            <ApprovalToolCard
-              key={part.toolCallId}
-              part={part}
-              approval={approvals.get(part.toolCallId)!}
-              runId={message.metadata?.runId}
-              runActive={message.metadata?.runId === activeRunId}
-              messageStatus={message.metadata?.status}
-            />
-          )
-        }
-        if (part.toolName === "contacts_search") {
-          return <ContactsToolCard key={part.toolCallId} part={part} />
-        }
-        if (part.toolName === "board_search_projects") {
-          return <BoardProjectsToolCard key={part.toolCallId} part={part} />
-        }
-        if (part.toolName === "board_get_project") {
-          return (
-            <BoardProjectDetailToolCard key={part.toolCallId} part={part} />
-          )
-        }
-        if (part.toolName === "board_search_tasks") {
-          return <TasksToolCard key={part.toolCallId} part={part} />
-        }
-        if (part.toolName === "board_list_templates") {
-          return <BoardTemplatesToolCard key={part.toolCallId} part={part} />
-        }
-        if (boardMutationToolNames.has(part.toolName)) {
-          return <BoardMutationToolCard key={part.toolCallId} part={part} />
-        }
-        if (part.toolName === "reading_search") {
-          return <ReadingSearchToolCard key={part.toolCallId} part={part} />
-        }
-        if (readingItemToolNames.has(part.toolName)) {
-          return <ReadingItemToolCard key={part.toolCallId} part={part} />
-        }
-        if (part.toolName === "docs_search") {
-          return <DocsSearchToolCard key={part.toolCallId} part={part} />
-        }
-        if (docItemToolNames.has(part.toolName)) {
-          return <DocsItemToolCard key={part.toolCallId} part={part} />
-        }
-        if (part.toolName === "calendar_get_schedule") {
-          return <CalendarScheduleToolCard key={part.toolCallId} part={part} />
-        }
-        if (calendarMutationToolNames.has(part.toolName)) {
-          return <CalendarMutationToolCard key={part.toolCallId} part={part} />
-        }
-        if (
-          part.toolName === "system_memory_upsert" ||
-          part.toolName === "system_memory_forget"
-        ) {
-          return (
-            <MemoryToolCard
-              key={part.toolCallId}
-              part={part}
-              messageId={message.id}
-              runActive={message.metadata?.runId === activeRunId}
-            />
-          )
-        }
         return (
-          <Tool
+          <MemoizedToolCard
             key={part.toolCallId}
-            defaultOpen={part.state === "output-error"}
-          >
-            <ToolHeader
-              type="dynamic-tool"
-              toolName={part.toolName}
-              state={part.state}
-            />
-            <ToolContent>
-              {part.input !== undefined && <ToolInput input={part.input} />}
-              {(part.state === "output-available" ||
-                part.state === "output-error") && (
-                <ToolOutput
-                  output={
-                    part.state === "output-available" ? part.output : undefined
-                  }
-                  errorText={
-                    part.state === "output-error" ? part.errorText : undefined
-                  }
-                />
-              )}
-            </ToolContent>
-          </Tool>
+            part={part}
+            approval={approvals.get(part.toolCallId)}
+            messageId={message.id}
+            messageStatus={message.metadata?.status}
+            runId={message.metadata?.runId}
+            runActive={runActive}
+          />
         )
       case "source-url":
         return (
@@ -230,12 +328,12 @@ function MessageParts({
   })
 }
 
-export function ChatMessageItem({
+function ChatMessageItemComponent({
   message,
-  activeRunId,
+  runActive,
 }: {
   message: ChatUIMessage
-  activeRunId: string | null
+  runActive: boolean
 }) {
   const isUser = message.role === "user"
   const metadata = message.metadata
@@ -274,7 +372,7 @@ export function ChatMessageItem({
       </div>
 
       <MessageContent>
-        <MessageParts message={message} activeRunId={activeRunId} />
+        <MessageParts message={message} runActive={runActive} />
       </MessageContent>
 
       {!isUser &&
@@ -288,3 +386,7 @@ export function ChatMessageItem({
     </Message>
   )
 }
+
+export const ChatMessageItem = memo(ChatMessageItemComponent)
+
+ChatMessageItem.displayName = "ChatMessageItem"

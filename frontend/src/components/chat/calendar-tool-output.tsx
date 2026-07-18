@@ -27,6 +27,9 @@ import { Button } from "@/components/ui/button"
 import { ToolInput } from "@/components/chat/tool-input"
 import { cn } from "@/lib/utils"
 import { workspaceRecordUrl } from "@/lib/workspace-navigation"
+import { parseBatchToolResult } from "@/lib/tool-batch"
+
+import { BatchToolResultSummary } from "./batch-tool-result"
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -87,10 +90,22 @@ const EVENT_COLORS: Record<string, { hex: string; bg: string }> = {
 
 const PRIORITY_BADGES: Record<string, { label: string; className: string }> = {
   none: { label: "None", className: "bg-muted text-muted-foreground" },
-  low: { label: "Low", className: "bg-blue-500/10 text-blue-600 dark:text-blue-400" },
-  medium: { label: "Med", className: "bg-amber-500/10 text-amber-600 dark:text-amber-400" },
-  high: { label: "High", className: "bg-orange-500/10 text-orange-600 dark:text-orange-400" },
-  urgent: { label: "Urgent", className: "bg-red-500/10 text-red-600 dark:text-red-400" },
+  low: {
+    label: "Low",
+    className: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+  },
+  medium: {
+    label: "Med",
+    className: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  },
+  high: {
+    label: "High",
+    className: "bg-orange-500/10 text-orange-600 dark:text-orange-400",
+  },
+  urgent: {
+    label: "Urgent",
+    className: "bg-red-500/10 text-red-600 dark:text-red-400",
+  },
 }
 
 // ── Shared helpers ───────────────────────────────────────────
@@ -183,7 +198,7 @@ export function CalendarScheduleToolCard({
 
   return (
     <Collapsible
-      defaultOpen={true}
+      defaultOpen={false}
       className="group not-prose mb-4 w-full rounded-md border"
     >
       <CollapsibleTrigger
@@ -234,8 +249,7 @@ export function CalendarScheduleToolCard({
         {part.state === "output-available" && days.length > 0 && (
           <div className="space-y-4">
             {days.map((day) => {
-              const isToday =
-                new Date().toISOString().slice(0, 10) === day.date
+              const isToday = new Date().toISOString().slice(0, 10) === day.date
               const hasItems = day.tasks.length > 0 || day.events.length > 0
 
               return (
@@ -260,10 +274,7 @@ export function CalendarScheduleToolCard({
                     <div className="space-y-2">
                       {/* Events */}
                       {day.events.map((event) => (
-                        <EventRow
-                          key={event.id}
-                          event={event}
-                        />
+                        <EventRow key={event.id} event={event} />
                       ))}
                       {/* Tasks */}
                       {day.tasks.map((task) => (
@@ -309,10 +320,7 @@ function EventRow({ event }: { event: CalendarEvent }) {
         color.bg
       )}
     >
-      <div
-        className="w-1 shrink-0"
-        style={{ backgroundColor: color.hex }}
-      />
+      <div className="w-1 shrink-0" style={{ backgroundColor: color.hex }} />
       <div className="flex min-w-0 flex-1 items-center justify-between gap-3 py-2.5 pr-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -323,11 +331,15 @@ function EventRow({ event }: { event: CalendarEvent }) {
               style={{ color: color.hex }}
             />
             <span className="truncate text-sm font-medium">{event.title}</span>
-            {event.recurrenceFrequency && event.recurrenceFrequency !== "none" && (
-              <Badge variant="secondary" className="shrink-0 px-1 text-[10px] capitalize">
-                {event.recurrenceFrequency}
-              </Badge>
-            )}
+            {event.recurrenceFrequency &&
+              event.recurrenceFrequency !== "none" && (
+                <Badge
+                  variant="secondary"
+                  className="shrink-0 px-1 text-[10px] capitalize"
+                >
+                  {event.recurrenceFrequency}
+                </Badge>
+              )}
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
             {event.allDay ? (
@@ -393,7 +405,10 @@ function TaskRow({
             {priorityBadge && task.priority !== "none" && (
               <Badge
                 variant="secondary"
-                className={cn("shrink-0 px-1 text-[10px]", priorityBadge.className)}
+                className={cn(
+                  "shrink-0 px-1 text-[10px]",
+                  priorityBadge.className
+                )}
               >
                 {priorityBadge.label}
               </Badge>
@@ -411,9 +426,7 @@ function TaskRow({
                 {task.projectName}
               </span>
             )}
-            {task.stateName && (
-              <span>{task.stateName}</span>
-            )}
+            {task.stateName && <span>{task.stateName}</span>}
           </div>
         </div>
       </div>
@@ -445,12 +458,13 @@ export function CalendarMutationToolCard({
     icon: Calendar03Icon,
   }
   const isCreate = part.toolName === "calendar_create_event"
-  const result = parseOutput<EventMutationResult>(part.output)
+  const batch = parseBatchToolResult<EventMutationResult>(part.output)
+  const result = batch ? null : parseOutput<EventMutationResult>(part.output)
   const event = result?.event
 
   return (
     <Collapsible
-      defaultOpen={true}
+      defaultOpen={false}
       className="group not-prose mb-4 w-full rounded-md border"
     >
       <CollapsibleTrigger
@@ -470,6 +484,7 @@ export function CalendarMutationToolCard({
           />
           <span className="text-sm font-medium">{meta.label}</span>
           {getStatusBadge(part.state)}
+          {batch && <Badge variant="outline">{batch.total}</Badge>}
         </div>
         <HugeiconsIcon
           icon={ChevronDownIcon}
@@ -485,9 +500,7 @@ export function CalendarMutationToolCard({
           <div className="rounded-md border bg-muted/20 px-3 py-2">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <ClockIcon className="size-3.5 animate-spin" />
-              <span>
-                {isCreate ? "Creating event…" : "Updating event…"}
-              </span>
+              <span>{isCreate ? "Creating event…" : "Updating event…"}</span>
             </div>
           </div>
         )}
@@ -496,6 +509,13 @@ export function CalendarMutationToolCard({
           <div className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
             {part.errorText || "Tool execution failed"}
           </div>
+        )}
+
+        {part.state === "output-available" && batch && (
+          <BatchToolResultSummary
+            batch={batch}
+            getLabel={(item) => item.event?.title}
+          />
         )}
 
         {part.state === "output-available" && event && (
@@ -514,9 +534,7 @@ export function CalendarMutationToolCard({
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
                   {result?.action && (
-                    <Badge
-                      className="bg-green-500/10 text-[10px] text-green-700 dark:text-green-400"
-                    >
+                    <Badge className="bg-green-500/10 text-[10px] text-green-700 dark:text-green-400">
                       {result.action === "created" ? "Created" : "Saved"}
                     </Badge>
                   )}
@@ -547,14 +565,15 @@ export function CalendarMutationToolCard({
                   {event.description}
                 </p>
               )}
-              {event.recurrenceFrequency && event.recurrenceFrequency !== "none" && (
-                <p className="mt-0.5 text-xs text-muted-foreground/70 capitalize">
-                  Repeats {event.recurrenceFrequency}
-                  {event.recurrenceInterval > 1
-                    ? ` (every ${event.recurrenceInterval})`
-                    : ""}
-                </p>
-              )}
+              {event.recurrenceFrequency &&
+                event.recurrenceFrequency !== "none" && (
+                  <p className="mt-0.5 text-xs text-muted-foreground/70 capitalize">
+                    Repeats {event.recurrenceFrequency}
+                    {event.recurrenceInterval > 1
+                      ? ` (every ${event.recurrenceInterval})`
+                      : ""}
+                  </p>
+                )}
             </div>
 
             <div className="flex justify-end">
@@ -572,7 +591,7 @@ export function CalendarMutationToolCard({
           </div>
         )}
 
-        {part.state === "output-available" && !event && (
+        {part.state === "output-available" && !batch && !event && (
           <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
             Event not found
           </div>
