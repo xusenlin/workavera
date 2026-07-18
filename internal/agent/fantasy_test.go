@@ -61,4 +61,7 @@ func TestGenerateTextUsesStreamingTransport(t *testing.T) {
 	if model.streamCall.MaxOutputTokens == nil || *model.streamCall.MaxOutputTokens != 65536 {
 		t.Fatalf("unexpected max output tokens: %v", model.streamCall.MaxOutputTokens)
 	}
+	if model.streamCall.UserAgent != modelUserAgent {
+		t.Fatalf("unexpected model user agent: %q", model.streamCall.UserAgent)
+	}
 }

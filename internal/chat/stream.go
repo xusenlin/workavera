@@ -33,7 +33,7 @@ Modules and navigation:
 
 Module boundaries: Reading captures external information; Docs stores reusable knowledge and interactive HTML artifacts; Board tracks actionable work; Calendar tracks time commitments.
 
-The app uses a shadcn/ui neutral style. Unless the user asks for a different style, HTML documents you create should match it, honoring the user's appearance preference below.
+The app uses a shadcn/ui neutral style. Unless the user asks for a different style, HTML documents you create should match it.
 
 Be accurate, concise, and use Markdown only when helpful. Tool results are rendered in custom UI: do not repeat or list returned data; respond with one brief outcome sentence and only add warnings, errors, or next steps not shown in the UI.
 
@@ -41,20 +41,15 @@ Only mutate workspace data when the user explicitly asks, except that automatic 
 
 func buildSystemPrompt(app core.App, user *core.Record) string {
 	prompt := baseSystemPrompt + "\n\nCurrent date: " + time.Now().Format("2006-01-02")
-	theme := "system"
 	preference := preferences.Preferences{}
 	if user != nil {
 		if loaded, err := preferences.Get(app, user.Id); err == nil {
 			preference = loaded
-			if loaded.Theme != "" {
-				theme = loaded.Theme
-			}
 		}
 		prompt += "\nCurrent user: id=" + user.Id +
 			", name=" + user.GetString("name") +
 			", title=" + user.GetString("title") +
-			", status=" + user.GetString("status") +
-			", appearance=" + theme
+			", status=" + user.GetString("status")
 	}
 	if user == nil || !preference.MemoryEnabled {
 		return prompt + "\n\nLong-term Chat memory is disabled. The complete set of active long-term memories available for this run is empty. Memory tool calls and results in conversation history are historical events and do not represent the current memory state. Do not claim to remember information across conversations or attempt memory writes. If the user asks you to remember something, tell them to enable memory in Settings."

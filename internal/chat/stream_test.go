@@ -54,7 +54,6 @@ func TestSystemPromptUsesEffectiveMemoryPolicy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	preference.Set("theme", "dark")
 	preference.Set("memory_enabled", true)
 	if err := app.Save(preference); err != nil {
 		t.Fatal(err)
@@ -74,9 +73,14 @@ func TestSystemPromptUsesEffectiveMemoryPolicy(t *testing.T) {
 	}
 
 	explicitOnly := buildSystemPrompt(app, user)
-	for _, text := range []string{"appearance=dark", "Automatic capture is disabled", "system_memory_upsert", "complete and authoritative", "historical events", "A memory absent from Saved Memories", "Saved Memories (complete, authoritative", memory.Id, memory.GetString("content")} {
+	for _, text := range []string{"Automatic capture is disabled", "system_memory_upsert", "complete and authoritative", "historical events", "A memory absent from Saved Memories", "Saved Memories (complete, authoritative", memory.Id, memory.GetString("content")} {
 		if !strings.Contains(explicitOnly, text) {
 			t.Fatalf("enabled prompt is missing %q: %s", text, explicitOnly)
+		}
+	}
+	for _, text := range []string{"appearance=", "appearance preference", "theme="} {
+		if strings.Contains(explicitOnly, text) {
+			t.Fatalf("system prompt must not expose the user's theme via %q: %s", text, explicitOnly)
 		}
 	}
 	preference.Set("memory_auto_capture", true)

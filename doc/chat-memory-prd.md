@@ -115,7 +115,7 @@ Enabling automatic capture is standing permission for compliant memory writes on
 For each run, Chat assembles context in this order:
 
 1. Workavera's base system rules and the current date.
-2. Current public user profile data and appearance preference.
+2. Current public user profile data.
 3. The effective memory policy.
 4. All active long-term memories.
 5. The existing conversation summary and recent messages.

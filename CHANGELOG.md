@@ -31,6 +31,12 @@ and versions follow [Semantic Versioning](https://semver.org/).
   authoritative current state. Historical memory tool calls remain visible as
   past events, while current user messages and the current saved-memory set
   take precedence over stale history.
+- Chat system context no longer includes the user's appearance preference;
+  visual theme remains a UI-only preference.
+- Memory action cards place Undo and Manage controls at the lower right with a
+  dedicated undo icon, and memory source links use a compact Chat icon.
+- Requests to model providers now identify their source as Workavera instead of
+  the underlying Fantasy SDK.
 - Account-level appearance and memory controls now live together in a private
   user-preferences record. Existing themes are migrated without changing the
   user's selection, and new accounts default to the system theme with memory

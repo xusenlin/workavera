@@ -4,10 +4,10 @@ import { toast } from "sonner"
 
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
-  ArrowLeft01Icon,
   Brain02Icon,
   Delete02Icon,
   Settings02Icon,
+  Undo03Icon,
 } from "@hugeicons/core-free-icons"
 import { CheckCircleIcon, ClockIcon, XCircleIcon } from "lucide-react"
 import type { DynamicToolUIPart } from "ai"
@@ -143,7 +143,7 @@ export function MemoryToolCard({
             <p className="mt-1 text-xs text-destructive">{part.errorText}</p>
           )}
           {!loading && !failed && (
-            <div className="mt-2 flex items-center gap-2">
+            <div className="mt-3 flex items-center justify-end gap-1">
               {!forget &&
                 !runActive &&
                 result &&
@@ -154,7 +154,7 @@ export function MemoryToolCard({
                     onClick={() => void undo()}
                     disabled={undoing}
                   >
-                    <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} />
+                    <HugeiconsIcon icon={Undo03Icon} strokeWidth={2} />
                     {undoing ? "Undoing..." : "Undo"}
                   </Button>
                 )}

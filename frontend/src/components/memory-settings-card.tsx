@@ -6,9 +6,9 @@ import { HugeiconsIcon } from "@hugeicons/react"
 import {
   Add01Icon,
   Brain02Icon,
+  Chat01Icon,
   Delete02Icon,
   Edit01Icon,
-  Link02Icon,
   Search01Icon,
 } from "@hugeicons/core-free-icons"
 
@@ -549,7 +549,11 @@ function MemoryRow({
             href={workspaceRecordUrl("chat", memory.sourceConversation)}
             className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
           >
-            <HugeiconsIcon icon={Link02Icon} strokeWidth={2} />
+            <HugeiconsIcon
+              icon={Chat01Icon}
+              strokeWidth={2}
+              className="size-3 shrink-0"
+            />
             Source conversation
           </a>
         )}

@@ -16,7 +16,16 @@ import (
 const (
 	maxAgentSteps        = 12
 	maxAgentOutputTokens = 16384
+	modelUserAgent       = "Workavera (https://workavera.com)"
 )
+
+func agentOptions(maxSteps int, maxOutputTokens int64) []fantasy.AgentOption {
+	return []fantasy.AgentOption{
+		fantasy.WithStopConditions(fantasy.StepCountIs(maxSteps)),
+		fantasy.WithMaxOutputTokens(maxOutputTokens),
+		fantasy.WithUserAgent(modelUserAgent),
+	}
+}
 
 // effectiveMaxOutputTokens returns the model-specific limit, falling back to
 // the package default when the model does not configure one.
@@ -54,10 +63,7 @@ func GenerateText(ctx context.Context, config ModelConfig, systemPrompt, prompt 
 // considering that the actual response (for example, a summary) will be much
 // shorter.
 func generateText(ctx context.Context, model fantasy.LanguageModel, maxOutputTokens int64, systemPrompt, prompt string) (string, error) {
-	opts := []fantasy.AgentOption{
-		fantasy.WithStopConditions(fantasy.StepCountIs(1)),
-		fantasy.WithMaxOutputTokens(maxOutputTokens),
-	}
+	opts := agentOptions(1, maxOutputTokens)
 	if systemPrompt != "" {
 		opts = append(opts, fantasy.WithSystemPrompt(systemPrompt))
 	}
@@ -75,10 +81,7 @@ func (r *FantasyRunner) Stream(ctx context.Context, request Request, emit EmitFu
 		return Result{}, err
 	}
 
-	opts := []fantasy.AgentOption{
-		fantasy.WithStopConditions(fantasy.StepCountIs(maxAgentSteps)),
-		fantasy.WithMaxOutputTokens(effectiveMaxOutputTokens(request.Model)),
-	}
+	opts := agentOptions(maxAgentSteps, effectiveMaxOutputTokens(request.Model))
 	if r.toolFactory != nil {
 		opts = append(opts, fantasy.WithTools(r.toolFactory(ToolScope{
 			ActorID:        request.ActorID,
