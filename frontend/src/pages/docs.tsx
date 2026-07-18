@@ -9,9 +9,11 @@ import {
   Delete02Icon,
   DocumentAttachmentIcon,
   Download01Icon,
+  Edit02Icon,
   File02Icon,
   FloppyDiskIcon,
   FolderTransferIcon,
+  Folder01Icon,
   HistoryIcon,
   Maximize01Icon,
   Minimize01Icon,
@@ -67,7 +69,9 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
@@ -81,10 +85,7 @@ import { extractErrorMessage, isRequestAbort } from "@/lib/error"
 import { htmlPreviewSrcDoc } from "@/lib/html-preview"
 import { pb } from "@/lib/pocketbase"
 import { cn } from "@/lib/utils"
-import {
-  requestedRecordId,
-  workspaceRecordUrl,
-} from "@/lib/workspace-navigation"
+import { requestedRecordId } from "@/lib/workspace-navigation"
 
 type DocKind = "markdown" | "html"
 
@@ -94,6 +95,7 @@ type DocRecord = RecordModel & {
   content: string
   owner: string
   project: string
+  folder: string
   status: "draft" | "archived"
   revision: number
   last_edited_by: string
@@ -105,12 +107,15 @@ type DocumentListRecord = RecordModel & {
   kind: DocKind
   owner: string
   project: string
+  folder: string
   revision: number
 }
 
 type ArchivedDocumentListRecord = RecordModel & {
   title: string
   owner: string
+  project: string
+  folder: string
   revision: number
 }
 
@@ -120,6 +125,8 @@ type PinnedDocumentSummary = {
   kind: DocKind
   ownerId: string
   projectId?: string
+  folderId?: string
+  folderName?: string
   revision: number
 }
 
@@ -131,6 +138,8 @@ type DocumentResult = {
   ownerId: string
   projectId?: string
   projectName?: string
+  folderId?: string
+  folderName?: string
   status: "draft" | "archived"
   revision: number
   lastEditedBy: string
@@ -149,6 +158,20 @@ type Version = {
 }
 
 type Project = { id: string; name: string }
+type ProjectRecord = RecordModel & {
+  name: string
+  owner: string
+  archived: boolean
+}
+type ProjectPreferenceRecord = RecordModel & {
+  project: string
+  sort_order: number
+  expand?: { project?: ProjectRecord }
+}
+type DocFolder = RecordModel & { name: string; owner: string }
+type DocsView =
+  | { type: "recent" | "pinned" | "my" }
+  | { type: "folder" | "project"; id: string }
 
 const DOCS_PAGE_SIZE = 15
 
@@ -156,12 +179,16 @@ export function DocsPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const requestedDocId = requestedRecordId(searchParams)
+  const [view, setView] = useState<DocsView>(() =>
+    docsViewFromParams(searchParams)
+  )
   const [documents, setDocuments] = useState<DocumentListRecord[]>([])
   const [pinnedDocuments, setPinnedDocuments] = useState<
     PinnedDocumentSummary[]
   >([])
   const [projects, setProjects] = useState<Project[]>([])
   const [editableProjects, setEditableProjects] = useState<Project[]>([])
+  const [folders, setFolders] = useState<DocFolder[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [persisted, setPersisted] = useState<DocumentResult | null>(null)
   const [draftTitle, setDraftTitle] = useState("")
@@ -176,10 +203,13 @@ export function DocsPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [archivedOpen, setArchivedOpen] = useState(false)
+  const [folderEditorOpen, setFolderEditorOpen] = useState(false)
+  const [editingFolder, setEditingFolder] = useState<DocFolder | null>(null)
   const [editorMode, setEditorMode] = useState<DocumentEditorMode>("rich-text")
   const [htmlMode, setHtmlMode] = useState<"preview" | "source">("preview")
   const [fullscreen, setFullscreen] = useState(false)
   const editorAreaRef = useRef<HTMLElement>(null)
+  const autoSelectFirstDocument = useRef(true)
 
   useEffect(() => {
     const updateFullscreen = () => {
@@ -205,50 +235,89 @@ export function DocsPage() {
   const loadList = useCallback(
     async (targetPage = page) => {
       const actorId = pb.authStore.record?.id ?? ""
+      const directoryView = isDirectoryView(view)
       const normalizedQuery = query.trim()
       const escapedQuery = normalizedQuery.replaceAll('"', '\\"')
       const pinnedPath = normalizedQuery
         ? `/api/docs-pinned?query=${encodeURIComponent(normalizedQuery)}`
         : "/api/docs-pinned"
-      const pinned = await pb.send<PinnedDocumentSummary[]>(pinnedPath, {})
       const filters = ['status = "draft"']
       if (escapedQuery) {
         filters.push(
           `(title ~ "${escapedQuery}" || content ~ "${escapedQuery}")`
         )
       }
-      for (const doc of pinned) filters.push(`id != "${doc.id}"`)
-      const [docResult, projectRecords, memberships] = await Promise.all([
-        pb
+      if (view.type === "my") {
+        filters.push('project = ""', 'folder = ""')
+      } else if (view.type === "folder") {
+        filters.push('project = ""', `folder = "${view.id}"`)
+      } else if (view.type === "project") {
+        filters.push(`project = "${view.id}"`)
+      }
+      const [allPinned, projectPreferences, memberships, folderRecords] =
+        await Promise.all([
+          pb.send<PinnedDocumentSummary[]>(pinnedPath, {}),
+          actorId
+            ? pb
+                .collection("board_project_preferences")
+                .getFullList<ProjectPreferenceRecord>({
+                  filter: pb.filter(
+                    "user = {:user} && project.archived = false",
+                    { user: actorId }
+                  ),
+                  sort: "sort_order,id",
+                  expand: "project",
+                })
+            : Promise.resolve([]),
+          actorId
+            ? pb
+                .collection("board_project_members")
+                .getFullList<RecordModel & { project: string; role: string }>({
+                  filter: `user = "${actorId}"`,
+                })
+            : Promise.resolve([]),
+          pb.collection("doc_folders").getFullList<DocFolder>({ sort: "name" }),
+        ])
+      const projectRecords = projectPreferences.flatMap((preference) => {
+        const project = preference.expand?.project
+        return project ? [project] : []
+      })
+      let listedDocuments: DocumentListRecord[] = []
+      let listedTotalItems = 0
+      let listedTotalPages = 1
+      if (view.type !== "pinned") {
+        const docResult = await pb
           .collection("docs")
-          .getList<DocumentListRecord>(targetPage, DOCS_PAGE_SIZE, {
-            sort: "-updated",
-            filter: filters.join(" && "),
-            fields: "id,title,kind,owner,project,revision",
-          }),
-        pb
-          .collection("board_projects")
-          .getFullList<RecordModel & { name: string; owner: string }>({
-            sort: "name",
-          }),
-        actorId
-          ? pb
-              .collection("board_project_members")
-              .getFullList<RecordModel & { project: string; role: string }>({
-                filter: `user = "${actorId}"`,
-              })
-          : Promise.resolve([]),
-      ])
+          .getList<DocumentListRecord>(
+            view.type === "recent" ? 1 : targetPage,
+            view.type === "recent" ? 10 : DOCS_PAGE_SIZE,
+            {
+              sort: "-updated",
+              filter: filters.join(" && "),
+              fields: "id,title,kind,owner,project,folder,revision",
+            }
+          )
+        listedDocuments = docResult.items
+        listedTotalItems = docResult.totalItems
+        listedTotalPages = docResult.totalPages
+      }
       const editableMemberships = new Set(
         memberships
           .filter((membership) => membership.role !== "viewer")
           .map((membership) => membership.project)
       )
-      setPinnedDocuments(pinned)
-      setDocuments(docResult.items)
-      setTotalPages(Math.max(1, docResult.totalPages))
-      setTotalItems(docResult.totalItems + pinned.length)
+      setPinnedDocuments(allPinned)
+      setDocuments(listedDocuments)
+      setTotalPages(directoryView ? Math.max(1, listedTotalPages) : 1)
+      setTotalItems(
+        view.type === "pinned"
+          ? allPinned.length
+          : view.type === "recent"
+            ? listedDocuments.length
+            : listedTotalItems
+      )
       setProjects(projectRecords.map(({ id, name }) => ({ id, name })))
+      setFolders(folderRecords)
       setEditableProjects(
         projectRecords
           .filter(
@@ -259,10 +328,13 @@ export function DocsPage() {
       )
       setSelectedId((current) => {
         if (current) return current
-        return pinned[0]?.id ?? docResult.items[0]?.id ?? null
+        if (!autoSelectFirstDocument.current) return null
+        return view.type === "pinned"
+          ? (allPinned[0]?.id ?? null)
+          : (listedDocuments[0]?.id ?? null)
       })
     },
-    [page, query]
+    [page, query, view]
   )
 
   // Selection can change while a document fetch is in flight (URL sync and
@@ -270,37 +342,56 @@ export function DocsPage() {
   // through the previous document). Only the newest load may apply its result;
   // a stale response must never overwrite the document loaded after it.
   const loadDocumentSeq = useRef(0)
-  const loadDocument = useCallback(async (id: string) => {
-    const seq = ++loadDocumentSeq.current
-    const record = await pb.collection("docs").getOne<DocRecord>(id)
-    const project = record.project
-      ? await pb
-          .collection("board_projects")
-          .getOne<RecordModel & { name: string }>(record.project)
-          .catch(() => null)
-      : null
-    if (seq !== loadDocumentSeq.current) return
-    const doc: DocumentResult = {
-      id: record.id,
-      title: record.title,
-      kind: record.kind === "html" ? "html" : "markdown",
-      content: record.content,
-      ownerId: record.owner,
-      projectId: record.project || undefined,
-      projectName: project?.name,
-      status: record.status,
-      revision: record.revision,
-      lastEditedBy: record.last_edited_by,
-      created: record.created,
-      updated: record.updated,
-    }
-    setPersisted(doc)
-    setDraftTitle(doc.title)
-    setDraftContent(doc.content)
-    setServerHasNewVersion(false)
-    setEditorMode("rich-text")
-    setHtmlMode("preview")
-  }, [])
+  const dismissedRequestedDocId = useRef<string | null>(null)
+  const loadDocument = useCallback(
+    async (id: string) => {
+      const seq = ++loadDocumentSeq.current
+      const record = await pb.collection("docs").getOne<DocRecord>(id)
+      const [project, folder] = await Promise.all([
+        record.project
+          ? pb
+              .collection("board_projects")
+              .getOne<RecordModel & { name: string }>(record.project)
+              .catch(() => null)
+          : Promise.resolve(null),
+        record.folder
+          ? pb
+              .collection("doc_folders")
+              .getOne<DocFolder>(record.folder)
+              .catch(() => null)
+          : Promise.resolve(null),
+      ])
+      if (seq !== loadDocumentSeq.current) return
+      const doc: DocumentResult = {
+        id: record.id,
+        title: record.title,
+        kind: record.kind === "html" ? "html" : "markdown",
+        content: record.content,
+        ownerId: record.owner,
+        projectId: record.project || undefined,
+        projectName: project?.name,
+        folderId: record.folder || undefined,
+        folderName: folder?.name,
+        status: record.status,
+        revision: record.revision,
+        lastEditedBy: record.last_edited_by,
+        created: record.created,
+        updated: record.updated,
+      }
+      setPersisted(doc)
+      setDraftTitle(doc.title)
+      setDraftContent(doc.content)
+      setServerHasNewVersion(false)
+      setEditorMode("rich-text")
+      setHtmlMode("preview")
+      if (requestedDocId === id && !searchParams.get("view")) {
+        const nextView = viewForDocument(doc)
+        setView(nextView)
+        navigate(docsPageUrl(nextView, id), { replace: true })
+      }
+    },
+    [navigate, requestedDocId, searchParams]
+  )
 
   useEffect(() => {
     void Promise.resolve()
@@ -313,21 +404,26 @@ export function DocsPage() {
   }, [loadList])
 
   useEffect(() => {
+    if (!requestedDocId) {
+      dismissedRequestedDocId.current = null
+      return
+    }
+    if (requestedDocId === dismissedRequestedDocId.current) return
     if (!requestedDocId || requestedDocId === selectedId) return
     if (dirty && !window.confirm("Discard your unsaved changes?")) {
       if (selectedId) {
-        navigate(workspaceRecordUrl("docs", selectedId), { replace: true })
+        navigate(docsPageUrl(view, selectedId), { replace: true })
       }
       return
     }
     void Promise.resolve().then(() => setSelectedId(requestedDocId))
-  }, [dirty, navigate, requestedDocId, selectedId])
+  }, [dirty, navigate, requestedDocId, selectedId, view])
 
   useEffect(() => {
     if (!requestedDocId && selectedId) {
-      navigate(workspaceRecordUrl("docs", selectedId), { replace: true })
+      navigate(docsPageUrl(view, selectedId), { replace: true })
     }
-  }, [navigate, requestedDocId, selectedId])
+  }, [navigate, requestedDocId, selectedId, view])
 
   useEffect(() => {
     if (!selectedId) return
@@ -339,10 +435,10 @@ export function DocsPage() {
         if (requestedDocId === selectedId) {
           setSelectedId(null)
           setPersisted(null)
-          navigate("/docs", { replace: true })
+          navigate(docsPageUrl(view), { replace: true })
         }
       })
-  }, [loadDocument, navigate, requestedDocId, selectedId])
+  }, [loadDocument, navigate, requestedDocId, selectedId, view])
 
   useEffect(() => {
     if (!selectedId) return
@@ -373,8 +469,55 @@ export function DocsPage() {
   const selectDocument = (id: string) => {
     if (id === selectedId) return
     if (dirty && !window.confirm("Discard your unsaved changes?")) return
+    autoSelectFirstDocument.current = true
     setSelectedId(id)
-    navigate(workspaceRecordUrl("docs", id), { replace: true })
+    navigate(docsPageUrl(view, id), { replace: true })
+  }
+
+  const selectView = (next: DocsView) => {
+    if (sameDocsView(view, next)) return
+    if (dirty && !window.confirm("Discard your unsaved changes?")) return
+    autoSelectFirstDocument.current = false
+    loadDocumentSeq.current++
+    dismissedRequestedDocId.current = selectedId
+    setLoading(true)
+    setView(next)
+    setPage(1)
+    setSelectedId(null)
+    setPersisted(null)
+    setDraftTitle("")
+    setDraftContent("")
+    navigate(docsPageUrl(next), { replace: true })
+  }
+
+  const editFolder = (folder?: DocFolder) => {
+    setEditingFolder(folder ?? null)
+    setFolderEditorOpen(true)
+  }
+
+  const deleteFolder = async (folder: DocFolder) => {
+    try {
+      await pb.collection("doc_folders").delete(folder.id)
+      if (view.type === "folder" && view.id === folder.id) {
+        const nextView: DocsView = { type: "my" }
+        autoSelectFirstDocument.current = false
+        loadDocumentSeq.current++
+        dismissedRequestedDocId.current = selectedId
+        setLoading(true)
+        setView(nextView)
+        setPage(1)
+        setSelectedId(null)
+        setPersisted(null)
+        setDraftTitle("")
+        setDraftContent("")
+        navigate(docsPageUrl(nextView), { replace: true })
+      } else {
+        await loadList()
+      }
+      toast.success("Folder deleted. Its documents are now in My documents.")
+    } catch (error) {
+      toast.error(extractErrorMessage(error, "Could not delete folder."))
+    }
   }
 
   const save = async () => {
@@ -464,9 +607,14 @@ export function DocsPage() {
     try {
       await pb.send(`/api/docs/${id}/archive`, { method: "POST" })
       if (selectedId === id) {
+        autoSelectFirstDocument.current = false
+        loadDocumentSeq.current++
+        dismissedRequestedDocId.current = id
         setSelectedId(null)
         setPersisted(null)
-        navigate("/docs", { replace: true })
+        setDraftTitle("")
+        setDraftContent("")
+        navigate(docsPageUrl(view), { replace: true })
       }
       await loadList()
       toast.success("Document archived.")
@@ -479,9 +627,14 @@ export function DocsPage() {
     try {
       await pb.send(`/api/docs/${id}`, { method: "DELETE" })
       if (selectedId === id) {
+        autoSelectFirstDocument.current = false
+        loadDocumentSeq.current++
+        dismissedRequestedDocId.current = id
         setSelectedId(null)
         setPersisted(null)
-        navigate("/docs", { replace: true })
+        setDraftTitle("")
+        setDraftContent("")
+        navigate(docsPageUrl(view), { replace: true })
       }
       await loadList()
       toast.success("Document deleted.")
@@ -538,57 +691,79 @@ export function DocsPage() {
             />
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto p-2">
+        <div className="shrink-0 border-b">
+          <LocationNavigation
+            view={view}
+            folders={folders}
+            projects={projects}
+            onSelect={selectView}
+            onCreateFolder={() => editFolder()}
+            onEditFolder={editFolder}
+            onDeleteFolder={deleteFolder}
+          />
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-2">
           {loading ? (
             <div className="flex justify-center py-10">
               <Spinner />
             </div>
           ) : pinnedDocuments.length === 0 && documents.length === 0 ? (
             <p className="px-3 py-10 text-center text-sm text-muted-foreground">
-              No documents yet.
+              No documents in this location.
             </p>
           ) : (
             <div className="space-y-3">
-              <DocumentGroup
-                label="Pinned"
-                documents={pinnedDocuments.map((doc) => ({
-                  id: doc.id,
-                  title: doc.title,
-                  kind: doc.kind,
-                  owner: doc.ownerId,
-                  project: doc.projectId ?? "",
-                  revision: doc.revision,
-                  pinned: true,
-                }))}
-                selectedId={selectedId}
-                projects={projects}
-                onSelect={selectDocument}
-                onTogglePin={togglePin}
-                onArchive={archiveDocument}
-                onDelete={deleteDocument}
-              />
-              <DocumentGroup
-                label="Recent"
-                documents={documents.map((doc) => ({
-                  id: doc.id,
-                  title: doc.title,
-                  kind: doc.kind,
-                  owner: doc.owner,
-                  project: doc.project,
-                  revision: doc.revision,
-                  pinned: false,
-                }))}
-                selectedId={selectedId}
-                projects={projects}
-                onSelect={selectDocument}
-                onTogglePin={togglePin}
-                onArchive={archiveDocument}
-                onDelete={deleteDocument}
-              />
+              {view.type === "pinned" && (
+                <DocumentGroup
+                  documents={pinnedDocuments.map((doc) => ({
+                    id: doc.id,
+                    title: doc.title,
+                    kind: doc.kind,
+                    owner: doc.ownerId,
+                    project: doc.projectId ?? "",
+                    folder: doc.folderId ?? "",
+                    revision: doc.revision,
+                    pinned: true,
+                  }))}
+                  selectedId={selectedId}
+                  projects={projects}
+                  folders={folders}
+                  onSelect={selectDocument}
+                  onTogglePin={togglePin}
+                  onArchive={archiveDocument}
+                  onDelete={deleteDocument}
+                />
+              )}
+              {view.type !== "pinned" && (
+                <DocumentGroup
+                  label={
+                    view.type === "recent"
+                      ? undefined
+                      : docsViewLabel(view, folders, projects)
+                  }
+                  documents={documents.map((doc) => ({
+                    id: doc.id,
+                    title: doc.title,
+                    kind: doc.kind,
+                    owner: doc.owner,
+                    project: doc.project,
+                    folder: doc.folder,
+                    revision: doc.revision,
+                    pinned: pinnedDocuments.some((pin) => pin.id === doc.id),
+                  }))}
+                  selectedId={selectedId}
+                  projects={projects}
+                  folders={folders}
+                  onSelect={selectDocument}
+                  onTogglePin={togglePin}
+                  onArchive={archiveDocument}
+                  onDelete={deleteDocument}
+                />
+              )}
             </div>
           )}
         </div>
-        {!loading && totalPages > 0 && (
+        {!loading && isDirectoryView(view) && totalPages > 0 && (
           <Pagination className="justify-end px-2 py-1">
             <PaginationContent>
               <PaginationItem>
@@ -655,12 +830,41 @@ export function DocsPage() {
               </span>
               <div className="ml-auto flex items-center gap-1">
                 {!persisted.projectId && (
-                  <MoveToProjectButton
+                  <MoveDocumentButton
                     document={persisted}
+                    folders={folders}
                     projects={editableProjects}
-                    onMoved={async (doc) => {
-                      setPersisted(doc)
-                      await loadList()
+                    disabled={dirty}
+                    onMoved={(nextView) => {
+                      setLoading(true)
+                      setView(nextView)
+                      setPage(1)
+                      setPersisted((current) =>
+                        current
+                          ? {
+                              ...current,
+                              projectId:
+                                nextView.type === "project"
+                                  ? nextView.id
+                                  : undefined,
+                              projectName:
+                                nextView.type === "project"
+                                  ? projectName(projects, nextView.id)
+                                  : undefined,
+                              folderId:
+                                nextView.type === "folder"
+                                  ? nextView.id
+                                  : undefined,
+                              folderName:
+                                nextView.type === "folder"
+                                  ? folderName(folders, nextView.id)
+                                  : undefined,
+                            }
+                          : current
+                      )
+                      navigate(docsPageUrl(nextView, persisted.id), {
+                        replace: true,
+                      })
                     }}
                   />
                 )}
@@ -718,7 +922,10 @@ export function DocsPage() {
                           size="icon-sm"
                           aria-label="Export"
                         >
-                          <HugeiconsIcon icon={Download01Icon} strokeWidth={2} />
+                          <HugeiconsIcon
+                            icon={Download01Icon}
+                            strokeWidth={2}
+                          />
                         </Button>
                       </DropdownMenuTrigger>
                     </TooltipTrigger>
@@ -766,8 +973,7 @@ export function DocsPage() {
                     className="size-10"
                   />
                   <p className="text-sm">
-                    This document is empty. Edit the HTML source to add
-                    content.
+                    This document is empty. Edit the HTML source to add content.
                   </p>
                 </div>
               ) : (
@@ -800,25 +1006,42 @@ export function DocsPage() {
               strokeWidth={1.5}
               className="size-10"
             />
-            <p className="text-sm">Select a document or create a new one.</p>
+            <p className="text-sm">Select a document to view its content.</p>
           </div>
         )}
       </main>
 
       <CreateDocumentDialog
+        key={`${createOpen}:${defaultLocationForView(view, editableProjects)}`}
         open={createOpen}
         onOpenChange={setCreateOpen}
         projects={editableProjects}
+        folders={folders}
+        defaultLocation={defaultLocationForView(view, editableProjects)}
         onCreated={async (doc) => {
           setPage(1)
           await loadList(1)
           setSelectedId(doc.id)
-          navigate(workspaceRecordUrl("docs", doc.id), { replace: true })
+          const nextView = viewForDocument(doc)
+          setView(nextView)
+          navigate(docsPageUrl(nextView, doc.id), { replace: true })
+        }}
+      />
+      <FolderEditorDialog
+        key={`${folderEditorOpen}:${editingFolder?.id ?? "new"}`}
+        open={folderEditorOpen}
+        onOpenChange={setFolderEditorOpen}
+        folder={editingFolder}
+        onSaved={async (folder) => {
+          await loadList()
+          selectView({ type: "folder", id: folder.id })
         }}
       />
       <ArchivedDocumentsDialog
         open={archivedOpen}
         onOpenChange={setArchivedOpen}
+        folders={folders}
+        projects={projects}
         onChanged={() => loadList()}
       />
       {persisted && (
@@ -883,8 +1106,217 @@ type DocumentListEntry = {
   kind: DocKind
   owner: string
   project: string
+  folder: string
   revision: number
   pinned: boolean
+}
+
+function LocationNavigation({
+  view,
+  folders,
+  projects,
+  onSelect,
+  onCreateFolder,
+  onEditFolder,
+  onDeleteFolder,
+}: {
+  view: DocsView
+  folders: DocFolder[]
+  projects: Project[]
+  onSelect: (view: DocsView) => void
+  onCreateFolder: () => void
+  onEditFolder: (folder: DocFolder) => void
+  onDeleteFolder: (folder: DocFolder) => Promise<void>
+}) {
+  const selectedFolder =
+    view.type === "folder"
+      ? folders.find((folder) => folder.id === view.id)
+      : undefined
+  const locationValue =
+    view.type === "my"
+      ? "my_documents"
+      : view.type === "folder" || view.type === "project"
+        ? `${view.type}:${view.id}`
+        : ""
+
+  return (
+    <nav className="space-y-2 p-2" aria-label="Document locations">
+      <div className="grid grid-cols-3 gap-1">
+        <QuickViewButton
+          label="Pinned"
+          icon={Pin02Icon}
+          active={view.type === "pinned"}
+          onClick={() => onSelect({ type: "pinned" })}
+        />
+        <QuickViewButton
+          label="Recent"
+          icon={File02Icon}
+          active={view.type === "recent"}
+          onClick={() => onSelect({ type: "recent" })}
+        />
+        <QuickViewButton
+          label="Locations"
+          icon={Folder01Icon}
+          active={isDirectoryView(view)}
+          onClick={() => {
+            if (!isDirectoryView(view)) onSelect({ type: "my" })
+          }}
+        />
+      </div>
+      {isDirectoryView(view) && (
+        <div className="flex items-center gap-1">
+          <Select
+            value={locationValue}
+            onValueChange={(value) => onSelect(viewForLocationValue(value))}
+          >
+            <SelectTrigger
+              size="sm"
+              className="min-w-0 flex-1 rounded-lg bg-background"
+              aria-label="Choose document location"
+            >
+              <SelectValue placeholder="Choose location" />
+            </SelectTrigger>
+            <SelectContent
+              position="popper"
+              align="start"
+              className="max-h-72"
+            >
+              <SelectGroup>
+                <SelectLabel>My documents</SelectLabel>
+                <SelectItem value="my_documents">
+                  <HugeiconsIcon icon={Folder01Icon} strokeWidth={2} />
+                  Root
+                </SelectItem>
+                {folders.map((folder) => (
+                  <SelectItem
+                    key={folder.id}
+                    value={`folder:${folder.id}`}
+                    className="pl-6"
+                  >
+                    <HugeiconsIcon icon={Folder01Icon} strokeWidth={2} />
+                    {folder.name}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+              {projects.length > 0 && (
+                <SelectGroup>
+                  <SelectLabel>Projects</SelectLabel>
+                  {projects.map((project) => (
+                    <SelectItem
+                      key={project.id}
+                      value={`project:${project.id}`}
+                      className="pl-6"
+                    >
+                      <HugeiconsIcon icon={Folder01Icon} strokeWidth={2} />
+                      {project.name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              )}
+            </SelectContent>
+          </Select>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="New folder"
+            onClick={onCreateFolder}
+          >
+            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+          </Button>
+          {selectedFolder && (
+            <FolderActionsButton
+              folder={selectedFolder}
+              onEdit={() => onEditFolder(selectedFolder)}
+              onDelete={() => onDeleteFolder(selectedFolder)}
+            />
+          )}
+        </div>
+      )}
+    </nav>
+  )
+}
+
+function QuickViewButton({
+  label,
+  icon,
+  active,
+  onClick,
+}: {
+  label: string
+  icon: Parameters<typeof HugeiconsIcon>[0]["icon"]
+  active: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex min-w-0 items-center justify-center gap-1 rounded-md px-1.5 py-1.5 text-xs hover:bg-muted/60",
+        active && "bg-muted font-medium"
+      )}
+    >
+      <HugeiconsIcon icon={icon} strokeWidth={2} className="size-4 shrink-0" />
+      <span className="truncate">{label}</span>
+    </button>
+  )
+}
+
+function FolderActionsButton({
+  folder,
+  onEdit,
+  onDelete,
+}: {
+  folder: DocFolder
+  onEdit: () => void
+  onDelete: () => Promise<void>
+}) {
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`${folder.name} actions`}
+          >
+            <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={onEdit}>
+            <HugeiconsIcon icon={Edit02Icon} strokeWidth={2} />
+            Rename
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            variant="destructive"
+            onClick={() => setConfirmDelete(true)}
+          >
+            <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete folder?</AlertDialogTitle>
+            <AlertDialogDescription>
+              “{folder.name}” will be deleted. Its documents will move to My
+              documents and will not be deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void onDelete()}>
+              Delete folder
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  )
 }
 
 function DocumentGroup({
@@ -892,15 +1324,17 @@ function DocumentGroup({
   documents,
   selectedId,
   projects,
+  folders,
   onSelect,
   onTogglePin,
   onArchive,
   onDelete,
 }: {
-  label: string
+  label?: string
   documents: DocumentListEntry[]
   selectedId: string | null
   projects: Project[]
+  folders: DocFolder[]
   onSelect: (id: string) => void
   onTogglePin: (id: string, pinned: boolean) => Promise<void>
   onArchive: (id: string) => Promise<void>
@@ -909,9 +1343,11 @@ function DocumentGroup({
   if (documents.length === 0) return null
   return (
     <section>
-      <p className="px-3 py-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-        {label}
-      </p>
+      {label && (
+        <p className="px-3 py-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+          {label}
+        </p>
+      )}
       <div className="space-y-1">
         {documents.map((doc) => (
           <DocumentListItem
@@ -919,7 +1355,11 @@ function DocumentGroup({
             document={doc}
             active={selectedId === doc.id}
             projectName={
-              doc.project ? projectName(projects, doc.project) : "Private"
+              doc.project
+                ? projectName(projects, doc.project)
+                : doc.folder
+                  ? folderName(folders, doc.folder)
+                  : "My documents"
             }
             onSelect={() => onSelect(doc.id)}
             onTogglePin={() => onTogglePin(doc.id, doc.pinned)}
@@ -1049,10 +1489,14 @@ function DocumentListItem({
 function ArchivedDocumentsDialog({
   open,
   onOpenChange,
+  folders,
+  projects,
   onChanged,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
+  folders: DocFolder[]
+  projects: Project[]
   onChanged: () => Promise<void>
 }) {
   const [items, setItems] = useState<ArchivedDocumentListRecord[]>([])
@@ -1068,7 +1512,7 @@ function ArchivedDocumentsDialog({
       .getList<ArchivedDocumentListRecord>(page, 10, {
         filter: 'status = "archived"',
         sort: "-updated",
-        fields: "id,title,owner,revision",
+        fields: "id,title,owner,project,folder,revision",
       })
     setItems(result.items)
     setTotalPages(Math.max(1, result.totalPages))
@@ -1143,7 +1587,12 @@ function ArchivedDocumentsDialog({
                         {doc.title}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Revision {doc.revision}
+                        {doc.project
+                          ? projectName(projects, doc.project)
+                          : doc.folder
+                            ? folderName(folders, doc.folder)
+                            : "My documents"}{" "}
+                        · Revision {doc.revision}
                       </p>
                     </div>
                     {isCreator && (
@@ -1237,39 +1686,111 @@ function ArchivedDocumentsDialog({
   )
 }
 
+function FolderEditorDialog({
+  open,
+  onOpenChange,
+  folder,
+  onSaved,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  folder: DocFolder | null
+  onSaved: (folder: DocFolder) => Promise<void>
+}) {
+  const [name, setName] = useState(folder?.name ?? "")
+  const [saving, setSaving] = useState(false)
+
+  const save = async () => {
+    if (!name.trim()) return
+    setSaving(true)
+    try {
+      const result = folder
+        ? await pb
+            .collection("doc_folders")
+            .update<DocFolder>(folder.id, { name })
+        : await pb.collection("doc_folders").create<DocFolder>({ name })
+      await onSaved(result)
+      onOpenChange(false)
+      toast.success(folder ? "Folder renamed." : "Folder created.")
+    } catch (error) {
+      toast.error(extractErrorMessage(error, "Could not save folder."))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{folder ? "Rename folder" : "New folder"}</DialogTitle>
+          <DialogDescription>
+            Personal folders organize documents inside My documents.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2">
+          <Label htmlFor="folder-name">Name</Label>
+          <Input
+            id="folder-name"
+            value={name}
+            maxLength={80}
+            onChange={(event) => setName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") void save()
+            }}
+            autoFocus
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button disabled={!name.trim() || saving} onClick={() => void save()}>
+            {saving ? "Saving…" : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function CreateDocumentDialog({
   open,
   onOpenChange,
   projects,
+  folders,
+  defaultLocation,
   onCreated,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   projects: Project[]
+  folders: DocFolder[]
+  defaultLocation: string
   onCreated: (doc: DocumentResult) => Promise<void>
 }) {
   const [title, setTitle] = useState("")
   const [kind, setKind] = useState<DocKind>("markdown")
-  const [location, setLocation] = useState<"private" | "project">("private")
-  const [projectId, setProjectId] = useState("")
+  const [location, setLocation] = useState(defaultLocation)
   const [saving, setSaving] = useState(false)
+
   const create = async () => {
     setSaving(true)
     try {
+      const [locationType, locationId = ""] = location.split(":")
       const doc = await pb.send<DocumentResult>("/api/docs", {
         method: "POST",
         body: {
           title,
           kind,
           content: "",
-          projectId: location === "private" ? "" : projectId,
+          folderId: locationType === "folder" ? locationId : "",
+          projectId: locationType === "project" ? locationId : "",
         },
       })
       await onCreated(doc)
       setTitle("")
       setKind("markdown")
-      setLocation("private")
-      setProjectId("")
       onOpenChange(false)
     } catch (error) {
       toast.error(extractErrorMessage(error, "Could not create document."))
@@ -1283,7 +1804,7 @@ function CreateDocumentDialog({
         <DialogHeader>
           <DialogTitle>New document</DialogTitle>
           <DialogDescription>
-            Create a private note or a document shared with a project.
+            Choose where this document should live.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-5">
@@ -1329,60 +1850,30 @@ function CreateDocumentDialog({
               </button>
             </div>
           </div>
-          <div className="space-y-3">
-            <Label>Who can access it?</Label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setLocation("private")}
-                className={cn(
-                  "rounded-xl border p-4 text-left transition-colors hover:bg-muted/50",
-                  location === "private" &&
-                    "border-foreground/30 bg-muted ring-1 ring-foreground/10"
-                )}
-              >
-                <span className="block text-sm font-medium">Private</span>
-                <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
-                  Only you can open and edit this document.
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setLocation("project")}
-                className={cn(
-                  "rounded-xl border p-4 text-left transition-colors hover:bg-muted/50",
-                  location === "project" &&
-                    "border-foreground/30 bg-muted ring-1 ring-foreground/10"
-                )}
-              >
-                <span className="block text-sm font-medium">Project</span>
-                <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
-                  Share it with members of one project.
-                </span>
-              </button>
-            </div>
-            {location === "project" && (
-              <div className="space-y-2 pt-1">
-                <Label>Project</Label>
-                <Select value={projectId} onValueChange={setProjectId}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Choose a project" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {projects.map((project) => (
-                      <SelectItem key={project.id} value={project.id}>
-                        {project.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {projects.length === 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    You do not have an editable project yet.
-                  </p>
-                )}
-              </div>
-            )}
+          <div className="space-y-2">
+            <Label>Location</Label>
+            <Select value={location} onValueChange={setLocation}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="my_documents">My documents</SelectItem>
+                {folders.map((folder) => (
+                  <SelectItem key={folder.id} value={`folder:${folder.id}`}>
+                    My documents / {folder.name}
+                  </SelectItem>
+                ))}
+                {projects.map((project) => (
+                  <SelectItem key={project.id} value={`project:${project.id}`}>
+                    Project / {project.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Personal locations are private. Project documents are shared with
+              that project's members.
+            </p>
           </div>
         </div>
         <DialogFooter>
@@ -1390,9 +1881,7 @@ function CreateDocumentDialog({
             Cancel
           </Button>
           <Button
-            disabled={
-              !title.trim() || saving || (location === "project" && !projectId)
-            }
+            disabled={!title.trim() || saving}
             onClick={() => void create()}
           >
             {saving ? "Creating…" : "Create"}
@@ -1403,27 +1892,47 @@ function CreateDocumentDialog({
   )
 }
 
-function MoveToProjectButton({
+function MoveDocumentButton({
   document,
   projects,
+  folders,
+  disabled,
   onMoved,
 }: {
   document: DocumentResult
   projects: Project[]
-  onMoved: (doc: DocumentResult) => Promise<void>
+  folders: DocFolder[]
+  disabled: boolean
+  onMoved: (view: DocsView) => void
 }) {
   const [open, setOpen] = useState(false)
-  const [projectId, setProjectId] = useState("")
+  const [location, setLocation] = useState(
+    document.folderId ? `folder:${document.folderId}` : "my_documents"
+  )
   const move = async () => {
-    if (!projectId) return
     try {
-      const doc = await pb.send<DocumentResult>(
-        `/api/docs/${document.id}/move-to-project`,
-        { method: "POST", body: { projectId } }
-      )
-      await onMoved(doc)
+      const [locationType, locationId = ""] = location.split(":")
+      let nextView: DocsView
+      if (locationType === "project") {
+        const moved = await pb.send<DocumentResult>(
+          `/api/docs/${document.id}/move-to-project`,
+          {
+            method: "POST",
+            body: { projectId: locationId },
+          }
+        )
+        nextView = viewForDocument(moved)
+      } else {
+        const moved = await pb.collection("docs").update<DocRecord>(document.id, {
+          folder: locationType === "folder" ? locationId : "",
+        })
+        nextView = moved.folder
+          ? { type: "folder", id: moved.folder }
+          : { type: "my" }
+      }
+      onMoved(nextView)
       setOpen(false)
-      toast.success("Document moved to project.")
+      toast.success("Document moved.")
     } catch (error) {
       toast.error(extractErrorMessage(error, "Could not move document."))
     }
@@ -1431,26 +1940,40 @@ function MoveToProjectButton({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <HeaderIconButton
-        label="Move to project"
+        label="Move document"
         icon={FolderTransferIcon}
-        onClick={() => setOpen(true)}
+        disabled={disabled}
+        onClick={() => {
+          setLocation(
+            document.folderId
+              ? `folder:${document.folderId}`
+              : "my_documents"
+          )
+          setOpen(true)
+        }}
       />
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Move to project</DialogTitle>
+          <DialogTitle>Move document</DialogTitle>
           <DialogDescription>
-            Project members will inherit access. This document cannot be moved
-            back in the first version.
+            Moving to a project shares the document with project members and
+            cannot be undone in this version.
           </DialogDescription>
         </DialogHeader>
-        <Select value={projectId} onValueChange={setProjectId}>
+        <Select value={location} onValueChange={setLocation}>
           <SelectTrigger>
-            <SelectValue placeholder="Select project" />
+            <SelectValue placeholder="Select location" />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="my_documents">My documents</SelectItem>
+            {folders.map((folder) => (
+              <SelectItem key={folder.id} value={`folder:${folder.id}`}>
+                My documents / {folder.name}
+              </SelectItem>
+            ))}
             {projects.map((project) => (
-              <SelectItem key={project.id} value={project.id}>
-                {project.name}
+              <SelectItem key={project.id} value={`project:${project.id}`}>
+                Project / {project.name}
               </SelectItem>
             ))}
           </SelectContent>
@@ -1459,9 +1982,7 @@ function MoveToProjectButton({
           <Button variant="outline" onClick={() => setOpen(false)}>
             Cancel
           </Button>
-          <Button disabled={!projectId} onClick={() => void move()}>
-            Move
-          </Button>
+          <Button onClick={() => void move()}>Move</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1562,6 +2083,66 @@ function HistoryDialog({
 
 function projectName(projects: Project[], id: string) {
   return projects.find((project) => project.id === id)?.name ?? "Project"
+}
+function folderName(folders: DocFolder[], id: string) {
+  return folders.find((folder) => folder.id === id)?.name ?? "Folder"
+}
+function docsViewFromParams(searchParams: URLSearchParams): DocsView {
+  const type = searchParams.get("view")
+  const id = searchParams.get("location")?.trim() ?? ""
+  if ((type === "folder" || type === "project") && id) return { type, id }
+  if (type === "pinned" || type === "my") return { type }
+  return { type: "recent" }
+}
+function docsPageUrl(view: DocsView, recordId?: string) {
+  const params = new URLSearchParams({ view: view.type })
+  if (view.type === "folder" || view.type === "project") {
+    params.set("location", view.id)
+  }
+  if (recordId) params.set("open", recordId)
+  return `/docs?${params.toString()}`
+}
+function sameDocsView(left: DocsView, right: DocsView) {
+  return (
+    left.type === right.type &&
+    (!("id" in left) || !("id" in right) || left.id === right.id)
+  )
+}
+function isDirectoryView(view: DocsView) {
+  return (
+    view.type === "my" || view.type === "folder" || view.type === "project"
+  )
+}
+function viewForDocument(doc: DocumentResult): DocsView {
+  if (doc.projectId) return { type: "project", id: doc.projectId }
+  if (doc.folderId) return { type: "folder", id: doc.folderId }
+  return { type: "my" }
+}
+function defaultLocationForView(view: DocsView, editableProjects: Project[]) {
+  if (view.type === "folder") return `folder:${view.id}`
+  if (
+    view.type === "project" &&
+    editableProjects.some((project) => project.id === view.id)
+  ) {
+    return `project:${view.id}`
+  }
+  return "my_documents"
+}
+function viewForLocationValue(value: string): DocsView {
+  const [type, id = ""] = value.split(":")
+  if (type === "folder" && id) return { type: "folder", id }
+  if (type === "project" && id) return { type: "project", id }
+  return { type: "my" }
+}
+function docsViewLabel(
+  view: DocsView,
+  folders: DocFolder[],
+  projects: Project[]
+) {
+  if (view.type === "my") return "My documents"
+  if (view.type === "folder") return folderName(folders, view.id)
+  if (view.type === "project") return projectName(projects, view.id)
+  return "Recent"
 }
 function formatDate(value: string) {
   return value ? new Date(value).toLocaleString() : ""

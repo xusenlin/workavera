@@ -58,6 +58,7 @@ const readingItemToolNames = new Set([
 const docItemToolNames = new Set([
   "docs_get",
   "docs_upsert",
+  "docs_move",
   "docs_replace",
   "docs_write_chunk",
 ])

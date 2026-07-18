@@ -10,8 +10,11 @@ import (
 )
 
 type docsSearchInput struct {
-	Query string `json:"query,omitempty" description:"Optional text matched against document titles and content"`
-	Limit int    `json:"limit,omitempty" description:"Maximum results, default 20, max 50"`
+	Query     string `json:"query,omitempty" description:"Optional text matched against document titles and content"`
+	Limit     int    `json:"limit,omitempty" description:"Maximum results, default 20, max 50"`
+	FolderID  string `json:"folderId,omitempty" description:"Optional personal folder ID returned by docs_list_folders"`
+	ProjectID string `json:"projectId,omitempty" description:"Optional Board project ID"`
+	RootOnly  bool   `json:"rootOnly,omitempty" description:"Only search documents directly in My documents. Mutually exclusive with folderId and projectId."`
 }
 
 type docsGetInput struct {
@@ -24,7 +27,14 @@ type docsUpsertInput struct {
 	Kind         string `json:"kind" enum:"markdown,html" description:"Document kind: markdown for simple, easily editable content; html for rich, interactive content. Before creating, ask the user to choose if they have not specified a kind. When updating, use the existing kind returned by docs_get."`
 	Content      string `json:"content,omitempty" description:"Complete document content: Markdown for markdown documents, a full self-contained HTML file for html documents. For HTML too large for one call, create with a short placeholder and continue with docs_write_chunk."`
 	ProjectID    string `json:"projectId,omitempty" description:"Optional Board project ID; omit for a private document. Only used when creating."`
+	FolderID     string `json:"folderId,omitempty" description:"Optional personal folder ID returned by docs_list_folders. Mutually exclusive with projectId and only used when creating."`
 	BaseRevision int    `json:"baseRevision,omitempty" description:"Revision returned by docs_get; required when updating. The save fails if it is stale."`
+}
+
+type docsMoveInput struct {
+	ID            string `json:"id" description:"Document ID returned by docs_search or docs_get"`
+	Destination   string `json:"destination" enum:"my_documents,folder,project" description:"Target location type"`
+	DestinationID string `json:"destinationId,omitempty" description:"Folder or project ID. Omit only when destination is my_documents."`
 }
 
 type docsWriteChunkInput struct {
@@ -44,7 +54,7 @@ type docsReplaceInput struct {
 
 func newDocsSearchTool(app core.App, actorID string) fantasy.AgentTool {
 	return fantasy.NewAgentTool("docs_search", "Search documents visible to the current user. Returns metadata and a short Markdown excerpt.", func(ctx context.Context, input docsSearchInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
-		result, err := workdocs.Search(ctx, app, actorID, workdocs.SearchOptions{Query: input.Query, Limit: input.Limit})
+		result, err := workdocs.Search(ctx, app, actorID, workdocs.SearchOptions{Query: input.Query, Limit: input.Limit, FolderID: input.FolderID, ProjectID: input.ProjectID, RootOnly: input.RootOnly})
 		return docsToolResponse(result, err)
 	})
 }
@@ -59,7 +69,7 @@ func newDocsGetTool(app core.App, actorID string) fantasy.AgentTool {
 func newDocsUpsertTool(app core.App, actorID string) fantasy.AgentTool {
 	return fantasy.NewAgentTool("docs_upsert", "Create or update a document only when explicitly requested. Before creating, if the user has not chosen a kind, briefly ask them to choose simple, easily editable Markdown or rich, interactive HTML. Before updating, call docs_get and use its kind and revision. Prefer one call for multiple edits. Never mutate the same document in parallel or overwrite a revision conflict.", func(ctx context.Context, input docsUpsertInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
 		if input.ID == "" {
-			result, err := workdocs.Create(ctx, app, actorID, workdocs.CreateInput{Title: input.Title, Kind: input.Kind, Content: input.Content, ProjectID: input.ProjectID, Source: "ai"})
+			result, err := workdocs.Create(ctx, app, actorID, workdocs.CreateInput{Title: input.Title, Kind: input.Kind, Content: input.Content, ProjectID: input.ProjectID, FolderID: input.FolderID, Source: "ai"})
 			return docsToolResponse(result, err)
 		}
 		result, changed, err := workdocs.Update(ctx, app, actorID, input.ID, workdocs.UpdateInput{Title: input.Title, Content: input.Content, BaseRevision: input.BaseRevision, Source: "ai"})
@@ -67,6 +77,20 @@ func newDocsUpsertTool(app core.App, actorID string) fantasy.AgentTool {
 			return fantasy.NewTextErrorResponse("Document save failed: " + err.Error()), nil
 		}
 		return docsToolResponse(map[string]any{"document": result, "changed": changed}, nil)
+	})
+}
+
+func newDocsListFoldersTool(app core.App, actorID string) fantasy.AgentTool {
+	return fantasy.NewAgentTool("docs_list_folders", "List the current user's personal document folders. Use this to resolve a folder name to its ID before creating or moving a document.", func(ctx context.Context, _ struct{}, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
+		result, err := workdocs.ListFolders(ctx, app, actorID)
+		return docsToolResponse(result, err)
+	})
+}
+
+func newDocsMoveTool(app core.App, actorID string) fantasy.AgentTool {
+	return fantasy.NewAgentTool("docs_move", "Move a document only when the user explicitly asks to organize or move it. Personal documents can move to My documents, an existing personal folder, or an editable project. Project documents cannot move back or across projects.", func(ctx context.Context, input docsMoveInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
+		result, err := workdocs.Move(ctx, app, actorID, input.ID, workdocs.MoveInput{Destination: input.Destination, DestinationID: input.DestinationID})
+		return docsToolResponse(result, err)
 	})
 }
 

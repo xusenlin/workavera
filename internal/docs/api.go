@@ -4,12 +4,16 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 )
 
 func Register(app core.App) {
+	app.OnRecordCreateRequest(FoldersCollectionName).BindFunc(validateFolderRequest)
+	app.OnRecordUpdateRequest(FoldersCollectionName).BindFunc(validateFolderRequest)
+	app.OnRecordUpdateRequest(CollectionName).BindFunc(validateDocumentFolderRequest)
 	app.OnServe().BindFunc(func(event *core.ServeEvent) error {
 		router := event.Router
 		router.POST("/api/docs", createRequest).Bind(apis.RequireAuth("users"))
@@ -26,6 +30,33 @@ func Register(app core.App) {
 		router.POST("/api/docs/{id}/restore/{revision}", restoreRequest).Bind(apis.RequireAuth("users"))
 		return event.Next()
 	})
+}
+
+func validateFolderRequest(event *core.RecordRequestEvent) error {
+	name := strings.TrimSpace(event.Record.GetString("name"))
+	if name == "" {
+		return event.BadRequestError("Folder name is required.", nil)
+	}
+	if event.Record.IsNew() && event.Auth != nil {
+		event.Record.Set("owner", event.Auth.Id)
+	}
+	event.Record.Set("name", name)
+	return event.Next()
+}
+
+func validateDocumentFolderRequest(event *core.RecordRequestEvent) error {
+	if event.Auth == nil || event.Record.GetString("owner") != event.Auth.Id || event.Record.GetString("project") != "" {
+		return event.ForbiddenError("Only private documents can be moved between personal folders.", nil)
+	}
+	folderID := event.Record.GetString("folder")
+	if folderID == "" {
+		return event.Next()
+	}
+	folder, err := event.App.FindRecordById(FoldersCollectionName, folderID)
+	if err != nil || folder.GetString("owner") != event.Auth.Id {
+		return event.ForbiddenError("Folder access denied.", err)
+	}
+	return event.Next()
 }
 
 func uploadAssetRequest(event *core.RequestEvent) error {

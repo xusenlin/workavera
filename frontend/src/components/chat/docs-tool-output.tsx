@@ -37,6 +37,8 @@ type Doc = {
   ownerId: string
   projectId?: string
   projectName?: string
+  folderId?: string
+  folderName?: string
   status: string
   revision: number
   lastEditedBy: string
@@ -209,9 +211,9 @@ export function DocsSearchToolCard({ part }: { part: DynamicToolUIPart }) {
                       </span>
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5">
-                      {doc.projectName && (
+                      {(doc.projectName || doc.folderName) && (
                         <Badge variant="outline" className="text-[10px]">
-                          {doc.projectName}
+                          {doc.projectName ?? doc.folderName}
                         </Badge>
                       )}
                       <span className="text-xs text-muted-foreground tabular-nums">
@@ -251,6 +253,7 @@ const docToolMeta: Record<string, { label: string; icon: typeof File02Icon }> =
   {
     docs_get: { label: "Document", icon: File02Icon },
     docs_upsert: { label: "Upsert Document", icon: FileEditIcon },
+    docs_move: { label: "Move Document", icon: FileEditIcon },
     docs_replace: { label: "Replace Text", icon: ReplaceIcon },
     docs_write_chunk: { label: "Write Document Chunk", icon: FileEditIcon },
   }
@@ -408,9 +411,9 @@ export function DocsItemToolCard({ part }: { part: DynamicToolUIPart }) {
 
               {/* Meta line */}
               <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
-                {doc.projectName && (
+                {(doc.projectName || doc.folderName) && (
                   <span className="rounded-full bg-muted px-1.5 py-0.5">
-                    {doc.projectName}
+                    {doc.projectName ?? doc.folderName}
                   </span>
                 )}
                 <span>Updated {formatDate(doc.updated)}</span>
@@ -445,10 +448,14 @@ export function DocsItemToolCard({ part }: { part: DynamicToolUIPart }) {
               <Collapsible>
                 <CollapsibleTrigger className="group/content text-xs font-medium text-muted-foreground underline-offset-2 hover:underline">
                   <span className="group-data-[state=open]/content:hidden">
-                    {doc.kind === "html" ? "Show HTML source" : "Show Markdown content"}
+                    {doc.kind === "html"
+                      ? "Show HTML source"
+                      : "Show Markdown content"}
                   </span>
                   <span className="hidden group-data-[state=open]/content:inline">
-                    {doc.kind === "html" ? "Hide HTML source" : "Hide Markdown content"}
+                    {doc.kind === "html"
+                      ? "Hide HTML source"
+                      : "Hide Markdown content"}
                   </span>
                 </CollapsibleTrigger>
                 <CollapsibleContent className="mt-1 max-h-72 overflow-y-auto rounded-md border bg-muted/20 p-2.5">

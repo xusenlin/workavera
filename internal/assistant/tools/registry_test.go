@@ -18,8 +18,8 @@ import (
 func TestFactoryRegistersOnlyProductionTools(t *testing.T) {
 	factory := NewFactory(nil)
 	registered := factory.ForActor("actor-1")
-	if len(registered) != 26 {
-		t.Fatalf("expected twenty-six production tools, got %d", len(registered))
+	if len(registered) != 28 {
+		t.Fatalf("expected twenty-eight production tools, got %d", len(registered))
 	}
 	names := map[string]bool{}
 	for _, tool := range registered {
@@ -49,7 +49,9 @@ func TestFactoryRegistersOnlyProductionTools(t *testing.T) {
 		"reading_summarize",
 		"docs_search",
 		"docs_get",
+		"docs_list_folders",
 		"docs_upsert",
+		"docs_move",
 		"docs_replace",
 		"docs_write_chunk",
 	} {
@@ -142,6 +144,18 @@ func TestDocsUpsertRequiresDocumentKindAndPromptsForChoice(t *testing.T) {
 	for _, text := range []string{"ask them to choose", "Markdown", "HTML"} {
 		if !strings.Contains(info.Description, text) {
 			t.Fatalf("docs_upsert description is missing %q: %s", text, info.Description)
+		}
+	}
+}
+
+func TestDocsMoveRequiresExplicitUserRequest(t *testing.T) {
+	info := newDocsMoveTool(nil, "actor-1").Info()
+	if !strings.Contains(info.Description, "explicitly asks") {
+		t.Fatalf("docs_move must require explicit user intent: %s", info.Description)
+	}
+	for _, field := range []string{"id", "destination"} {
+		if !slices.Contains(info.Required, field) {
+			t.Fatalf("docs_move missing required field %q: %#v", field, info.Required)
 		}
 	}
 }

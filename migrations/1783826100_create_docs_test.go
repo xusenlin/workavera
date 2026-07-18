@@ -19,8 +19,8 @@ func TestDocsCollectionsMigration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if docs.CreateRule != nil || docs.UpdateRule != nil || docs.DeleteRule != nil {
-		t.Fatal("docs mutations must go through server endpoints")
+	if docs.CreateRule != nil || docs.UpdateRule == nil || docs.DeleteRule != nil {
+		t.Fatal("only personal folder moves may use the docs Records API")
 	}
 	status, ok := docs.Fields.GetByName("status").(*core.SelectField)
 	if !ok || !slices.Equal(status.Values, []string{"draft", "archived"}) {

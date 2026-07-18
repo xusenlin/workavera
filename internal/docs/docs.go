@@ -14,7 +14,8 @@ const (
 	CollectionName         = "docs"
 	VersionsCollectionName = "doc_versions"
 	PinsCollectionName     = "doc_pins"
-	maxPinnedDocuments     = 6
+	FoldersCollectionName  = "doc_folders"
+	maxPinnedDocuments     = 10
 
 	// KindMarkdown documents use the BlockNote editing flow; KindHTML
 	// documents hold a self-contained HTML artifact rendered in a sandboxed
@@ -29,7 +30,7 @@ var (
 	ErrForbidden    = errors.New("document access denied")
 	ErrConflict     = errors.New("document has a newer revision")
 	ErrInvalidInput = errors.New("invalid document input")
-	ErrPinLimit     = errors.New("you can pin at most 6 documents")
+	ErrPinLimit     = errors.New("you can pin at most 10 documents")
 )
 
 type Document struct {
@@ -40,6 +41,8 @@ type Document struct {
 	OwnerID      string `json:"ownerId"`
 	ProjectID    string `json:"projectId,omitempty"`
 	ProjectName  string `json:"projectName,omitempty"`
+	FolderID     string `json:"folderId,omitempty"`
+	FolderName   string `json:"folderName,omitempty"`
 	Status       string `json:"status"`
 	Revision     int    `json:"revision"`
 	LastEditedBy string `json:"lastEditedBy"`
@@ -54,11 +57,21 @@ type DocumentSummary struct {
 	OwnerID      string `json:"ownerId"`
 	ProjectID    string `json:"projectId,omitempty"`
 	ProjectName  string `json:"projectName,omitempty"`
+	FolderID     string `json:"folderId,omitempty"`
+	FolderName   string `json:"folderName,omitempty"`
 	Status       string `json:"status"`
 	Revision     int    `json:"revision"`
 	LastEditedBy string `json:"lastEditedBy"`
 	Created      string `json:"created"`
 	Updated      string `json:"updated"`
+}
+
+type Folder struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	OwnerID string `json:"ownerId"`
+	Created string `json:"created"`
+	Updated string `json:"updated"`
 }
 
 type Version struct {
@@ -76,6 +89,7 @@ type CreateInput struct {
 	Kind      string `json:"kind"`
 	Content   string `json:"content"`
 	ProjectID string `json:"projectId"`
+	FolderID  string `json:"folderId"`
 	Source    string `json:"-"`
 }
 
@@ -87,8 +101,16 @@ type UpdateInput struct {
 }
 
 type SearchOptions struct {
-	Query string
-	Limit int
+	Query     string
+	Limit     int
+	FolderID  string
+	ProjectID string
+	RootOnly  bool
+}
+
+type MoveInput struct {
+	Destination   string
+	DestinationID string
 }
 
 type ReplaceInput struct {
@@ -125,10 +147,18 @@ func Create(ctx context.Context, app core.App, actorID string, input CreateInput
 	if err := validateContentForKind(input.Kind, input.Content); err != nil {
 		return Document{}, err
 	}
+	if input.ProjectID != "" && input.FolderID != "" {
+		return Document{}, ErrInvalidInput
+	}
 	if input.ProjectID != "" {
 		canEdit, err := canEditProject(app, actorID, input.ProjectID)
 		if err != nil || !canEdit {
 			return Document{}, ErrForbidden
+		}
+	}
+	if input.FolderID != "" {
+		if _, err := ownedFolder(app, actorID, input.FolderID); err != nil {
+			return Document{}, err
 		}
 	}
 	if input.Source != "ai" {
@@ -147,6 +177,7 @@ func Create(ctx context.Context, app core.App, actorID string, input CreateInput
 		record.Set("content", input.Content)
 		record.Set("owner", actorID)
 		record.Set("project", input.ProjectID)
+		record.Set("folder", input.FolderID)
 		record.Set("status", "draft")
 		record.Set("revision", 1)
 		record.Set("last_edited_by", actorID)
@@ -339,6 +370,34 @@ func Search(ctx context.Context, app core.App, actorID string, options SearchOpt
 	access := `((project = "" && owner = {:actor}) || project.owner = {:actor} || project.board_project_members_via_project.user ?= {:actor})`
 	filter := access + ` && status = "draft"`
 	params := dbx.Params{"actor": actorID}
+	locationFilters := 0
+	if options.FolderID != "" {
+		locationFilters++
+	}
+	if options.ProjectID != "" {
+		locationFilters++
+	}
+	if options.RootOnly {
+		locationFilters++
+	}
+	if locationFilters > 1 {
+		return nil, ErrInvalidInput
+	}
+	if options.FolderID != "" {
+		if _, err := ownedFolder(app, actorID, options.FolderID); err != nil {
+			return nil, err
+		}
+		filter += ` && project = "" && folder = {:folder}`
+		params["folder"] = options.FolderID
+	} else if options.ProjectID != "" {
+		if role, _ := projectRole(app, actorID, options.ProjectID); role == "" {
+			return nil, ErrNotFound
+		}
+		filter += ` && project = {:project}`
+		params["project"] = options.ProjectID
+	} else if options.RootOnly {
+		filter += ` && project = "" && folder = ""`
+	}
 	if query := strings.TrimSpace(options.Query); query != "" {
 		filter += ` && (title ~ {:query} || content ~ {:query})`
 		params["query"] = query
@@ -419,9 +478,62 @@ func MoveToProject(ctx context.Context, app core.App, actorID, id, projectID str
 			return ErrForbidden
 		}
 		record.Set("project", projectID)
+		record.Set("folder", "")
 		return tx.Save(record)
 	})
 	if err != nil {
+		return Document{}, err
+	}
+	return Get(ctx, app, actorID, id)
+}
+
+func ListFolders(ctx context.Context, app core.App, actorID string) ([]Folder, error) {
+	if err := requireActor(ctx, app, actorID); err != nil {
+		return nil, err
+	}
+	records, err := app.FindRecordsByFilter(FoldersCollectionName, "owner = {:owner}", "name", 0, 0, dbx.Params{"owner": actorID})
+	if err != nil {
+		return nil, err
+	}
+	result := make([]Folder, 0, len(records))
+	for _, record := range records {
+		result = append(result, folderForRecord(record))
+	}
+	return result, nil
+}
+
+func Move(ctx context.Context, app core.App, actorID, id string, input MoveInput) (Document, error) {
+	if input.Destination == "project" {
+		return MoveToProject(ctx, app, actorID, id, input.DestinationID)
+	}
+	if input.Destination != "my_documents" && input.Destination != "folder" {
+		return Document{}, ErrInvalidInput
+	}
+	if input.Destination == "my_documents" && input.DestinationID != "" {
+		return Document{}, ErrInvalidInput
+	}
+	if input.Destination == "folder" && input.DestinationID == "" {
+		return Document{}, ErrInvalidInput
+	}
+	if err := ctx.Err(); err != nil {
+		return Document{}, err
+	}
+	folderID := ""
+	if input.Destination == "folder" {
+		if _, err := ownedFolder(app, actorID, input.DestinationID); err != nil {
+			return Document{}, err
+		}
+		folderID = input.DestinationID
+	}
+	record, err := app.FindRecordById(CollectionName, id)
+	if err != nil {
+		return Document{}, ErrNotFound
+	}
+	if record.GetString("owner") != actorID || record.GetString("project") != "" || record.GetString("status") != "draft" {
+		return Document{}, ErrForbidden
+	}
+	record.Set("folder", folderID)
+	if err := app.Save(record); err != nil {
 		return Document{}, err
 	}
 	return Get(ctx, app, actorID, id)
@@ -662,7 +774,7 @@ func requireActor(ctx context.Context, app core.App, actorID string) error {
 
 func documentForRecord(app core.App, record *core.Record) Document {
 	summary := documentSummaryForRecord(app, record)
-	return Document{ID: summary.ID, Title: summary.Title, Kind: summary.Kind, Content: record.GetString("content"), OwnerID: summary.OwnerID, ProjectID: summary.ProjectID, ProjectName: summary.ProjectName, Status: summary.Status, Revision: summary.Revision, LastEditedBy: summary.LastEditedBy, Created: summary.Created, Updated: summary.Updated}
+	return Document{ID: summary.ID, Title: summary.Title, Kind: summary.Kind, Content: record.GetString("content"), OwnerID: summary.OwnerID, ProjectID: summary.ProjectID, ProjectName: summary.ProjectName, FolderID: summary.FolderID, FolderName: summary.FolderName, Status: summary.Status, Revision: summary.Revision, LastEditedBy: summary.LastEditedBy, Created: summary.Created, Updated: summary.Updated}
 }
 
 func documentSummaryForRecord(app core.App, record *core.Record) DocumentSummary {
@@ -673,11 +785,33 @@ func documentSummaryForRecord(app core.App, record *core.Record) DocumentSummary
 			projectName = project.GetString("name")
 		}
 	}
+	folderID := record.GetString("folder")
+	folderName := ""
+	if folderID != "" {
+		if folder, err := app.FindRecordById(FoldersCollectionName, folderID); err == nil {
+			folderName = folder.GetString("name")
+		}
+	}
 	kind := record.GetString("kind")
 	if kind == "" {
 		kind = KindMarkdown
 	}
-	return DocumentSummary{ID: record.Id, Title: record.GetString("title"), Kind: kind, OwnerID: record.GetString("owner"), ProjectID: projectID, ProjectName: projectName, Status: record.GetString("status"), Revision: record.GetInt("revision"), LastEditedBy: record.GetString("last_edited_by"), Created: record.GetString("created"), Updated: record.GetString("updated")}
+	return DocumentSummary{ID: record.Id, Title: record.GetString("title"), Kind: kind, OwnerID: record.GetString("owner"), ProjectID: projectID, ProjectName: projectName, FolderID: folderID, FolderName: folderName, Status: record.GetString("status"), Revision: record.GetInt("revision"), LastEditedBy: record.GetString("last_edited_by"), Created: record.GetString("created"), Updated: record.GetString("updated")}
+}
+
+func ownedFolder(app core.App, actorID, id string) (*core.Record, error) {
+	folder, err := app.FindRecordById(FoldersCollectionName, id)
+	if err != nil {
+		return nil, ErrNotFound
+	}
+	if folder.GetString("owner") != actorID {
+		return nil, ErrForbidden
+	}
+	return folder, nil
+}
+
+func folderForRecord(record *core.Record) Folder {
+	return Folder{ID: record.Id, Name: record.GetString("name"), OwnerID: record.GetString("owner"), Created: record.GetString("created"), Updated: record.GetString("updated")}
 }
 
 func versionForRecord(record *core.Record, includeContent bool) Version {

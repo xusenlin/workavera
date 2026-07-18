@@ -104,28 +104,92 @@ func TestMovePrivateDocumentToProjectUsesProjectPermissions(t *testing.T) {
 	}
 }
 
-func TestPinsArePerUserAndLimitedToSix(t *testing.T) {
+func TestPersonalFoldersCreateSearchAndMoveWithoutRevision(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(app.Cleanup)
+	owner := createTestUser(t, app, "folder-owner@example.com")
+	other := createTestUser(t, app, "folder-other@example.com")
+	folder := createTestFolder(t, app, owner.Id, "Plans")
+	otherFolder := createTestFolder(t, app, other.Id, "Private")
+
+	doc, err := Create(context.Background(), app, owner.Id, CreateInput{Title: "Roadmap", FolderID: folder.Id})
+	if err != nil || doc.FolderID != folder.Id || doc.FolderName != "Plans" || doc.ProjectID != "" {
+		t.Fatalf("create in folder: %#v, %v", doc, err)
+	}
+	if _, err := Create(context.Background(), app, owner.Id, CreateInput{Title: "Invalid", FolderID: otherFolder.Id}); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("cross-owner folder accepted: %v", err)
+	}
+	project := createTestProject(t, app, owner.Id)
+	if _, err := Create(context.Background(), app, owner.Id, CreateInput{Title: "Two locations", FolderID: folder.Id, ProjectID: project.Id}); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("folder/project combination accepted: %v", err)
+	}
+
+	root, err := Create(context.Background(), app, owner.Id, CreateInput{Title: "Root"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	folderResults, err := Search(context.Background(), app, owner.Id, SearchOptions{FolderID: folder.Id})
+	if err != nil || len(folderResults) != 1 || folderResults[0].ID != doc.ID {
+		t.Fatalf("folder search: %#v, %v", folderResults, err)
+	}
+	rootResults, err := Search(context.Background(), app, owner.Id, SearchOptions{RootOnly: true})
+	if err != nil || len(rootResults) != 1 || rootResults[0].ID != root.ID {
+		t.Fatalf("root search: %#v, %v", rootResults, err)
+	}
+	if _, err := Search(context.Background(), app, owner.Id, SearchOptions{FolderID: folder.Id, RootOnly: true}); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("multiple location filters accepted: %v", err)
+	}
+
+	moved, err := Move(context.Background(), app, owner.Id, root.ID, MoveInput{Destination: "folder", DestinationID: folder.Id})
+	if err != nil || moved.FolderID != folder.Id || moved.Revision != 1 {
+		t.Fatalf("move to folder: %#v, %v", moved, err)
+	}
+	moved, err = Move(context.Background(), app, owner.Id, root.ID, MoveInput{Destination: "my_documents"})
+	if err != nil || moved.FolderID != "" || moved.Revision != 1 {
+		t.Fatalf("move to My documents: %#v, %v", moved, err)
+	}
+	if _, err := Move(context.Background(), app, owner.Id, root.ID, MoveInput{Destination: "folder", DestinationID: otherFolder.Id}); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("cross-owner move accepted: %v", err)
+	}
+
+	folders, err := ListFolders(context.Background(), app, owner.Id)
+	if err != nil || len(folders) != 1 || folders[0].ID != folder.Id {
+		t.Fatalf("list folders: %#v, %v", folders, err)
+	}
+	moved, err = MoveToProject(context.Background(), app, owner.Id, doc.ID, project.Id)
+	if err != nil || moved.ProjectID != project.Id || moved.FolderID != "" || moved.Revision != 1 {
+		t.Fatalf("move folder document to project: %#v, %v", moved, err)
+	}
+	if _, err := Move(context.Background(), app, owner.Id, doc.ID, MoveInput{Destination: "my_documents"}); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("project document moved back to personal space: %v", err)
+	}
+}
+
+func TestPinsArePerUserAndLimitedToTen(t *testing.T) {
 	app, err := tests.NewTestApp()
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(app.Cleanup)
 	actor := createTestUser(t, app, "pins-owner@example.com")
-	for index := 0; index < 7; index++ {
+	for index := 0; index < 11; index++ {
 		doc, err := Create(context.Background(), app, actor.Id, CreateInput{Title: fmt.Sprintf("Doc %d", index)})
 		if err != nil {
 			t.Fatal(err)
 		}
 		err = SetPinned(context.Background(), app, actor.Id, doc.ID, true)
-		if index < 6 && err != nil {
+		if index < 10 && err != nil {
 			t.Fatalf("pin %d: %v", index, err)
 		}
-		if index == 6 && !errors.Is(err, ErrPinLimit) {
+		if index == 10 && !errors.Is(err, ErrPinLimit) {
 			t.Fatalf("expected pin limit, got %v", err)
 		}
 	}
 	pinned, err := ListPinned(context.Background(), app, actor.Id, "")
-	if err != nil || len(pinned) != 6 {
+	if err != nil || len(pinned) != 10 {
 		t.Fatalf("unexpected pins: %#v, %v", pinned, err)
 	}
 }
@@ -435,6 +499,21 @@ func createTestProject(t *testing.T, app core.App, ownerID string) *core.Record 
 	}
 	record := core.NewRecord(collection)
 	record.Set("name", "Docs project")
+	record.Set("owner", ownerID)
+	if err := app.Save(record); err != nil {
+		t.Fatal(err)
+	}
+	return record
+}
+
+func createTestFolder(t *testing.T, app core.App, ownerID, name string) *core.Record {
+	t.Helper()
+	collection, err := app.FindCollectionByNameOrId(FoldersCollectionName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := core.NewRecord(collection)
+	record.Set("name", name)
 	record.Set("owner", ownerID)
 	if err := app.Save(record); err != nil {
 		t.Fatal(err)

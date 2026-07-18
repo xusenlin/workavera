@@ -58,7 +58,9 @@ func (f *Factory) ForActor(actorID string) []fantasy.AgentTool {
 		newReadingSummarizeTool(f.app, actorID),
 		newDocsSearchTool(f.app, actorID),
 		newDocsGetTool(f.app, actorID),
+		newDocsListFoldersTool(f.app, actorID),
 		newDocsUpsertTool(f.app, actorID),
+		newDocsMoveTool(f.app, actorID),
 		newDocsReplaceTool(f.app, actorID),
 		newDocsWriteChunkTool(f.app, actorID),
 	}
