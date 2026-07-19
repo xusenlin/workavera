@@ -27,23 +27,23 @@ Workavera combines both halves and adds the part neither has:
 
 ### Dashboard
 
-![Workavera Dashboard with workspace overview, due tasks, and upcoming events](./screenShot/en-home.png)
+![Workavera Dashboard with workspace overview, due tasks, and upcoming events](./screenShot/en/dashboard.png)
 
-### Chat creating a Board project
+### DeepSeek creating a project and calendar plan
 
-![Workavera Chat using Board tools to pick a template and create a project with tasks](./screenShot/en-chat-task.png)
+![Workavera Chat using DeepSeek and workspace tools to create project tasks and calendar events](./screenShot/en/chat-deepseek.png)
 
 ### Board
 
-![Workavera Board Kanban with workflow columns, labels, priorities, and due dates](./screenShot/en-board.png)
-
-### Chat creating Calendar events
-
-![Workavera Chat creating recurring calendar events with reminders](./screenShot/en-chat-calendar.png)
+![Workavera Board Kanban with workflow columns, priorities, and due dates](./screenShot/en/board.png)
 
 ### Calendar
 
-![Workavera Calendar combining personal events and Board task deadlines](./screenShot/en-calendar-events.png)
+![Workavera Calendar combining personal events and Board task deadlines](./screenShot/en/calendar.png)
+
+### Bring your own model
+
+![Workavera Settings with DeepSeek configured as the default model](./screenShot/en/settings.png)
 
 ## Quick start
 

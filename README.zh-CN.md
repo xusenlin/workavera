@@ -25,13 +25,25 @@ Workavera 把两边结合起来，并补上了双方都没有的那一块：
 
 ## 产品截图
 
-### Chat 与工作区工具
+### Dashboard 工作概览
 
-![Workavera Chat 调用 Board 工具创建项目](./screenShot/workavera_chat.png)
+![Workavera Dashboard 展示项目、任务与近期日程](./screenShot/zh-CN/dashboard.png)
 
-### Board 任务详情
+### DeepSeek 调用工作区工具
 
-![Workavera Board 任务详情](./screenShot/workavera_task.png)
+![Workavera Chat 使用 DeepSeek 创建中文项目、任务与日历事件](./screenShot/zh-CN/chat-deepseek.png)
+
+### Board 中文项目看板
+
+![Workavera Board 展示中文社区上线计划](./screenShot/zh-CN/board.png)
+
+### Calendar 统一日程
+
+![Workavera Calendar 汇总中文项目截止日期与日历事件](./screenShot/zh-CN/calendar.png)
+
+### 本地模型配置
+
+![Workavera Settings 将 DeepSeek 配置为默认模型](./screenShot/zh-CN/settings.png)
 
 ## 快速开始
 
