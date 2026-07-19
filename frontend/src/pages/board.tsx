@@ -2,9 +2,14 @@ import { useEffect, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router"
 
 import { HugeiconsIcon } from "@hugeicons/react"
-import { Add01Icon, KanbanIcon } from "@hugeicons/core-free-icons"
+import {
+  Add01Icon,
+  Archive02Icon,
+  KanbanIcon,
+} from "@hugeicons/core-free-icons"
 
 import { Button } from "@/components/ui/button"
+import { ArchivedProjectsDialog } from "@/components/board/archived-projects-dialog"
 import { KanbanBoard } from "@/components/board/kanban-board"
 import { ProjectSheet } from "@/components/board/project-sheet"
 import {
@@ -18,12 +23,15 @@ export function BoardPage() {
   const [searchParams] = useSearchParams()
   const requestedTaskId = requestedRecordId(searchParams) || undefined
   const [projectSheetOpen, setProjectSheetOpen] = useState(false)
+  const [archivedOpen, setArchivedOpen] = useState(false)
   const [editingProject, setEditingProject] = useState<Project | null>(null)
   const [resolvedTaskId, setResolvedTaskId] = useState<string | undefined>()
   const initialized = useBoardStore((state) => state.initialized)
   const openProject = useBoardStore((state) => state.openProject)
   const openTask = useBoardStore((state) => state.openTask)
   const clearOpenedRecord = useBoardStore((state) => state.clearOpenedRecord)
+  const loadProjectPage = useBoardStore((state) => state.loadProjectPage)
+  const projectPage = useBoardStore((state) => state.projectPage)
 
   useEffect(() => {
     if (!initialized || !requestedTaskId) return
@@ -96,10 +104,24 @@ export function BoardPage() {
             columns to update status.
           </p>
         </div>
-        <Button variant="secondary" size="sm" onClick={handleAddProject}>
-          <HugeiconsIcon icon={Add01Icon} strokeWidth={2} className="size-4" />
-          Add project
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => setArchivedOpen(true)}
+            aria-label="View archived projects"
+          >
+            <HugeiconsIcon icon={Archive02Icon} strokeWidth={2} />
+          </Button>
+          <Button variant="secondary" size="sm" onClick={handleAddProject}>
+            <HugeiconsIcon
+              icon={Add01Icon}
+              strokeWidth={2}
+              className="size-4"
+            />
+            Add project
+          </Button>
+        </div>
       </div>
 
       <KanbanBoard
@@ -112,6 +134,12 @@ export function BoardPage() {
         open={projectSheetOpen}
         onOpenChange={handleProjectSheetOpenChange}
         project={editingProject}
+      />
+
+      <ArchivedProjectsDialog
+        open={archivedOpen}
+        onOpenChange={setArchivedOpen}
+        onChanged={() => loadProjectPage(projectPage)}
       />
     </div>
   )

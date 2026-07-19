@@ -133,6 +133,7 @@ type BoardState = {
     id: string,
     patch: { name?: string; description?: string }
   ) => Promise<void>
+  archiveProject: (id: string) => Promise<void>
   removeProject: (id: string) => Promise<void>
   moveProject: (id: string, direction: -1 | 1) => Promise<void>
   transferProjectOwner: (id: string, ownerId: string) => Promise<void>
@@ -644,6 +645,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           requestKey: null,
         })
       const project = toProject(record)
+      if (project.archived) return null
       const relations = await loadProjectRelations([projectId])
       set((state) => ({
         openedProject: project,
@@ -783,6 +785,31 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       }))
     } catch (error) {
       const message = messageFromError(error, "Could not update the project")
+      set({ error: message })
+      toast.error(message)
+      throw new Error(message, { cause: error })
+    }
+  },
+
+  archiveProject: async (id) => {
+    try {
+      await pb.send(`/api/board/projects/${id}/archive`, { method: "POST" })
+      let page = get().projectPage
+      let snapshot = await loadBoardPage(page, get().templates)
+      if (page > 0 && snapshot.projects.length === 0) {
+        page = Math.max(0, snapshot.projectTotalPages - 1)
+        snapshot = await loadBoardPage(page, get().templates)
+      }
+      set({ ...snapshot, openedProject: null })
+      if (connectionWanted) {
+        await connectRealtime(
+          set,
+          snapshot.projects.map((project) => project.id)
+        )
+      }
+      toast.success("Project archived.")
+    } catch (error) {
+      const message = messageFromError(error, "Could not archive the project")
       set({ error: message })
       toast.error(message)
       throw new Error(message, { cause: error })

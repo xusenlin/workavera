@@ -95,6 +95,12 @@ function describeLog(log: ProjectOperationLog) {
       if (change(log, "description").changed) {
         descriptions.push("updated the project description")
       }
+      const archived = change(log, "archived")
+      if (archived.to === true) {
+        descriptions.push("archived the project")
+      } else if (archived.to === false) {
+        descriptions.push("restored the project")
+      }
       return descriptions
     }
     case "create_state":

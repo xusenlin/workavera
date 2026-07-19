@@ -90,6 +90,29 @@ func createBoardProject(event *core.RequestEvent) error {
 	return event.JSON(http.StatusCreated, project)
 }
 
+func archiveBoardProjectRequest(event *core.RequestEvent) error {
+	return setBoardProjectArchivedRequest(event, true)
+}
+
+func unarchiveBoardProjectRequest(event *core.RequestEvent) error {
+	return setBoardProjectArchivedRequest(event, false)
+}
+
+func setBoardProjectArchivedRequest(event *core.RequestEvent, archived bool) error {
+	result, err := SetProjectArchived(event.Request.Context(), event.App, event.Auth.Id, event.Request.PathValue("id"), archived)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrProjectNotFound):
+			return event.NotFoundError("Project not found.", err)
+		case errors.Is(err, ErrOwnerOnly):
+			return event.ForbiddenError("Only the project owner can archive or restore it.", err)
+		default:
+			return event.InternalServerError("Could not update project archive state.", err)
+		}
+	}
+	return event.JSON(http.StatusOK, result)
+}
+
 func transferBoardProjectOwnerRequest(event *core.RequestEvent) error {
 	var request transferBoardProjectOwnerRequestBody
 	if err := event.BindBody(&request); err != nil {

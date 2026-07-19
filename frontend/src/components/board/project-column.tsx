@@ -2,6 +2,7 @@ import { useState } from "react"
 
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
+  Archive02Icon,
   ArrowDown01Icon,
   ArrowUp01Icon,
   ChevronDownIcon,
@@ -60,6 +61,7 @@ export function ProjectColumn({
   onEditProject,
 }: ProjectColumnProps) {
   const toggleCollapse = useBoardStore((store) => store.toggleProjectCollapse)
+  const archiveProject = useBoardStore((store) => store.archiveProject)
   const removeProject = useBoardStore((store) => store.removeProject)
   const moveProject = useBoardStore((store) => store.moveProject)
   const projects = useBoardStore((store) => store.projects)
@@ -168,6 +170,14 @@ export function ProjectColumn({
                 <DropdownMenuItem onClick={() => onEditProject?.(project)}>
                   <HugeiconsIcon icon={Settings02Icon} strokeWidth={2} />
                   Edit project
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() =>
+                    void archiveProject(project.id).catch(() => {})
+                  }
+                >
+                  <HugeiconsIcon icon={Archive02Icon} strokeWidth={2} />
+                  Archive project
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   variant="destructive"

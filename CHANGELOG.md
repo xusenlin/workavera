@@ -9,6 +9,11 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Board project owners can archive projects from the project menu and manage
+  accessible archived projects in a paginated dialog. Owners can restore a
+  project with its existing order preference or permanently delete it;
+  archive and restore changes are recorded in Project Activity and are not
+  exposed as Assistant mutations.
 - Chat now supports private, cross-conversation long-term memory under explicit
   user control. Memory is off by default; users can enable saved-memory use and
   separately opt in to automatic capture from Settings.

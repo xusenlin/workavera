@@ -72,6 +72,54 @@ func TestCreateProjectFromTemplateAndBlank(t *testing.T) {
 	}
 }
 
+func TestProjectArchiveAndRestoreRequireOwner(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(app.Cleanup)
+	owner := createQueryTestUser(t, app, "archive-owner@example.com", "Owner")
+	member := createQueryTestUser(t, app, "archive-member@example.com", "Member")
+	project := createQueryTestProject(t, app, owner.Id, "Archive me", false)
+	createProjectTestMembership(t, app, project.Id, member.Id, "member")
+
+	if _, err := SetProjectArchived(context.Background(), app, member.Id, project.Id, true); !errors.Is(err, ErrOwnerOnly) {
+		t.Fatalf("member archived project: %v", err)
+	}
+	result, err := SetProjectArchived(context.Background(), app, owner.Id, project.Id, true)
+	if err != nil || result.Action != "archived" {
+		t.Fatalf("archive project: %#v, %v", result, err)
+	}
+	project, err = app.FindRecordById(boardProjectsCollection, project.Id)
+	if err != nil || !project.GetBool("archived") {
+		t.Fatalf("project was not archived: %#v, %v", project, err)
+	}
+	name := "Archived edit"
+	if _, err := UpdateProject(context.Background(), app, owner.Id, UpdateProjectCommand{ProjectID: project.Id, Name: &name}); !errors.Is(err, ErrProjectArchived) {
+		t.Fatalf("archived project was updated: %v", err)
+	}
+
+	result, err = SetProjectArchived(context.Background(), app, owner.Id, project.Id, false)
+	if err != nil || result.Action != "restored" {
+		t.Fatalf("restore project: %#v, %v", result, err)
+	}
+	project, err = app.FindRecordById(boardProjectsCollection, project.Id)
+	if err != nil || project.GetBool("archived") {
+		t.Fatalf("project was not restored: %#v, %v", project, err)
+	}
+	logs, err := app.FindRecordsByFilter(
+		boardProjectOperationLogs,
+		"project = {:project} && action = 'update_project'",
+		"created",
+		0,
+		0,
+		dbx.Params{"project": project.Id},
+	)
+	if err != nil || len(logs) != 2 {
+		t.Fatalf("unexpected archive logs: %#v, %v", logs, err)
+	}
+}
+
 func TestProjectCapabilitiesAndCommandPermissions(t *testing.T) {
 	app, err := tests.NewTestApp()
 	if err != nil {

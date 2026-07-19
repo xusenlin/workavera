@@ -14,6 +14,7 @@ import (
 var (
 	ErrProjectNotFound = errors.New("project not found")
 	ErrOwnerOnly       = errors.New("only the project owner can perform this action")
+	ErrProjectArchived = errors.New("archived projects cannot be modified")
 	ErrTaskWriteDenied = errors.New("you cannot edit tasks in this project")
 )
 
@@ -243,6 +244,38 @@ func UpdateProject(ctx context.Context, app core.App, actorID string, command Up
 			}
 		}
 		result = MutationResult{OK: true, Action: "updated", ResourceType: "project", ID: project.Id, Name: project.GetString("name"), ProjectID: project.Id}
+		return nil
+	})
+	return result, err
+}
+
+func SetProjectArchived(ctx context.Context, app core.App, actorID, projectID string, archived bool) (MutationResult, error) {
+	if err := requireActiveActor(ctx, app, actorID); err != nil {
+		return MutationResult{}, err
+	}
+	var result MutationResult
+	err := app.RunInTransaction(func(tx core.App) error {
+		project, err := requireProjectOwnerAnyState(tx, actorID, projectID)
+		if err != nil {
+			return err
+		}
+		action := "archived"
+		if !archived {
+			action = "restored"
+		}
+		if project.GetBool("archived") != archived {
+			project.Set("archived", archived)
+			if err := tx.Save(project); err != nil {
+				return err
+			}
+			actor, _ := tx.FindRecordById("users", actorID)
+			if err := saveBoardProjectOperationLog(tx, actor, project.Id, "update_project", map[string]any{
+				"archived": map[string]any{"from": !archived, "to": archived},
+			}); err != nil {
+				return err
+			}
+		}
+		result = MutationResult{OK: true, Action: action, ResourceType: "project", ID: project.Id, Name: project.GetString("name"), ProjectID: project.Id}
 		return nil
 	})
 	return result, err
@@ -672,6 +705,17 @@ func requireActiveActor(ctx context.Context, app core.App, actorID string) error
 }
 
 func requireProjectOwner(app core.App, actorID, projectID string) (*core.Record, error) {
+	project, err := requireProjectOwnerAnyState(app, actorID, projectID)
+	if err != nil {
+		return nil, err
+	}
+	if project.GetBool("archived") {
+		return nil, ErrProjectArchived
+	}
+	return project, nil
+}
+
+func requireProjectOwnerAnyState(app core.App, actorID, projectID string) (*core.Record, error) {
 	project, err := app.FindRecordById(boardProjectsCollection, strings.TrimSpace(projectID))
 	if err != nil {
 		return nil, ErrProjectNotFound
@@ -686,6 +730,9 @@ func requireTaskWriter(app core.App, actorID, projectID string) (*core.Record, e
 	project, err := app.FindRecordById(boardProjectsCollection, strings.TrimSpace(projectID))
 	if err != nil {
 		return nil, ErrProjectNotFound
+	}
+	if project.GetBool("archived") {
+		return nil, ErrProjectArchived
 	}
 	role := projectActorRole(app, project, actorID)
 	if role != "owner" && role != "admin" && role != "member" {

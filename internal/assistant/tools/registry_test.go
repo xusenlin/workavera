@@ -150,6 +150,13 @@ func TestBoardSearchTasksSupportsCrossProjectKeywords(t *testing.T) {
 	}
 }
 
+func TestBoardProjectArchiveIsNotExposedToAssistant(t *testing.T) {
+	info := newBoardUpdateProjectTool(nil, "actor-1").Info()
+	if _, ok := info.Parameters["archived"]; ok {
+		t.Fatalf("board_update_project must not expose project archive state: %#v", info.Parameters)
+	}
+}
+
 func TestBatchMutationToolsExposeOnlyArrayInputs(t *testing.T) {
 	tests := []struct {
 		name       string

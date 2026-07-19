@@ -11,6 +11,10 @@ func Register(app *pocketbase.PocketBase) {
 	app.OnServe().BindFunc(func(event *core.ServeEvent) error {
 		event.Router.POST("/api/board/projects", createBoardProject).
 			Bind(apis.RequireAuth("users"))
+		event.Router.POST("/api/board/projects/{id}/archive", archiveBoardProjectRequest).
+			Bind(apis.RequireAuth("users"))
+		event.Router.POST("/api/board/projects/{id}/unarchive", unarchiveBoardProjectRequest).
+			Bind(apis.RequireAuth("users"))
 		event.Router.PATCH("/api/board/projects/{id}/owner", transferBoardProjectOwnerRequest).
 			Bind(apis.RequireAuth("users"))
 		return event.Next()

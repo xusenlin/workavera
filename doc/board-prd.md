@@ -150,8 +150,16 @@ The Chinese variants contain localized names and descriptions. Templates are cop
 
 - The creation sheet accepts a name, description, template or blank workflow, initial labels, and members.
 - Project creation is transactional; the caller becomes the owner.
-- Owners can edit project details, configure states, manage labels and members, inspect Project Activity, transfer ownership, and delete the project.
+- Owners can edit project details, configure states, manage labels and members, inspect Project Activity, transfer ownership, archive the project, and delete it.
 - Board project loading is paginated; child records are loaded only for projects on the current page.
+
+### Project archive
+
+- Owners can archive an active project from its options menu. The project immediately leaves the active paginated Board while its project preference and data remain intact.
+- The Board header opens a paginated archived-project dialog modeled after the Docs archive. It lists archived projects visible to the current user, while restore and permanent-delete actions appear only for the project owner.
+- Restoring returns the project to the active Board using its retained order preference. Permanently deleting an archived project uses the existing owner-only project deletion behavior.
+- Archived projects remain readable through archive-aware queries, but the shared command layer rejects project, workflow, membership, and task mutations until the owner restores them.
+- Archive and restore run through authenticated owner-only endpoints and are recorded in Project Activity as `update_project` changes to `archived`.
 
 ### Kanban workflow
 
@@ -169,6 +177,8 @@ The Board subscribes to `board_projects`, `board_project_states`, `board_project
 ## 8. HTTP and Records API surface
 
 - `POST /api/board/projects` creates blank or templated projects transactionally.
+- `POST /api/board/projects/{id}/archive` archives an owner-controlled project.
+- `POST /api/board/projects/{id}/unarchive` restores an owner-controlled project.
 - `PATCH /api/board/projects/{id}/owner` transfers ownership transactionally.
 - Standard PocketBase Records APIs handle permitted project, state, label, member, and task CRUD.
 - Server request hooks validate ownership, roles, cross-project relationships, state deletion, and activity logging.
@@ -204,12 +214,13 @@ Mutation tools:
 
 `board_get_project` returns the caller's role and `canEditProject`, `canManageWorkflow`, `canManageMembers`, and `canEditTasks` capabilities. Existing data must be read before mutation so the assistant uses real IDs and the latest state. State, label, member, task-create, and task-update tools require an `items` array containing one to 50 records; a single mutation is represented by one item, and legacy top-level single-record inputs are rejected. Each item is executed in order and reports its own result, so one invalid item does not hide or discard successful siblings. Task updates use patch semantics; empty arrays clear assignees, labels, or documents, and a null due date clears the deadline.
 
-No AI deletion or ownership-transfer tool is registered. The assistant must direct users to Board for destructive actions.
+No AI archive, restore, deletion, or ownership-transfer tool is registered. The assistant must direct users to Board for these project-lifecycle actions.
 
 ## 10. Acceptance criteria
 
 - A user can create an independent project from any seeded template or as a blank project.
 - Only owners can manage settings, members, workflow, labels, and ownership.
+- Only owners can archive, restore, or permanently delete projects; archived projects are excluded from the active Board and retain their ordering preference for restoration.
 - Admins and members can edit tasks; viewers are read-only.
 - Cross-project states, labels, documents, and non-participant assignees are rejected by the server.
 - The Board picker can link and unlink up to 20 active documents from the task's project; server validation rejects private and cross-project links, and deleting a document does not delete the task.
