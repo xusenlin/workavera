@@ -7,6 +7,7 @@ import {
   ArrowUp01Icon,
   ChevronDownIcon,
   ChevronRightIcon,
+  Copy01Icon,
   Delete02Icon,
   Layers02Icon,
   MoreHorizontalIcon,
@@ -14,6 +15,7 @@ import {
   Tag01Icon,
   UserGroup02Icon,
 } from "@hugeicons/core-free-icons"
+import { toast } from "sonner"
 
 import {
   AlertDialog,
@@ -32,6 +34,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { useAuthStore } from "@/store/auth"
 import {
@@ -87,6 +95,17 @@ export function ProjectColumn({
   const canMoveUp = projectIndex >= 0 && globalProjectIndex > 0
   const canMoveDown =
     projectIndex >= 0 && globalProjectIndex < projectTotalItems - 1
+
+  const copyProjectReference = async () => {
+    try {
+      await navigator.clipboard.writeText(
+        `Projects:${project.id}:${project.name}`
+      )
+      toast.success("Project ID and name copied.")
+    } catch {
+      toast.error("Could not copy project ID and name.")
+    }
+  }
 
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-card/50 p-4">
@@ -155,6 +174,24 @@ export function ProjectColumn({
           >
             <HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} />
           </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="Copy project ID and name"
+                  onClick={() => void copyProjectReference()}
+                >
+                  <HugeiconsIcon icon={Copy01Icon} strokeWidth={2} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                Copy project ID and name
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           {isOwner && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

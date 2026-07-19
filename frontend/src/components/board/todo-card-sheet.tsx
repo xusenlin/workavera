@@ -1,15 +1,17 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router"
 
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   ArrowUpRight01Icon,
   Cancel01Icon,
+  Copy01Icon,
   Delete02Icon,
   File01Icon,
   SourceCodeIcon,
   Link02Icon,
 } from "@hugeicons/core-free-icons"
+import { toast } from "sonner"
 
 import {
   AlertDialog,
@@ -43,6 +45,12 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { pb } from "@/lib/pocketbase"
 import { workspaceRecordUrl } from "@/lib/workspace-navigation"
@@ -110,6 +118,7 @@ export function TodoCardSheet({
   projectId,
   defaultStateId,
 }: TodoCardSheetProps) {
+  const titleInputRef = useRef<HTMLInputElement>(null)
   const addTodo = useBoardStore((s) => s.addTodo)
   const updateTodo = useBoardStore((s) => s.updateTodo)
   const removeTodo = useBoardStore((s) => s.removeTodo)
@@ -223,11 +232,25 @@ export function TodoCardSheet({
     onOpenChange(value)
   }
 
+  const copyTaskReference = async () => {
+    if (!todo) return
+    try {
+      await navigator.clipboard.writeText(`Task:${todo.id}:${todo.title}`)
+      toast.success("Task ID and name copied.")
+    } catch {
+      toast.error("Could not copy task ID and name.")
+    }
+  }
+
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetContent
         side="right"
         className="w-full sm:max-w-lg!"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          titleInputRef.current?.focus()
+        }}
         onInteractOutside={(event) => {
           // Interacting with the nested document picker (a portalled dialog)
           // must not dismiss the task sheet. Check the live DOM rather than a
@@ -242,7 +265,29 @@ export function TodoCardSheet({
         }}
       >
         <SheetHeader>
-          <SheetTitle>{todo ? "Edit task" : "Add task"}</SheetTitle>
+          <div className="flex items-center gap-1.5">
+            <SheetTitle>{todo ? "Edit task" : "Add task"}</SheetTitle>
+            {todo && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label="Copy task ID and name"
+                      onClick={() => void copyTaskReference()}
+                    >
+                      <HugeiconsIcon icon={Copy01Icon} strokeWidth={2} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    Copy task ID and name
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
           <SheetDescription>
             {todo
               ? "Update the task details below."
@@ -255,6 +300,7 @@ export function TodoCardSheet({
           <div className="flex flex-col gap-2">
             <Label htmlFor="todo-title">Title</Label>
             <Input
+              ref={titleInputRef}
               id="todo-title"
               placeholder="Task title..."
               value={form.title}

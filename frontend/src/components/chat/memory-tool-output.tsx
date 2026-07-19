@@ -125,8 +125,8 @@ export function MemoryToolCard({
       defaultOpen={false}
       className="group not-prose mb-4 w-full rounded-xl border bg-muted/10"
     >
-      <CollapsibleTrigger className="flex w-full items-start gap-3 p-3 text-left">
-        <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+      <CollapsibleTrigger className="flex w-full items-center gap-3 p-3 text-left">
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
           <HugeiconsIcon
             icon={forget ? Delete02Icon : Brain02Icon}
             strokeWidth={2}
@@ -146,7 +146,7 @@ export function MemoryToolCard({
             </Badge>
           )}
         </div>
-        <ChevronDownIcon className="mt-2 size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+        <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
       </CollapsibleTrigger>
 
       <CollapsibleContent className="space-y-3 px-3 pb-3 pl-14 outline-none">
