@@ -27,6 +27,20 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Document creators can now move documents between My documents, personal
+  folders, and editable projects. Moving a document out of a project
+  atomically unlinks it from that project's tasks without changing its content
+  revision.
+- Task result cards cap each workflow-state lane at 32 rem with independent
+  vertical scrolling and top-aligned columns, preventing one large state from
+  stretching shorter states into a long empty area. Horizontal trackpad or
+  wheel gestures continue to scroll the state lanes even while the pointer is
+  over a lane, and both horizontal and vertical scrollbars are visually hidden.
+- `board_search_tasks` can now search task titles and descriptions by keyword
+  across all active projects visible to the current user without requiring a
+  project ID. Results are limited to 20 by default (maximum 50) and embed each
+  task's project and complete state; project-scoped state/assignee filtering
+  and full task listing remain available.
 - Chat now memoizes historical messages and settled tool cards so streaming
   updates rerender only the active assistant response. Every tool card starts
   collapsed, and collapsed details are unmounted rather than merely hidden,

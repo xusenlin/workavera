@@ -75,6 +75,8 @@ func TestMovePrivateDocumentToProjectUsesProjectPermissions(t *testing.T) {
 	member := createTestUser(t, app, "move-member@example.com")
 	viewer := createTestUser(t, app, "move-viewer@example.com")
 	project := createTestProject(t, app, owner.Id)
+	otherProject := createTestProject(t, app, owner.Id)
+	folder := createTestFolder(t, app, owner.Id, "Moved from project")
 	createTestMembership(t, app, project.Id, member.Id, "member")
 	createTestMembership(t, app, project.Id, viewer.Id, "viewer")
 
@@ -92,15 +94,47 @@ func TestMovePrivateDocumentToProjectUsesProjectPermissions(t *testing.T) {
 	if _, _, err := Update(context.Background(), app, viewer.Id, doc.ID, UpdateInput{Title: "No", BaseRevision: 1}); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("viewer edited project document: %v", err)
 	}
-	if _, err := MoveToProject(context.Background(), app, owner.Id, doc.ID, project.Id); !errors.Is(err, ErrForbidden) {
-		t.Fatalf("project document moved twice: %v", err)
+	if _, err := MoveToProject(context.Background(), app, member.Id, doc.ID, otherProject.Id); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("non-creator moved project document: %v", err)
 	}
-	project.Set("owner", member.Id)
-	if err := app.Save(project); err != nil {
+	moved, err = MoveToProject(context.Background(), app, owner.Id, doc.ID, otherProject.Id)
+	if err != nil || moved.ProjectID != otherProject.Id || moved.Revision != 1 {
+		t.Fatalf("move across projects: %#v, %v", moved, err)
+	}
+	if _, err := Get(context.Background(), app, member.Id, doc.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("former project member retained document access: %v", err)
+	}
+	moved, err = Move(context.Background(), app, owner.Id, doc.ID, MoveInput{Destination: "folder", DestinationID: folder.Id})
+	if err != nil || moved.ProjectID != "" || moved.FolderID != folder.Id || moved.Revision != 1 {
+		t.Fatalf("move project document to private folder: %#v, %v", moved, err)
+	}
+}
+
+func TestMovingProjectDocumentUnlinksBoardTasks(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Get(context.Background(), app, owner.Id, doc.ID); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("former project participant retained document access: %v", err)
+	t.Cleanup(app.Cleanup)
+	owner := createTestUser(t, app, "move-linked-owner@example.com")
+	project := createTestProject(t, app, owner.Id)
+	target := createTestProject(t, app, owner.Id)
+	doc, err := Create(context.Background(), app, owner.Id, CreateInput{Title: "Linked", ProjectID: project.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	task := createTestTaskWithDocument(t, app, owner.Id, project.Id, doc.ID)
+
+	moved, err := MoveToProject(context.Background(), app, owner.Id, doc.ID, target.Id)
+	if err != nil || moved.ProjectID != target.Id {
+		t.Fatalf("move linked document: %#v, %v", moved, err)
+	}
+	task, err = app.FindRecordById("board_tasks", task.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := task.GetStringSlice("documents"); len(got) != 0 {
+		t.Fatalf("moving document must unlink source tasks, got %#v", got)
 	}
 }
 
@@ -163,8 +197,9 @@ func TestPersonalFoldersCreateSearchAndMoveWithoutRevision(t *testing.T) {
 	if err != nil || moved.ProjectID != project.Id || moved.FolderID != "" || moved.Revision != 1 {
 		t.Fatalf("move folder document to project: %#v, %v", moved, err)
 	}
-	if _, err := Move(context.Background(), app, owner.Id, doc.ID, MoveInput{Destination: "my_documents"}); !errors.Is(err, ErrForbidden) {
-		t.Fatalf("project document moved back to personal space: %v", err)
+	moved, err = Move(context.Background(), app, owner.Id, doc.ID, MoveInput{Destination: "my_documents"})
+	if err != nil || moved.ProjectID != "" || moved.FolderID != "" || moved.Revision != 1 {
+		t.Fatalf("move project document back to My documents: %#v, %v", moved, err)
 	}
 }
 
@@ -534,4 +569,38 @@ func createTestMembership(t *testing.T, app core.App, projectID, userID, role st
 	if err := app.Save(record); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func createTestTaskWithDocument(t *testing.T, app core.App, ownerID, projectID, documentID string) *core.Record {
+	t.Helper()
+	states, err := app.FindCollectionByNameOrId("board_project_states")
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := core.NewRecord(states)
+	state.Set("project", projectID)
+	state.Set("name", "Todo")
+	state.Set("color", "#64748b")
+	state.Set("category", "pending")
+	state.Set("sort_order", 1000)
+	if err := app.Save(state); err != nil {
+		t.Fatal(err)
+	}
+
+	tasks, err := app.FindCollectionByNameOrId("board_tasks")
+	if err != nil {
+		t.Fatal(err)
+	}
+	task := core.NewRecord(tasks)
+	task.Set("project", projectID)
+	task.Set("state", state.Id)
+	task.Set("title", "Linked task")
+	task.Set("priority", "medium")
+	task.Set("rank", 1000)
+	task.Set("created_by", ownerID)
+	task.Set("documents", []string{documentID})
+	if err := app.Save(task); err != nil {
+		t.Fatal(err)
+	}
+	return task
 }

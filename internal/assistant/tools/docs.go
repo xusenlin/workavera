@@ -92,7 +92,7 @@ func newDocsListFoldersTool(app core.App, actorID string) fantasy.AgentTool {
 }
 
 func newDocsMoveTool(app core.App, actorID string) fantasy.AgentTool {
-	return fantasy.NewAgentTool("docs_move", "Move a document only when the user explicitly asks to organize or move it. Personal documents can move to My documents, an existing personal folder, or an editable project. Project documents cannot move back or across projects.", func(ctx context.Context, input docsMoveInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
+	return fantasy.NewAgentTool("docs_move", "Move a document only when the user explicitly asks to organize or move it. A document's creator can move it to My documents, an existing personal folder, or an editable project. Moving a document out of a project automatically unlinks it from that project's tasks.", func(ctx context.Context, input docsMoveInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
 		result, err := executeBatch(input.Items, func(_ int, item docsMoveItem) (any, error) {
 			return workdocs.Move(ctx, app, actorID, item.ID, workdocs.MoveInput{Destination: item.Destination, DestinationID: item.DestinationID})
 		})

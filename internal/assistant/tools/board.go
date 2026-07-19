@@ -18,9 +18,12 @@ type boardSearchProjectsInput struct {
 }
 
 type boardSearchTasksInput struct {
-	ProjectID string   `json:"projectId" description:"Project ID (required)"`
-	StateIDs  []string `json:"stateIds,omitempty" description:"Optional list of state IDs to filter tasks by state"`
-	UserIDs   []string `json:"userIds,omitempty" description:"Optional list of user IDs to filter tasks where any of these users are assignees"`
+	Query           string   `json:"query,omitempty" description:"Optional keyword matched against task title and description; required when projectId is omitted"`
+	ProjectID       string   `json:"projectId,omitempty" description:"Optional project ID; omit to search the keyword across all visible active projects"`
+	StateIDs        []string `json:"stateIds,omitempty" description:"Optional list of state IDs to filter tasks by state"`
+	UserIDs         []string `json:"userIds,omitempty" description:"Optional list of user IDs to filter tasks where any of these users are assignees"`
+	IncludeArchived bool     `json:"includeArchived,omitempty" description:"Whether a cross-project search includes archived projects, defaults to false"`
+	Limit           int      `json:"limit,omitempty" description:"Maximum keyword-search results, default 20, max 50; project listing without a keyword remains unbounded"`
 }
 
 type boardGetProjectInput struct {
@@ -152,12 +155,15 @@ func newBoardSearchProjectsTool(app core.App, actorID string) fantasy.AgentTool 
 func newBoardSearchTasksTool(app core.App, actorID string) fantasy.AgentTool {
 	return fantasy.NewAgentTool(
 		"board_search_tasks",
-		"Fetch and display tasks for a board project, optionally filtered by states or assignees. Each task includes any linked documents (id and title); call docs_get with a document id to read its content when relevant.",
+		"Search visible Board tasks by title or description across projects, or fetch tasks for one project. Results include each task's project, state, labels, assignees, and linked documents; call docs_get with a document id to read its content when relevant.",
 		func(ctx context.Context, input boardSearchTasksInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
 			result, err := board.SearchVisibleTasks(ctx, app, actorID, board.TaskSearchOptions{
-				ProjectID: input.ProjectID,
-				StateIDs:  input.StateIDs,
-				UserIDs:   input.UserIDs,
+				Query:           input.Query,
+				ProjectID:       input.ProjectID,
+				StateIDs:        input.StateIDs,
+				UserIDs:         input.UserIDs,
+				IncludeArchived: input.IncludeArchived,
+				Limit:           input.Limit,
 			})
 			if err != nil {
 				app.Logger().Error("assistant tasks tool failed", "actorId", actorID, "error", err)

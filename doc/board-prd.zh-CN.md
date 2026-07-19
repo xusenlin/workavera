@@ -184,6 +184,8 @@ Board 订阅 `board_projects`、`board_project_states`、`board_project_members`
 - `board_search_tasks`
 - `board_list_templates`
 
+`board_search_tasks` 可在不提供项目 ID 时，按标题或描述关键词搜索调用者可见的全部活动项目。跨项目关键词结果默认返回 20 条，最多 50 条；归档项目需要显式包含。提供项目 ID 后仍可限定关键词、状态或负责人；在项目范围内省略关键词时继续返回该项目的完整任务列表。每条命中除 `stateId` 外还直接包含所属项目与完整状态，调用方不需要自行推断项目或二次匹配状态名称。
+
 写入工具：
 
 - `board_create_project`
@@ -209,4 +211,5 @@ Board 订阅 `board_projects`、`board_project_states`、`board_project_members`
 - 两个登录会话可通过 PocketBase realtime 看到 Board 记录变化。
 - 刷新页面后从 PocketBase 恢复数据，不依赖本地存储。
 - Chat 可以查询 Board 并执行允许的非破坏性操作，同时遵守实时角色和权限。
+- Chat 可在不知道项目时按任务标题或描述关键词搜索，并在一次结果中取得任务 ID、所属项目和状态。
 - Chat 可在一次调用中创建或修改 1 至 50 条 Board 记录，单元素批次正常工作，部分成功时保留有序的逐条结果。

@@ -32,7 +32,6 @@ Project documents can be linked to Board tasks in the same project.
 - Custom per-document collaborators outside Board project membership.
 - Persisting editor-specific JSON, MDX, JSX, or multi-file HTML application bundles.
 - Public publishing.
-- Moving a project document back to private space or directly to another project.
 
 ## 4. Core rules
 
@@ -144,9 +143,9 @@ On HTTP 409, the editor keeps the local draft, displays `New version available`,
 
 The history dialog previews a selected revision's body. Restore requires the current base revision and creates a new version sourced as `restore`; existing history remains unchanged.
 
-### Move to project
+### Move between locations
 
-Only the owner of a private document can move it. Private documents move between `My documents` and the owner's one-level folders through the PocketBase Records API. The target project must grant owner, admin, or member access, and moving into it clears the folder. Moving changes location or access scope without changing the content revision or creating a version. A project document cannot move back or move directly to another project.
+Only the document creator can move it. A document can move between `My documents`, the creator's one-level personal folders, and projects where the creator has owner, admin, or member access. Moving changes the location and access scope without changing the content revision or creating a version. When a document leaves a project, the same transaction removes it from every task in that project so cross-project document relations cannot remain.
 
 ## 7. Editor experience
 
@@ -180,7 +179,7 @@ The same `draftContent` powers each kind's source and rendered modes. Mode switc
 - `POST /api/docs`
 - `PUT /api/docs/{id}`
 - `POST /api/docs/{id}/assets`
-- `POST /api/docs/{id}/move-to-project`
+- `POST /api/docs/{id}/move`
 - `GET /api/docs-pinned`
 - `POST /api/docs/{id}/pin`
 - `POST /api/docs/{id}/archive`
@@ -192,7 +191,7 @@ The same `draftContent` powers each kind's source and rendered modes. Mode switc
 
 All endpoints require `users` authentication. Inaccessible private/project documents use not-found semantics where appropriate to avoid revealing record existence.
 
-Personal folders use PocketBase `/api/collections/doc_folders/records` CRUD, and personal folder moves update only the `folder` field through the `docs` Records API.
+Personal folders use PocketBase `/api/collections/doc_folders/records` CRUD. Document location changes use the Docs move endpoint so private and project destinations share the same permission and relation-cleanup rules.
 
 ## 10. Assistant tools
 
@@ -200,7 +199,7 @@ Personal folders use PocketBase `/api/collections/doc_folders/records` CRUD, and
 - `docs_get`: returns complete current content, kind, revision, and project/folder location.
 - `docs_list_folders`: lists the current user's personal folders so IDs can be resolved before creating or moving.
 - `docs_upsert`: creates a document in My documents, a personal folder, or a project, or writes a complete replacement using `baseRevision`. Its `kind` is required; before creating, the Assistant briefly asks the user to choose simple, easily editable Markdown or rich, interactive HTML when no kind was specified.
-- `docs_move`: only when explicitly requested, moves one to 50 private documents to My documents, existing personal folders, or editable projects through a required `items` array; a single move uses one item, project documents cannot be moved, and legacy top-level single-document input is rejected. Items execute in order with independent results.
+- `docs_move`: only when explicitly requested, moves one to 50 creator-owned documents between My documents, existing personal folders, and editable projects through a required `items` array; a single move uses one item, and legacy top-level single-document input is rejected. Leaving a project automatically unlinks its tasks. Items execute in order with independent results.
 - `docs_replace`: replaces the first or all exact Markdown matches using `baseRevision`.
 - `docs_write_chunk`: writes oversized Markdown or HTML content in a replace/append sequence while recording one logical version.
 
@@ -208,7 +207,7 @@ The Assistant must call `docs_get` before updating, reuse the returned kind and 
 
 ## 11. Board integration
 
-`board_tasks.documents` links up to 20 documents. The server accepts only documents whose `project` matches the task's project. The Board picker lists active project documents, task activity records title-based link changes, and deleting a document automatically removes its task relations without deleting tasks.
+`board_tasks.documents` links up to 20 documents. The server accepts only documents whose `project` matches the task's project. The Board picker lists active project documents, task activity records title-based link changes, and deleting or moving a document out of a project automatically removes its task relations without deleting tasks.
 
 ## 12. Acceptance criteria
 
@@ -222,4 +221,5 @@ The Assistant must call `docs_get` before updating, reuse the returned kind and 
 - Attachment uploads enforce edit permission, media type, size, protected access, deduplication, and document cascade deletion.
 - Chat document mutations obey permissions and optimistic concurrency.
 - Chat can move a one-item or multi-item batch of up to 50 eligible documents, preserving ordered successes and failures.
+- A document creator can move a document between private and editable project locations without changing its revision; leaving a project unlinks source-project tasks atomically.
 - Board tasks accept only same-project document links and survive linked-document deletion.

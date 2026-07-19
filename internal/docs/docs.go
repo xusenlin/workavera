@@ -109,8 +109,8 @@ type SearchOptions struct {
 }
 
 type MoveInput struct {
-	Destination   string
-	DestinationID string
+	Destination   string `json:"destination"`
+	DestinationID string `json:"destinationId"`
 }
 
 type ReplaceInput struct {
@@ -459,32 +459,7 @@ func Restore(ctx context.Context, app core.App, actorID, id string, revision, ba
 }
 
 func MoveToProject(ctx context.Context, app core.App, actorID, id, projectID string) (Document, error) {
-	if err := ctx.Err(); err != nil {
-		return Document{}, err
-	}
-	if projectID == "" {
-		return Document{}, ErrInvalidInput
-	}
-	canEdit, err := canEditProject(app, actorID, projectID)
-	if err != nil || !canEdit {
-		return Document{}, ErrForbidden
-	}
-	err = app.RunInTransaction(func(tx core.App) error {
-		record, err := tx.FindRecordById(CollectionName, id)
-		if err != nil {
-			return ErrNotFound
-		}
-		if record.GetString("owner") != actorID || record.GetString("project") != "" {
-			return ErrForbidden
-		}
-		record.Set("project", projectID)
-		record.Set("folder", "")
-		return tx.Save(record)
-	})
-	if err != nil {
-		return Document{}, err
-	}
-	return Get(ctx, app, actorID, id)
+	return Move(ctx, app, actorID, id, MoveInput{Destination: "project", DestinationID: projectID})
 }
 
 func ListFolders(ctx context.Context, app core.App, actorID string) ([]Folder, error) {
@@ -503,40 +478,105 @@ func ListFolders(ctx context.Context, app core.App, actorID string) ([]Folder, e
 }
 
 func Move(ctx context.Context, app core.App, actorID, id string, input MoveInput) (Document, error) {
-	if input.Destination == "project" {
-		return MoveToProject(ctx, app, actorID, id, input.DestinationID)
-	}
-	if input.Destination != "my_documents" && input.Destination != "folder" {
+	if input.Destination != "my_documents" && input.Destination != "folder" && input.Destination != "project" {
 		return Document{}, ErrInvalidInput
 	}
 	if input.Destination == "my_documents" && input.DestinationID != "" {
 		return Document{}, ErrInvalidInput
 	}
-	if input.Destination == "folder" && input.DestinationID == "" {
+	if input.Destination != "my_documents" && input.DestinationID == "" {
 		return Document{}, ErrInvalidInput
 	}
 	if err := ctx.Err(); err != nil {
 		return Document{}, err
 	}
+
+	projectID := ""
 	folderID := ""
 	if input.Destination == "folder" {
-		if _, err := ownedFolder(app, actorID, input.DestinationID); err != nil {
-			return Document{}, err
-		}
 		folderID = input.DestinationID
+	} else if input.Destination == "project" {
+		projectID = input.DestinationID
 	}
-	record, err := app.FindRecordById(CollectionName, id)
+
+	err := app.RunInTransaction(func(tx core.App) error {
+		if folderID != "" {
+			if _, err := ownedFolder(tx, actorID, folderID); err != nil {
+				return err
+			}
+		}
+		if projectID != "" {
+			canEdit, err := canEditProject(tx, actorID, projectID)
+			if err != nil || !canEdit {
+				return ErrForbidden
+			}
+		}
+		record, err := tx.FindRecordById(CollectionName, id)
+		if err != nil {
+			return ErrNotFound
+		}
+		if record.GetString("owner") != actorID || record.GetString("status") != "draft" {
+			return ErrForbidden
+		}
+
+		currentProjectID := record.GetString("project")
+		if currentProjectID != "" {
+			canEdit, err := canEditProject(tx, actorID, currentProjectID)
+			if err != nil || !canEdit {
+				return ErrForbidden
+			}
+		}
+		if currentProjectID != "" && currentProjectID != projectID {
+			if err := unlinkDocumentFromTasks(tx, currentProjectID, id); err != nil {
+				return err
+			}
+		}
+
+		record.Set("project", projectID)
+		record.Set("folder", folderID)
+		return tx.Save(record)
+	})
 	if err != nil {
-		return Document{}, ErrNotFound
-	}
-	if record.GetString("owner") != actorID || record.GetString("project") != "" || record.GetString("status") != "draft" {
-		return Document{}, ErrForbidden
-	}
-	record.Set("folder", folderID)
-	if err := app.Save(record); err != nil {
 		return Document{}, err
 	}
 	return Get(ctx, app, actorID, id)
+}
+
+// unlinkDocumentFromTasks prevents cross-project document relations when a
+// document leaves its current project. The relation changes are committed in
+// the same transaction as the location change.
+func unlinkDocumentFromTasks(app core.App, projectID, documentID string) error {
+	tasks, err := app.FindRecordsByFilter(
+		"board_tasks",
+		"project = {:project}",
+		"",
+		0,
+		0,
+		dbx.Params{"project": projectID},
+	)
+	if err != nil {
+		return err
+	}
+	for _, task := range tasks {
+		documentIDs := task.GetStringSlice("documents")
+		remaining := make([]string, 0, len(documentIDs))
+		changed := false
+		for _, id := range documentIDs {
+			if id == documentID {
+				changed = true
+				continue
+			}
+			remaining = append(remaining, id)
+		}
+		if !changed {
+			continue
+		}
+		task.Set("documents", remaining)
+		if err := app.Save(task); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func ListPinned(ctx context.Context, app core.App, actorID, query string) ([]DocumentSummary, error) {

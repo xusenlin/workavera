@@ -829,7 +829,11 @@ export function DocsPage() {
                     : `v${persisted.revision}`}
               </span>
               <div className="ml-auto flex items-center gap-1">
-                {!persisted.projectId && (
+                {persisted.ownerId === pb.authStore.record?.id &&
+                  (!persisted.projectId ||
+                    editableProjects.some(
+                      (project) => project.id === persisted.projectId
+                    )) && (
                   <MoveDocumentButton
                     document={persisted}
                     folders={folders}
@@ -1906,35 +1910,30 @@ function MoveDocumentButton({
   onMoved: (view: DocsView) => void
 }) {
   const [open, setOpen] = useState(false)
-  const [location, setLocation] = useState(
-    document.folderId ? `folder:${document.folderId}` : "my_documents"
-  )
+  const [location, setLocation] = useState(documentLocationValue(document))
+  const [moving, setMoving] = useState(false)
+  const currentLocation = documentLocationValue(document)
   const move = async () => {
+    setMoving(true)
     try {
       const [locationType, locationId = ""] = location.split(":")
-      let nextView: DocsView
-      if (locationType === "project") {
-        const moved = await pb.send<DocumentResult>(
-          `/api/docs/${document.id}/move-to-project`,
-          {
-            method: "POST",
-            body: { projectId: locationId },
-          }
-        )
-        nextView = viewForDocument(moved)
-      } else {
-        const moved = await pb.collection("docs").update<DocRecord>(document.id, {
-          folder: locationType === "folder" ? locationId : "",
-        })
-        nextView = moved.folder
-          ? { type: "folder", id: moved.folder }
-          : { type: "my" }
-      }
-      onMoved(nextView)
+      const moved = await pb.send<DocumentResult>(
+        `/api/docs/${document.id}/move`,
+        {
+          method: "POST",
+          body: {
+            destination: locationType,
+            destinationId: locationId,
+          },
+        }
+      )
+      onMoved(viewForDocument(moved))
       setOpen(false)
       toast.success("Document moved.")
     } catch (error) {
       toast.error(extractErrorMessage(error, "Could not move document."))
+    } finally {
+      setMoving(false)
     }
   }
   return (
@@ -1944,11 +1943,7 @@ function MoveDocumentButton({
         icon={FolderTransferIcon}
         disabled={disabled}
         onClick={() => {
-          setLocation(
-            document.folderId
-              ? `folder:${document.folderId}`
-              : "my_documents"
-          )
+          setLocation(documentLocationValue(document))
           setOpen(true)
         }}
       />
@@ -1956,8 +1951,8 @@ function MoveDocumentButton({
         <DialogHeader>
           <DialogTitle>Move document</DialogTitle>
           <DialogDescription>
-            Moving to a project shares the document with project members and
-            cannot be undone in this version.
+            Moving changes who can access this document. Leaving a project also
+            removes the document from tasks in that project.
           </DialogDescription>
         </DialogHeader>
         <Select value={location} onValueChange={setLocation}>
@@ -1982,7 +1977,12 @@ function MoveDocumentButton({
           <Button variant="outline" onClick={() => setOpen(false)}>
             Cancel
           </Button>
-          <Button onClick={() => void move()}>Move</Button>
+          <Button
+            disabled={location === currentLocation || moving}
+            onClick={() => void move()}
+          >
+            {moving ? "Moving…" : "Move"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -2117,6 +2117,11 @@ function viewForDocument(doc: DocumentResult): DocsView {
   if (doc.projectId) return { type: "project", id: doc.projectId }
   if (doc.folderId) return { type: "folder", id: doc.folderId }
   return { type: "my" }
+}
+function documentLocationValue(doc: DocumentResult) {
+  if (doc.projectId) return `project:${doc.projectId}`
+  if (doc.folderId) return `folder:${doc.folderId}`
+  return "my_documents"
 }
 function defaultLocationForView(view: DocsView, editableProjects: Project[]) {
   if (view.type === "folder") return `folder:${view.id}`

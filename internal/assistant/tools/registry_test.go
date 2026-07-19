@@ -138,6 +138,18 @@ func TestBoardUpdateTaskInputTracksNullableDueDate(t *testing.T) {
 	}
 }
 
+func TestBoardSearchTasksSupportsCrossProjectKeywords(t *testing.T) {
+	info := newBoardSearchTasksTool(nil, "actor-1").Info()
+	if slices.Contains(info.Required, "projectId") {
+		t.Fatalf("projectId must be optional for cross-project keyword search: %#v", info.Required)
+	}
+	for _, field := range []string{"query", "projectId", "stateIds", "userIds", "includeArchived", "limit"} {
+		if _, ok := info.Parameters[field]; !ok {
+			t.Fatalf("board_search_tasks missing input field %q: %#v", field, info.Parameters)
+		}
+	}
+}
+
 func TestBatchMutationToolsExposeOnlyArrayInputs(t *testing.T) {
 	tests := []struct {
 		name       string

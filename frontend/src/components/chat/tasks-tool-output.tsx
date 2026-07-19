@@ -29,11 +29,18 @@ import type { ReactNode } from "react"
 import { useNavigate } from "react-router"
 
 type TaskStateSummary = {
+  projectId?: string
   id: string
   name: string
   color: string
   category: string
   sortOrder: number
+}
+
+type TaskProjectSummary = {
+  id: string
+  name: string
+  archived: boolean
 }
 
 type TaskLabelSummary = {
@@ -55,6 +62,8 @@ type TaskSummary = {
   description?: string
   priority?: string
   dueDate?: string
+  project?: TaskProjectSummary
+  state?: TaskStateSummary
   stateId: string
   labels: TaskLabelSummary[]
   assignees: TaskAssigneeSummary[]
@@ -142,6 +151,9 @@ export function TasksToolCard({ part }: { part: TasksToolPart }) {
     (a, b) => a.sortOrder - b.sortOrder
   )
   const tasks = result?.tasks ?? []
+  const projectCount = new Set(
+    tasks.map((task) => task.project?.id).filter(Boolean)
+  ).size
 
   // Group tasks by state id, sorted by rank within each group.
   const tasksByState = new Map<string, TaskSummary[]>()
@@ -212,28 +224,36 @@ export function TasksToolCard({ part }: { part: TasksToolPart }) {
         {/* Results */}
         {part.state === "output-available" && tasks.length > 0 && (
           <div className="space-y-3">
-            <div className="flex max-w-full min-w-0 gap-3 overflow-x-auto pb-2">
+            <div className="no-scrollbar flex max-w-full min-w-0 items-start gap-3 overflow-x-auto pb-2">
               {states.map((state) => {
                 const stateTasks = tasksByState.get(state.id) ?? []
                 if (stateTasks.length === 0) return null
+                const projectName = stateTasks[0]?.project?.name
                 return (
                   <div key={state.id} className="w-60 shrink-0 space-y-1.5">
                     {/* State header */}
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="size-2 rounded-full"
-                        style={{ backgroundColor: state.color }}
-                      />
-                      <span className="text-sm font-semibold">
-                        {state.name}
-                      </span>
-                      <span className="rounded-full bg-muted px-1.5 py-0.5 text-xs text-muted-foreground tabular-nums">
-                        {stateTasks.length}
-                      </span>
+                    <div className="min-w-0">
+                      {projectName && (
+                        <div className="truncate text-[10px] text-muted-foreground">
+                          {projectName}
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="size-2 rounded-full"
+                          style={{ backgroundColor: state.color }}
+                        />
+                        <span className="text-sm font-semibold">
+                          {state.name}
+                        </span>
+                        <span className="rounded-full bg-muted px-1.5 py-0.5 text-xs text-muted-foreground tabular-nums">
+                          {stateTasks.length}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Task cards */}
-                    <div className="space-y-1.5">
+                    <div className="no-scrollbar max-h-[32rem] space-y-1.5 overflow-y-auto overscroll-y-contain pr-1">
                       {stateTasks.map((task) => (
                         <TaskItem
                           key={task.id}
@@ -260,7 +280,7 @@ export function TasksToolCard({ part }: { part: TasksToolPart }) {
                     <div className="text-xs font-medium text-muted-foreground">
                       Other
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="no-scrollbar max-h-[32rem] space-y-1.5 overflow-y-auto overscroll-y-contain pr-1">
                       {orphanTasks.map((task) => (
                         <TaskItem
                           key={task.id}
@@ -283,6 +303,12 @@ export function TasksToolCard({ part }: { part: TasksToolPart }) {
                 <>
                   <span>·</span>
                   <span>{states.length} states</span>
+                </>
+              )}
+              {projectCount > 0 && (
+                <>
+                  <span>·</span>
+                  <span>{projectCount} projects</span>
                 </>
               )}
             </div>
@@ -331,6 +357,13 @@ function TaskItem({
       )}
 
       {/* Title */}
+      {(task.project || task.state) && (
+        <div className="mb-1 truncate text-[10px] text-muted-foreground">
+          {task.project?.name}
+          {task.project && task.state && " · "}
+          {task.state?.name}
+        </div>
+      )}
       <p className="text-sm leading-snug font-medium">{task.title}</p>
 
       {/* Description */}

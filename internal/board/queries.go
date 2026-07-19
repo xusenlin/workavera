@@ -10,7 +10,10 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 )
 
-const MaxProjectSearchResults = 20
+const (
+	MaxProjectSearchResults = 20
+	MaxTaskSearchResults    = 50
+)
 
 type ProjectSearchOptions struct {
 	Query           string
@@ -485,14 +488,25 @@ func loadProjectStatesWithCounts(ctx context.Context, app core.App, projectID st
 }
 
 type TaskSearchOptions struct {
-	ProjectID string
-	StateIDs  []string
-	UserIDs   []string
+	Query           string
+	ProjectID       string
+	StateIDs        []string
+	UserIDs         []string
+	IncludeArchived bool
+	Limit           int
+}
+
+// TaskProjectSummary identifies the project containing a matched task.
+type TaskProjectSummary struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Archived bool   `json:"archived"`
 }
 
 // TaskStateSummary carries the state a task belongs to so tool consumers can
 // group tasks by state without an extra fetch.
 type TaskStateSummary struct {
+	ProjectID string `json:"projectId"`
 	ID        string `json:"id"`
 	Name      string `json:"name"`
 	Color     string `json:"color"`
@@ -531,6 +545,8 @@ type TaskSummary struct {
 	Description string                `json:"description,omitempty"`
 	Priority    string                `json:"priority,omitempty"`
 	DueDate     string                `json:"dueDate,omitempty"`
+	Project     TaskProjectSummary    `json:"project"`
+	State       TaskStateSummary      `json:"state"`
 	StateID     string                `json:"stateId"`
 	Labels      []TaskLabelSummary    `json:"labels"`
 	Assignees   []TaskAssigneeSummary `json:"assignees"`
@@ -545,9 +561,9 @@ type TaskSearchResult struct {
 	Tasks  []TaskSummary      `json:"tasks"`
 }
 
-// SearchVisibleTasks returns the tasks of a project visible to the actor,
-// optionally filtered by one or more states. Labels and assignee names are
-// resolved server-side so the tool result is self-contained.
+// SearchVisibleTasks searches tasks in one visible project or, when ProjectID
+// is omitted, across every visible project. Labels, assignees, project, and
+// state are resolved server-side so every match is self-contained.
 func SearchVisibleTasks(ctx context.Context, app core.App, actorID string, options TaskSearchOptions) (TaskSearchResult, error) {
 	if actorID == "" {
 		return TaskSearchResult{}, errors.New("missing actor")
@@ -559,31 +575,64 @@ func SearchVisibleTasks(ctx context.Context, app core.App, actorID string, optio
 		return TaskSearchResult{}, errors.New("actor is not an active user")
 	}
 	projectID := strings.TrimSpace(options.ProjectID)
-	if projectID == "" {
-		return TaskSearchResult{}, errors.New("project ID is required")
+	query := strings.TrimSpace(options.Query)
+	if projectID == "" && query == "" {
+		return TaskSearchResult{}, errors.New("project ID or query is required")
 	}
 
-	// Verify the actor can access the project.
-	project, err := app.FindRecordById(boardProjectsCollection, projectID)
-	if err != nil {
-		return TaskSearchResult{}, errors.New("project not found")
-	}
-	visible, err := projectVisibleTo(app, project, actorID)
-	if err != nil {
-		return TaskSearchResult{}, err
-	}
-	if !visible {
-		return TaskSearchResult{}, errors.New("project not found")
+	projectRecords := make([]*core.Record, 0)
+	if projectID != "" {
+		project, err := app.FindRecordById(boardProjectsCollection, projectID)
+		if err != nil {
+			return TaskSearchResult{}, errors.New("project not found")
+		}
+		visible, err := projectVisibleTo(app, project, actorID)
+		if err != nil {
+			return TaskSearchResult{}, err
+		}
+		if !visible {
+			return TaskSearchResult{}, errors.New("project not found")
+		}
+		projectRecords = append(projectRecords, project)
+	} else {
+		projectClauses := []string{"(owner = {:actor} || board_project_members_via_project.user ?= {:actor})"}
+		projectParams := dbx.Params{"actor": actorID}
+		if !options.IncludeArchived {
+			projectClauses = append(projectClauses, "archived = false")
+		}
+		var err error
+		projectRecords, err = app.FindRecordsByFilter(
+			boardProjectsCollection,
+			strings.Join(projectClauses, " && "),
+			"-updated",
+			0,
+			0,
+			projectParams,
+		)
+		if err != nil {
+			return TaskSearchResult{}, err
+		}
 	}
 	if err := ctx.Err(); err != nil {
 		return TaskSearchResult{}, err
 	}
+	if len(projectRecords) == 0 {
+		return TaskSearchResult{States: []TaskStateSummary{}, Tasks: []TaskSummary{}}, nil
+	}
 
-	// Build filter: project = {:project} && optionally state filter.
-	// Assignee filtering is done in Go after the query because PocketBase's
-	// ?= operator does not work reliably with parameterized placeholders.
-	filter := "project = {:project}"
-	params := dbx.Params{"project": projectID}
+	projectsByID := make(map[string]TaskProjectSummary, len(projectRecords))
+	projectIDs := make([]string, 0, len(projectRecords))
+	for _, project := range projectRecords {
+		projectIDs = append(projectIDs, project.Id)
+		projectsByID[project.Id] = TaskProjectSummary{
+			ID:       project.Id,
+			Name:     project.GetString("name"),
+			Archived: project.GetBool("archived"),
+		}
+	}
+
+	projectFilter, params := fieldMatchesAny("project", "project", projectIDs)
+	clauses := []string{projectFilter}
 	if len(options.StateIDs) > 0 {
 		stateClauses := make([]string, 0, len(options.StateIDs))
 		for i, sid := range options.StateIDs {
@@ -591,10 +640,39 @@ func SearchVisibleTasks(ctx context.Context, app core.App, actorID string, optio
 			stateClauses = append(stateClauses, "state = {:"+key+"}")
 			params[key] = sid
 		}
-		filter += " && (" + strings.Join(stateClauses, " || ") + ")"
+		clauses = append(clauses, "("+strings.Join(stateClauses, " || ")+")")
+	}
+	if query != "" {
+		clauses = append(clauses, "(title ~ {:query} || description ~ {:query})")
+		params["query"] = query
 	}
 
-	taskRecords, err := app.FindRecordsByFilter(boardTasksCollection, filter, "rank", 0, 0, params)
+	limit := options.Limit
+	if limit > MaxTaskSearchResults {
+		limit = MaxTaskSearchResults
+	}
+	if limit < 0 {
+		limit = 0
+	}
+	if limit == 0 && query != "" {
+		limit = 20
+	}
+	recordLimit := limit
+	if len(options.UserIDs) > 0 {
+		recordLimit = 0
+	}
+	sort := "rank"
+	if query != "" {
+		sort = "-updated"
+	}
+	taskRecords, err := app.FindRecordsByFilter(
+		boardTasksCollection,
+		strings.Join(clauses, " && "),
+		sort,
+		recordLimit,
+		0,
+		params,
+	)
 	if err != nil {
 		return TaskSearchResult{}, err
 	}
@@ -619,10 +697,25 @@ func SearchVisibleTasks(ctx context.Context, app core.App, actorID string, optio
 		}
 		taskRecords = filtered
 	}
+	if limit > 0 && len(taskRecords) > limit {
+		taskRecords = taskRecords[:limit]
+	}
+	if len(taskRecords) == 0 {
+		return TaskSearchResult{States: []TaskStateSummary{}, Tasks: []TaskSummary{}}, nil
+	}
 
-	// Load the project states (optionally filtered) once, sorted by sort_order.
-	stateFilter := "project = {:project}"
-	stateParams := dbx.Params{"project": projectID}
+	// Only load related data for projects that actually contain matches.
+	matchedProjectSet := make(map[string]bool)
+	matchedProjectIDs := make([]string, 0, len(projectIDs))
+	for _, task := range taskRecords {
+		matchedProjectID := task.GetString("project")
+		if !matchedProjectSet[matchedProjectID] {
+			matchedProjectSet[matchedProjectID] = true
+			matchedProjectIDs = append(matchedProjectIDs, matchedProjectID)
+		}
+	}
+
+	stateFilter, stateParams := fieldMatchesAny("project", "stateProject", matchedProjectIDs)
 	if len(options.StateIDs) > 0 {
 		stateClauses := make([]string, 0, len(options.StateIDs))
 		for i, sid := range options.StateIDs {
@@ -641,19 +734,24 @@ func SearchVisibleTasks(ctx context.Context, app core.App, actorID string, optio
 	}
 
 	states := make([]TaskStateSummary, 0, len(stateRecords))
+	statesByID := make(map[string]TaskStateSummary, len(stateRecords))
 	for _, sr := range stateRecords {
-		states = append(states, TaskStateSummary{
+		state := TaskStateSummary{
+			ProjectID: sr.GetString("project"),
 			ID:        sr.Id,
 			Name:      sr.GetString("name"),
 			Color:     sr.GetString("color"),
 			Category:  sr.GetString("category"),
 			SortOrder: sr.GetInt("sort_order"),
-		})
+		}
+		states = append(states, state)
+		statesByID[state.ID] = state
 	}
 
-	// Preload all project labels so we can resolve each task's label ids in one
-	// pass instead of querying per task.
-	labelRecords, err := app.FindRecordsByFilter(boardProjectLabelsCollection, "project = {:project}", "", 0, 0, dbx.Params{"project": projectID})
+	// Preload labels and documents for matched projects so task relations can be
+	// resolved in one pass instead of querying per task.
+	labelFilter, labelParams := fieldMatchesAny("project", "labelProject", matchedProjectIDs)
+	labelRecords, err := app.FindRecordsByFilter(boardProjectLabelsCollection, labelFilter, "", 0, 0, labelParams)
 	if err != nil {
 		return TaskSearchResult{}, err
 	}
@@ -666,9 +764,8 @@ func SearchVisibleTasks(ctx context.Context, app core.App, actorID string, optio
 		}
 	}
 
-	// Preload the project's documents so each task's linked doc ids resolve to
-	// titles in one pass.
-	docRecords, err := app.FindRecordsByFilter(docsCollection, "project = {:project}", "", 0, 0, dbx.Params{"project": projectID})
+	docFilter, docParams := fieldMatchesAny("project", "docProject", matchedProjectIDs)
+	docRecords, err := app.FindRecordsByFilter(docsCollection, docFilter, "", 0, 0, docParams)
 	if err != nil {
 		return TaskSearchResult{}, err
 	}
@@ -698,13 +795,16 @@ func SearchVisibleTasks(ctx context.Context, app core.App, actorID string, optio
 			}
 		}
 
+		stateID := tr.GetString("state")
 		result = append(result, TaskSummary{
 			ID:          tr.Id,
 			Title:       tr.GetString("title"),
 			Description: tr.GetString("description"),
 			Priority:    tr.GetString("priority"),
 			DueDate:     tr.GetString("due_date"),
-			StateID:     tr.GetString("state"),
+			Project:     projectsByID[tr.GetString("project")],
+			State:       statesByID[stateID],
+			StateID:     stateID,
 			Labels:      taskLabels,
 			Assignees:   assignees,
 			Documents:   taskDocs,

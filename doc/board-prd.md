@@ -184,6 +184,14 @@ Read tools:
 - `board_search_tasks`
 - `board_list_templates`
 
+`board_search_tasks` accepts a title/description keyword without a project ID
+and searches every active project visible to the caller. Cross-project keyword
+results default to 20 and are capped at 50; archived projects are opt-in. A
+project ID can still scope keyword, state, or assignee filters, and omitting the
+keyword in project scope returns the project's complete task list. Every match
+embeds its project and complete state in addition to `stateId`, so consumers do
+not need to infer project ownership or join the state name themselves.
+
 Mutation tools:
 
 - `board_create_project`
@@ -209,4 +217,5 @@ No AI deletion or ownership-transfer tool is registered. The assistant must dire
 - Two sessions see Board record changes through PocketBase realtime.
 - Refreshing the page restores data from PocketBase rather than local storage.
 - Chat can query and perform permitted non-destructive Board mutations while honoring current roles and revisions.
+- Chat can find a task by title or description keyword without knowing its project and receive the task ID, project, and state in one result.
 - Chat can create or patch one to 50 Board records in one mutation call, including a one-item batch, and mixed-success results retain ordered per-item outcomes.

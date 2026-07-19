@@ -18,7 +18,7 @@ func Register(app core.App) {
 		router := event.Router
 		router.POST("/api/docs", createRequest).Bind(apis.RequireAuth("users"))
 		router.PUT("/api/docs/{id}", updateRequest).Bind(apis.RequireAuth("users"))
-		router.POST("/api/docs/{id}/move-to-project", moveRequest).Bind(apis.RequireAuth("users"))
+		router.POST("/api/docs/{id}/move", moveRequest).Bind(apis.RequireAuth("users"))
 		router.POST("/api/docs/{id}/assets", uploadAssetRequest).Bind(apis.RequireAuth("users"))
 		router.GET("/api/docs-pinned", pinnedRequest).Bind(apis.RequireAuth("users"))
 		router.POST("/api/docs/{id}/pin", pinRequest).Bind(apis.RequireAuth("users"))
@@ -144,13 +144,11 @@ func updateRequest(event *core.RequestEvent) error {
 }
 
 func moveRequest(event *core.RequestEvent) error {
-	var input struct {
-		ProjectID string `json:"projectId"`
-	}
+	var input MoveInput
 	if err := event.BindBody(&input); err != nil {
-		return event.BadRequestError("Invalid project data.", err)
+		return event.BadRequestError("Invalid document move data.", err)
 	}
-	doc, err := MoveToProject(event.Request.Context(), event.App, event.Auth.Id, event.Request.PathValue("id"), input.ProjectID)
+	doc, err := Move(event.Request.Context(), event.App, event.Auth.Id, event.Request.PathValue("id"), input)
 	if err != nil {
 		return requestError(event, err)
 	}
