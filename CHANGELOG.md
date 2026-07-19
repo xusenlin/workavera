@@ -5,7 +5,7 @@ All notable changes to Workavera are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/).
 
-## [0.0.8] - 2026-07-18
+## [0.0.8] - 2026-07-19
 
 ### Added
 
@@ -14,6 +14,13 @@ and versions follow [Semantic Versioning](https://semver.org/).
   project with its existing order preference or permanently delete it;
   archive and restore changes are recorded in Project Activity and are not
   exposed as Assistant mutations.
+- Docs now organizes private documents with one-level personal folders,
+  managed from the Locations pane and sorted by name. Folders are exclusive
+  to their owner; deleting a folder returns its documents to My documents
+  without deleting them or creating versions.
+- Board project headers and the task sheet have a copy button that places a
+  `Projects:{id}:{name}` or `Task:{id}:{title}` reference on the clipboard,
+  ready to paste into Chat so the Assistant can target the exact record.
 - Chat now supports private, cross-conversation long-term memory under explicit
   user control. Memory is off by default; users can enable saved-memory use and
   separately opt in to automatic capture from Settings.
@@ -66,6 +73,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
   visual theme remains a UI-only preference.
 - Memory action cards place Undo and Manage controls at the lower right with a
   dedicated undo icon, and memory source links use a compact Chat icon.
+- The task sheet focuses the title input when it opens, so a new task's title
+  can be typed immediately.
 - Requests to model providers now identify their source as Workavera instead of
   the underlying Fantasy SDK.
 - Account-level appearance and memory controls now live together in a private
@@ -259,7 +268,7 @@ First public release.
 - **AI Micro Apps** for self-contained HTML tools with sandboxed preview.
 - **Dashboard**, realtime **Notifications**, and **Settings** with per-user model configurations and model sharing.
 
-[0.0.8]: https://github.com/xusenlin/workavera/compare/v0.0.7...HEAD
+[0.0.8]: https://github.com/xusenlin/workavera/compare/v0.0.7...v0.0.8
 [0.0.7]: https://github.com/xusenlin/workavera/compare/v0.0.6...v0.0.7
 [0.0.6]: https://github.com/xusenlin/workavera/compare/v0.0.5...v0.0.6
 [0.0.5]: https://github.com/xusenlin/workavera/compare/v0.0.4...v0.0.5
