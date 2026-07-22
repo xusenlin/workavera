@@ -5,6 +5,25 @@ All notable changes to Workavera are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Account owners can retire their own account through deactivation instead of a
+  hard delete. A new `deactivated` flag on the users record, settable via the
+  existing self-update rule, retires the account without cascade-deleting the
+  projects, tasks, documents, calendar events, and chat history it owns, or
+  orphaning shared team data such as task assignees and document authorship.
+  This backs the in-app "Delete account" flow required for mobile app stores.
+
+### Changed
+
+- Deactivated accounts can no longer authenticate: password and refresh auth
+  requests are rejected, and deactivating rotates the account's token key so
+  any already-issued sessions stop working immediately. Only a superuser can
+  clear the flag; physically purging a deactivated account remains an
+  administrator task.
+
 ## [0.0.8] - 2026-07-19
 
 ### Added
@@ -268,6 +287,7 @@ First public release.
 - **AI Micro Apps** for self-contained HTML tools with sandboxed preview.
 - **Dashboard**, realtime **Notifications**, and **Settings** with per-user model configurations and model sharing.
 
+[Unreleased]: https://github.com/xusenlin/workavera/compare/v0.0.8...HEAD
 [0.0.8]: https://github.com/xusenlin/workavera/compare/v0.0.7...v0.0.8
 [0.0.7]: https://github.com/xusenlin/workavera/compare/v0.0.6...v0.0.7
 [0.0.6]: https://github.com/xusenlin/workavera/compare/v0.0.5...v0.0.6
