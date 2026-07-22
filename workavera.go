@@ -11,6 +11,7 @@ import (
 	"github.com/pocketbase/pocketbase/tools/osutils"
 
 	"github.com/xusenlin/workavera/frontend"
+	"github.com/xusenlin/workavera/internal/account"
 	"github.com/xusenlin/workavera/internal/board"
 	calendarfeature "github.com/xusenlin/workavera/internal/calendar"
 	"github.com/xusenlin/workavera/internal/chat"
@@ -32,6 +33,7 @@ func main() {
 	app := pocketbase.New()
 	app.RootCmd.Use = "workavera"
 	app.RootCmd.Version = version
+	account.Register(app)
 	board.Register(app)
 	calendarfeature.Register(app)
 	configs.Register(app)
