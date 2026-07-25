@@ -4,24 +4,25 @@
 
 [简体中文](./README.zh-CN.md)
 
-> **The AI-driven, open-source, self-hosted alternative to Slack + Notion + Linear** — one binary on your own server, your data, no per-seat fees.
+> **A self-hosted AI workspace for freelancers and small teams** — projects, docs, calendar, and reading in one binary on your own server, with an assistant that can actually operate them, inside your own permissions.
 
-> ⚠️ **Early-stage software (0.0.x).** Workavera is under active development: features and data schemas are still changing quickly, and releases may include breaking changes (see the [changelog](./CHANGELOG.md)). It is not ready for production use yet.
+> ⚠️ **Early-stage software (0.0.x).** Features and data schemas are still changing quickly, and releases may include breaking changes (see the [changelog](./CHANGELOG.md)). Back up `pb_data` before upgrading. It is not ready for production use yet.
 
-Workavera connects conversations, knowledge, relationships, projects, tasks, and time commitments in one workspace, and Chat is how you put it in motion: the AI can only use the capabilities your account already has—finding context, creating or updating records—and the server re-authorizes every action against your own permissions before it is applied.
+Workavera keeps your projects, tasks, documents, calendar, saved links, and contacts in one place, and Chat is how you put them in motion: the assistant works through the same capabilities your account already has—finding context, creating and updating records—and the server re-authorizes every action against your own permissions before it is applied.
 
 ## Why Workavera
 
-Self-hosted AI tools are a crowded space, but most of them fall on one of two sides:
+Self-hosted AI tools are a crowded space, and most of them sit on one of two sides:
 
 - **Chat front-ends** (Open WebUI, LibreChat, and similar) put a UI over model APIs. The conversation is the whole product—there is no workspace behind it for the AI to act on.
-- **Knowledge workspaces** (AFFiNE, AppFlowy, and similar) manage notes and projects and bolt AI on as a writing assistant. The AI suggests text; it doesn't operate the workspace.
+- **Knowledge workspaces** (AFFiNE, AppFlowy, and similar) manage notes and projects, with AI attached as a writing assistant. The AI suggests text; it doesn't operate the workspace.
 
-Workavera combines both halves and adds the part neither has:
+Workavera is an attempt at the middle:
 
 - **Permission-aware AI tool calling.** Chat can search your context and operate Board, Calendar, Docs, Reading, and Contacts—but only within the permissions your account already has, and the server re-authorizes every tool call (identity, role, ownership, revision). The AI is never a privileged service account.
 - **One self-contained binary.** The frontend is embedded via `go:embed` and data lives in PocketBase/SQLite—no Postgres, Redis, or vector-database stack. Deploy with a single `docker run` or a single downloaded binary.
-- **Built for freelancers and small teams.** Bring your own model API keys, run it on a cheap VPS or a NAS, and own all of your data. Open source under Apache-2.0.
+- **Reachable from the AI tools you already use.** The same tools are exposed over MCP at `/api/mcp`, so clients such as Claude Code and Cursor can work against your workspace with a scoped API key.
+- **Bring your own model.** Configure API keys for providers you already pay for. Workavera ships no model and runs no inference of its own, and it is open source under Apache-2.0.
 
 ## Screenshots
 
@@ -76,15 +77,15 @@ The demo user is seeded only when the `users` collection is empty, so upgrades d
 
 ## Product areas
 
-- **Dashboard** shows counts for active projects, open tasks, the next seven days, and unread Reading items, together with due tasks, upcoming events and deadlines, recently updated Docs/Chat/Reading records, and quick links.
-- **Reading** saves external URLs and notes with project, tags, read status, pins, archive, configurable summary language, and AI-generated summaries. Its paginated library can be searched and filtered by status or project, with mark-all-read and separate archive restore and delete controls.
-- **Contacts** provides a searchable contact list, detailed profiles, and personal favorites; Chat can search a bounded, non-sensitive contact projection.
-- **Chat** streams model output, reasoning, and tool calls into durable conversations. Runs continue across browser disconnects and can be resumed or stopped. A context-usage indicator tracks token and cache details, and long conversations are automatically compacted into a summary near the model's context limit without altering the visible history. Optional private long-term memory carries user-approved facts and preferences across conversations; it is disabled by default, independently controls automatic capture, and can be reviewed or edited at any time.
-- **Docs** stores private and project documents with BlockNote rich editing, source/fullscreen modes, Markdown/HTML export, explicit versions, conflict detection, pins, archive, and AI editing. Documents are Markdown or self-contained interactive HTML apps rendered in a sandboxed preview.
-- **Board** manages independent project workflows, labels, roles, tasks, activity history, due dates, and same-project document links. Ten bilingual workflow templates are included.
-- **Calendar** combines personal events with visible Board deadlines, supports recurrence and system-timezone scheduling, and produces in-app reminders.
-- **Notifications** provides realtime model-share requests, task-due notices, and calendar reminders with record deep links. The paginated inbox supports search, read-state and type filters, pins, archive/restore, and permanent delete.
-- **Settings and Profile** manage model configurations, model sharing, per-user appearance, Chat memory controls and saved memories, profile fields, and avatars.
+One line each; the [product documentation](#product-documentation) below carries the detail.
+
+- **Board** manages Kanban projects with custom workflow states, labels, members and roles, due dates, task activity history, and ten bilingual project templates.
+- **Docs** stores private and project documents with rich-text editing, explicit versions and conflict detection, Markdown/HTML export, and AI editing.
+- **Calendar** combines personal events and visible Board deadlines in one view, with recurrence and in-app reminders.
+- **Chat** is where you work with the model: durable streaming conversations that survive browser disconnects, with visible reasoning and tool calls, automatic compaction of long conversations, and optional long-term memory that is off by default.
+- **Reading** saves external links and notes with projects, tags, read state, and AI summaries.
+- **Contacts** provides a searchable team contact list with personal favorites.
+- **Dashboard, Notifications, and Settings** cover the workspace overview, the in-app notification inbox, model configuration and sharing, appearance, and profile.
 
 ## Development
 
