@@ -9,6 +9,28 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Each user can connect their own third-party MCP servers from Settings and use
+  those servers' tools in Chat alongside Board, Calendar, Docs, Reading, and
+  Contacts. A server is registered with an endpoint, a tool-name prefix, and
+  request headers; the headers hold the user's personal upstream credentials,
+  so servers are private to their owner and are never shared or readable back.
+  Streamable HTTP and SSE endpoints are supported; `stdio` is not.
+- Tool definitions are locked rather than mirrored. Refreshing a server fetches
+  its tool list and reports what was added, changed, removed, or uses an input
+  schema Workavera cannot resolve; nothing is enabled without the user choosing
+  it. A tool whose definition is unchanged keeps its settings across refreshes,
+  while a new or redefined one returns to disabled and needs review, so an
+  upstream server cannot silently redefine a tool the user already approved.
+- Each enabled tool records whether calls need approval. Upstream `readOnlyHint`
+  annotations only pre-select that choice during review, and never decide it at
+  call time, because the annotation comes from the server being judged.
+  Approval-gated remote calls use the existing Chat approval card and name the
+  external server and arguments.
+- Failed calls distinguish an upstream error from a definition that has drifted.
+  Arguments are validated against the locked schema before any request, so a
+  parameter rejection from upstream means the definition no longer matches and
+  the tool is flagged for refresh, while connection and credential failures are
+  reported against the server instead. See `doc/mcp-client-prd.md`.
 - Account owners can retire their own account through deactivation instead of a
   hard delete. A new `deactivated` flag on the users record, settable via the
   existing self-update rule, retires the account without cascade-deleting the

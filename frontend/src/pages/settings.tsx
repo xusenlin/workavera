@@ -17,6 +17,7 @@ import {
 } from "@hugeicons/core-free-icons"
 
 import { ApiKeysCard } from "@/components/api-keys-card"
+import { McpServersCard } from "@/components/mcp-servers-card"
 import { ModelCopyDialog } from "@/components/model-copy-dialog"
 import { ModelSheet } from "@/components/model-sheet"
 import { MemorySettingsCard } from "@/components/memory-settings-card"
@@ -347,6 +348,8 @@ export function SettingsPage() {
           )}
         </CardContent>
       </Card>
+
+      <McpServersCard />
 
       <ApiKeysCard />
 

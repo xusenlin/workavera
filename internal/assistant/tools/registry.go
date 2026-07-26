@@ -5,6 +5,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 
 	workagent "github.com/xusenlin/workavera/internal/agent"
+	"github.com/xusenlin/workavera/internal/mcpclient"
 	"github.com/xusenlin/workavera/internal/preferences"
 )
 
@@ -66,20 +67,26 @@ func (f *Factory) ForActor(actorID string) []fantasy.AgentTool {
 	}
 }
 
-// ForChat returns the normal actor tools plus Chat-only memory tools when the
-// user's memory preference is enabled. MCP deliberately continues to call
-// ForActor, so memory tools are never exposed through API keys.
+// ForChat returns the normal actor tools plus the Chat-only tools: memory
+// tools when the user's memory preference is enabled, and the tools their own
+// MCP servers contribute. MCP deliberately continues to call ForActor, so
+// neither is ever exposed through API keys.
+//
+// Remote MCP tools stay out of ForActor for a specific reason: an API key's
+// allow_destructive scope is enforced against a known list of built-in
+// destructive tools, and no equivalent judgement can be made about a
+// third-party tool. Exporting them would silently widen what a read-only key
+// can do.
 func (f *Factory) ForChat(scope workagent.ToolScope) []fantasy.AgentTool {
 	tools := f.ForActor(scope.ActorID)
 	if f.app == nil {
 		return tools
 	}
-	preference, err := preferences.Get(f.app, scope.ActorID)
-	if err != nil || !preference.MemoryEnabled {
-		return tools
+	if preference, err := preferences.Get(f.app, scope.ActorID); err == nil && preference.MemoryEnabled {
+		tools = append(tools,
+			newMemoryUpsertTool(f.app, scope, preference.MemoryAutoCapture),
+			newMemoryForgetTool(f.app, scope),
+		)
 	}
-	return append(tools,
-		newMemoryUpsertTool(f.app, scope, preference.MemoryAutoCapture),
-		newMemoryForgetTool(f.app, scope),
-	)
+	return append(tools, mcpclient.Tools(f.app, scope.ActorID)...)
 }
