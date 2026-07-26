@@ -67,6 +67,7 @@ export function ApprovalToolCard({
   const [submittingDecision, setSubmittingDecision] = useState<boolean | null>(
     null
   )
+  const [manualOpen, setManualOpen] = useState<boolean | null>(null)
   const [requestError, setRequestError] = useState<string | null>(null)
   const result = parseResult(part.output)
   const presentation = approval.presentation ?? {}
@@ -116,9 +117,19 @@ export function ApprovalToolCard({
 
   const StatusIcon = destructive ? AlertTriangleIcon : ShieldCheckIcon
 
+  // The approve and reject buttons live in the collapsed region, so a card that
+  // still needs a decision must start open or the run silently stalls with no
+  // visible way to act. Derived rather than a defaultOpen so that a card which
+  // only becomes actionable later — a run reattaching after a page reload, for
+  // example — also opens. An explicit toggle always wins.
+  const needsAttention =
+    (awaiting && !expired) || submitting || (responded && !completed && !failed)
+  const open = manualOpen ?? needsAttention
+
   return (
     <Collapsible
-      defaultOpen={false}
+      open={open}
+      onOpenChange={setManualOpen}
       className={cn(
         "group not-prose mb-4 w-full rounded-md border",
         destructive ? "border-destructive/30 bg-destructive/5" : "bg-muted/20"

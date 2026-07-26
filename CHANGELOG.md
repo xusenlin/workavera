@@ -38,6 +38,19 @@ and versions follow [Semantic Versioning](https://semver.org/).
   orphaning shared team data such as task assignees and document authorship.
   This backs the in-app "Delete account" flow required for mobile app stores.
 
+### Fixed
+
+- Chat tool-approval cards now open on their own while a decision is pending.
+  The approve and reject buttons sit in the card's collapsed region, so a run
+  waiting on approval appeared to stall with no visible way to act on it. The
+  card follows the approval state instead of a fixed initial value, so a run
+  that reattaches after a reload also opens its pending card, and collapsing it
+  by hand still sticks.
+- Dialogs and sheets no longer close when a click lands outside them; Escape and
+  the close button remain. Radix renders dropdown content in its own portal, so
+  opening a select inside a dialog counted as an outside click and dismissed the
+  whole dialog, discarding anything typed into it.
+
 ### Changed
 
 - Deactivated accounts can no longer authenticate: password and refresh auth
