@@ -8,6 +8,7 @@ import {
   CloudServerIcon,
   Delete02Icon,
   Edit01Icon,
+  ShieldKeyIcon,
   RefreshIcon,
   Settings02Icon,
 } from "@hugeicons/core-free-icons"
@@ -53,6 +54,11 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { pb } from "@/lib/pocketbase"
 import { cn } from "@/lib/utils"
 
@@ -161,6 +167,87 @@ function serverStatus(server: McpServer) {
     tone: "success" as const,
     label: `${enabledToolCount(server)} tools enabled`,
   }
+}
+
+// Shows which tools a server actually contributes, so the enabled set is
+// readable without opening the review sheet. Only enabled tools are listed:
+// the rest are not offered to Chat, so naming them here would suggest a
+// capability the assistant does not have.
+const TOOL_CHIP_LIMIT = 8
+
+function ServerToolList({ server }: { server: McpServer }) {
+  const enabled = server.tools.filter((tool) => tool.enabled)
+  if (enabled.length === 0) return null
+
+  const shown = enabled.slice(0, TOOL_CHIP_LIMIT)
+  const overflow = enabled.length - shown.length
+  const idle = server.tools.length - enabled.length
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-1">
+      {shown.map((tool) => (
+        <Tooltip key={tool.name}>
+          <TooltipTrigger asChild>
+            <span
+              className={cn(
+                // inline-flex centres the icon on the text's line box; an
+                // inline SVG would sit on the baseline and ride high.
+                "inline-flex cursor-default items-center gap-1 rounded-md px-1.5 py-0.5 font-mono text-[11px] leading-5",
+                tool.stale
+                  ? "bg-amber-500/10 text-amber-600 dark:text-amber-500"
+                  : "bg-muted text-muted-foreground",
+                !server.enabled && "opacity-50"
+              )}
+            >
+              {tool.name}
+              {tool.approval === "always" && (
+                <HugeiconsIcon
+                  icon={ShieldKeyIcon}
+                  strokeWidth={2}
+                  className="size-3 shrink-0 text-green-600 dark:text-green-400"
+                />
+              )}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent
+            side="top"
+            collisionPadding={12}
+            className="flex flex-col items-start gap-1"
+          >
+            <span className="font-mono">{tool.name}</span>
+            {/* Descriptions are written for the model, not for this tooltip:
+                some run to thousands of characters, which would push the
+                tooltip past the viewport. Clamp to a preview; the review sheet
+                carries the rest. Many servers also ship no description at all,
+                so say that rather than leaving an empty tooltip. */}
+            <span className="line-clamp-2 text-background/80">
+              {tool.description || "This tool has no description."}
+            </span>
+            <span className="text-background/80">
+              {tool.approval === "always"
+                ? "Asks before each call"
+                : "Runs without asking"}
+            </span>
+            {tool.stale && (
+              <span className="text-background/80">
+                A call failed; the definition may be out of date.
+              </span>
+            )}
+          </TooltipContent>
+        </Tooltip>
+      ))}
+      {overflow > 0 && (
+        <span className="text-[11px] leading-5 text-muted-foreground">
+          +{overflow} more
+        </span>
+      )}
+      {idle > 0 && (
+        <span className="text-[11px] leading-5 text-muted-foreground">
+          · {idle} not enabled
+        </span>
+      )}
+    </div>
+  )
 }
 
 export function McpServersCard() {
@@ -340,6 +427,7 @@ export function McpServersCard() {
                         {server.lastError}
                       </p>
                     )}
+                    <ServerToolList server={server} />
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
                     <Switch

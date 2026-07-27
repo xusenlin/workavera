@@ -26,6 +26,12 @@ and versions follow [Semantic Versioning](https://semver.org/).
   call time, because the annotation comes from the server being judged.
   Approval-gated remote calls use the existing Chat approval card and name the
   external server and arguments.
+- Every account starts with Hugging Face, DeepWiki, and Exa Search already
+  listed, so the feature is not an empty screen. The presets need no
+  credentials and arrive disabled with no tool definitions, so they reach Chat
+  only after the same refresh-and-review step as any other server. Settings
+  lists each server's enabled tools inline, marking the ones that ask for
+  approval before running.
 - Failed calls distinguish an upstream error from a definition that has drifted.
   Arguments are validated against the locked schema before any request, so a
   parameter rejection from upstream means the definition no longer matches and
