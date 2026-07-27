@@ -91,6 +91,17 @@ func newDocsListFoldersTool(app core.App, actorID string) fantasy.AgentTool {
 	})
 }
 
+type docsEnsureFolderInput struct {
+	Name string `json:"name" description:"Folder name. An existing folder with this name is reused; matching ignores case."`
+}
+
+func newDocsEnsureFolderTool(app core.App, actorID string) fantasy.AgentTool {
+	return fantasy.NewAgentTool("docs_ensure_folder", "Resolve a personal document folder by name, creating it only if no folder of that name exists. Use this instead of docs_list_folders when the user names a folder that may not exist yet. Matching ignores case, so calling this twice never produces duplicates.", func(ctx context.Context, input docsEnsureFolderInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
+		folder, created, err := workdocs.EnsureFolder(ctx, app, actorID, input.Name)
+		return docsToolResponse(map[string]any{"folder": folder, "created": created}, err)
+	})
+}
+
 func newDocsMoveTool(app core.App, actorID string) fantasy.AgentTool {
 	return fantasy.NewAgentTool("docs_move", "Move a document only when the user explicitly asks to organize or move it. A document's creator can move it to My documents, an existing personal folder, or an editable project. Moving a document out of a project automatically unlinks it from that project's tasks.", func(ctx context.Context, input docsMoveInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
 		result, err := executeBatch(input.Items, func(_ int, item docsMoveItem) (any, error) {

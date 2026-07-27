@@ -604,3 +604,83 @@ func createTestTaskWithDocument(t *testing.T, app core.App, ownerID, projectID, 
 	}
 	return task
 }
+
+func TestEnsureFolderIsIdempotentByName(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(app.Cleanup)
+	actor := createTestUser(t, app, "folder-owner@example.com")
+	ctx := context.Background()
+
+	folder, created, err := EnsureFolder(ctx, app, actor.Id, "  Reviews  ")
+	if err != nil || !created {
+		t.Fatalf("first call must create the folder: %#v, created=%v, %v", folder, created, err)
+	}
+	if folder.Name != "Reviews" {
+		t.Fatalf("folder name must be trimmed, got %q", folder.Name)
+	}
+
+	// A retried run, or a second scheduled run, must not leave a duplicate
+	// behind. Case is ignored so "reviews" cannot shadow "Reviews".
+	again, created, err := EnsureFolder(ctx, app, actor.Id, "reviews")
+	if err != nil || created {
+		t.Fatalf("second call must reuse the folder: created=%v, %v", created, err)
+	}
+	if again.ID != folder.ID {
+		t.Fatalf("expected the same folder, got %q and %q", folder.ID, again.ID)
+	}
+
+	folders, err := ListFolders(ctx, app, actor.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(folders) != 1 {
+		t.Fatalf("expected exactly one folder, got %d", len(folders))
+	}
+}
+
+func TestEnsureFolderRejectsEmptyNameAndForeignActor(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(app.Cleanup)
+	actor := createTestUser(t, app, "folder-validation@example.com")
+	ctx := context.Background()
+
+	if _, _, err := EnsureFolder(ctx, app, actor.Id, "   "); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("a blank name must be rejected, got %v", err)
+	}
+	if _, _, err := EnsureFolder(ctx, app, actor.Id, strings.Repeat("x", maxFolderNameLength+1)); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("an over-long name must be rejected, got %v", err)
+	}
+	if _, _, err := EnsureFolder(ctx, app, "", "Reviews"); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("a missing actor must be rejected, got %v", err)
+	}
+}
+
+func TestEnsureFolderSeparatesOwners(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(app.Cleanup)
+	first := createTestUser(t, app, "folder-a@example.com")
+	second := createTestUser(t, app, "folder-b@example.com")
+	ctx := context.Background()
+
+	mine, _, err := EnsureFolder(ctx, app, first.Id, "Reviews")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Same name, different owner: folders are private, so this is a new one.
+	theirs, created, err := EnsureFolder(ctx, app, second.Id, "Reviews")
+	if err != nil || !created {
+		t.Fatalf("another owner must get their own folder: created=%v, %v", created, err)
+	}
+	if mine.ID == theirs.ID {
+		t.Fatal("a folder must never be shared between owners")
+	}
+}

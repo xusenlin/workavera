@@ -26,6 +26,12 @@ and versions follow [Semantic Versioning](https://semver.org/).
   call time, because the annotation comes from the server being judged.
   Approval-gated remote calls use the existing Chat approval card and name the
   external server and arguments.
+- Chat can create a personal document folder through `docs_ensure_folder`,
+  which resolves a folder by name and only creates one when no folder of that
+  name exists. Previously the assistant could list folders but not create
+  them, so asking it to file a document under a new folder always failed.
+  Matching ignores case and the call is idempotent, so a repeated request
+  never leaves duplicates behind.
 - Every account starts with Hugging Face, DeepWiki, and Exa Search already
   listed, so the feature is not an empty screen. The presets need no
   credentials and arrive disabled with no tool definitions, so they reach Chat

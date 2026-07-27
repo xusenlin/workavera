@@ -16,6 +16,11 @@ const (
 	PinsCollectionName     = "doc_pins"
 	FoldersCollectionName  = "doc_folders"
 	maxPinnedDocuments     = 10
+	// Folders are one level deep and exist to keep a personal document list
+	// scannable, so the cap is about keeping the Locations pane readable
+	// rather than about storage.
+	maxFoldersPerOwner  = 50
+	maxFolderNameLength = 80
 
 	// KindMarkdown documents use the BlockNote editing flow; KindHTML
 	// documents hold a self-contained HTML artifact rendered in a sandboxed
@@ -475,6 +480,49 @@ func ListFolders(ctx context.Context, app core.App, actorID string) ([]Folder, e
 		result = append(result, folderForRecord(record))
 	}
 	return result, nil
+}
+
+// EnsureFolder resolves a personal folder by name, creating it only when no
+// folder of that name exists. Matching is case-insensitive so "Reviews" and
+// "reviews" cannot both exist.
+//
+// The idempotent shape is deliberate: the assistant would otherwise have to
+// list, compare, and then create, and a retried or repeated run would leave
+// duplicate folders behind. Returns whether a folder was created so callers
+// can report the difference.
+func EnsureFolder(ctx context.Context, app core.App, actorID, name string) (Folder, bool, error) {
+	if err := requireActor(ctx, app, actorID); err != nil {
+		return Folder{}, false, err
+	}
+	name = strings.TrimSpace(name)
+	if name == "" || len(name) > maxFolderNameLength {
+		return Folder{}, false, ErrInvalidInput
+	}
+
+	existing, err := ListFolders(ctx, app, actorID)
+	if err != nil {
+		return Folder{}, false, err
+	}
+	for _, folder := range existing {
+		if strings.EqualFold(folder.Name, name) {
+			return folder, false, nil
+		}
+	}
+	if len(existing) >= maxFoldersPerOwner {
+		return Folder{}, false, ErrInvalidInput
+	}
+
+	collection, err := app.FindCollectionByNameOrId(FoldersCollectionName)
+	if err != nil {
+		return Folder{}, false, err
+	}
+	record := core.NewRecord(collection)
+	record.Set("owner", actorID)
+	record.Set("name", name)
+	if err := app.Save(record); err != nil {
+		return Folder{}, false, err
+	}
+	return folderForRecord(record), true, nil
 }
 
 func Move(ctx context.Context, app core.App, actorID, id string, input MoveInput) (Document, error) {
