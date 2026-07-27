@@ -213,3 +213,115 @@ func createCalendarTestTask(t *testing.T, app core.App, projectID, stateID, crea
 	}
 	return record
 }
+
+func TestSearchEventsFindsRepeatingEventsByName(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(app.Cleanup)
+	actor := createCalendarTestUser(t, app, "calendar-search@example.com")
+	other := createCalendarTestUser(t, app, "calendar-search-other@example.com")
+	ctx := context.Background()
+
+	// A monthly event that started well in the past is exactly the case that
+	// defeats GetSchedule: it only surfaces on the dates it recurs on, so
+	// finding it by name would mean guessing months.
+	subscription, err := CreateEvent(ctx, app, actor.Id, CreateEventCommand{
+		Title: "GPT Plus — Monthly Subscription Payment", StartAt: "2026-01-05T09:00:00+08:00",
+		EndAt: "2026-01-05T09:30:00+08:00", RecurrenceFrequency: "monthly", RecurrenceInterval: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CreateEvent(ctx, app, actor.Id, CreateEventCommand{
+		Title: "Dentist", Description: "Bring the subscription receipt",
+		StartAt: "2026-07-20T14:00:00+08:00", EndAt: "2026-07-20T15:00:00+08:00",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CreateEvent(ctx, app, other.Id, CreateEventCommand{
+		Title: "Someone else's subscription", StartAt: "2026-07-21T14:00:00+08:00",
+		EndAt: "2026-07-21T15:00:00+08:00",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := SearchEvents(ctx, app, actor.Id, "subscription", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Total != 2 || !result.Complete {
+		t.Fatalf("unexpected result: %#v", result)
+	}
+	found := map[string]bool{}
+	for _, event := range result.Events {
+		found[event.ID] = true
+	}
+	if !found[subscription.Event.ID] {
+		t.Fatal("the repeating event must be found by name whatever date it next occurs on")
+	}
+
+	// Descriptions are searched too, which is how "Dentist" matched above.
+	titleOnly, err := SearchEvents(ctx, app, actor.Id, "dentist", "", "")
+	if err != nil || titleOnly.Total != 1 {
+		t.Fatalf("expected one title match: %#v, %v", titleOnly, err)
+	}
+
+	// Another owner's event is never visible.
+	for _, event := range result.Events {
+		if event.Title == "Someone else's subscription" {
+			t.Fatal("search must not cross owners")
+		}
+	}
+}
+
+func TestSearchEventsKeepsRepeatingEventsInsideDateBounds(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(app.Cleanup)
+	actor := createCalendarTestUser(t, app, "calendar-bounds@example.com")
+	ctx := context.Background()
+
+	if _, err := CreateEvent(ctx, app, actor.Id, CreateEventCommand{
+		Title: "Standup", StartAt: "2026-01-05T09:00:00+08:00", EndAt: "2026-01-05T09:15:00+08:00",
+		RecurrenceFrequency: "weekly", RecurrenceInterval: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CreateEvent(ctx, app, actor.Id, CreateEventCommand{
+		Title: "Standup retro", StartAt: "2026-01-06T09:00:00+08:00", EndAt: "2026-01-06T10:00:00+08:00",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// The window excludes both stored start dates, but the weekly event still
+	// occurs inside it, so a date bound must not filter repeating events out.
+	result, err := SearchEvents(ctx, app, actor.Id, "standup", "2026-07-01", "2026-07-31")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Total != 1 || result.Events[0].Title != "Standup" {
+		t.Fatalf("expected only the repeating event: %#v", result)
+	}
+}
+
+func TestSearchEventsRequiresAQuery(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(app.Cleanup)
+	actor := createCalendarTestUser(t, app, "calendar-empty@example.com")
+
+	// Listing every event would flood the model's context; the schedule view
+	// is what answers "show me everything".
+	if _, err := SearchEvents(context.Background(), app, actor.Id, "   ", "", ""); err == nil {
+		t.Fatal("a blank query must be rejected")
+	}
+	if _, err := SearchEvents(context.Background(), app, actor.Id, "standup", "not-a-date", ""); err == nil {
+		t.Fatal("an invalid from date must be rejected")
+	}
+}

@@ -18,6 +18,12 @@ type calendarGetScheduleInput struct {
 	Dates []string `json:"dates" description:"One or more calendar dates in YYYY-MM-DD format; maximum 31 unique dates"`
 }
 
+type calendarSearchEventsInput struct {
+	Query string `json:"query" description:"Text matched against event titles and descriptions"`
+	From  string `json:"from,omitempty" description:"Optional earliest start date in YYYY-MM-DD format; repeating events are always included"`
+	To    string `json:"to,omitempty" description:"Optional latest start date in YYYY-MM-DD format; repeating events are always included"`
+}
+
 type calendarCreateEventItem struct {
 	Title                 string `json:"title" description:"Event title"`
 	Description           string `json:"description,omitempty" description:"Optional event description"`
@@ -36,7 +42,7 @@ type calendarCreateEventInput struct {
 }
 
 type calendarUpdateEventItem struct {
-	EventID               string  `json:"eventId" description:"Existing personal event ID returned by calendar_get_schedule or calendar_create_event"`
+	EventID               string  `json:"eventId" description:"Existing personal event ID returned by calendar_search_events, calendar_get_schedule, or calendar_create_event"`
 	Title                 *string `json:"title,omitempty" description:"Optional replacement event title"`
 	Description           *string `json:"description,omitempty" description:"Optional replacement description; pass an empty string to clear"`
 	StartAt               *string `json:"startAt,omitempty" description:"Optional replacement start local date-time in the configured system timezone, formatted as YYYY-MM-DDTHH:MM:SS"`
@@ -54,7 +60,18 @@ type calendarUpdateEventInput struct {
 }
 
 type calendarDeleteEventInput struct {
-	EventID string `json:"eventId" description:"Existing personal event ID returned by calendar_get_schedule"`
+	EventID string `json:"eventId" description:"Existing personal event ID returned by calendar_search_events or calendar_get_schedule"`
+}
+
+func newCalendarSearchEventsTool(app core.App, actorID string) fantasy.AgentTool {
+	return fantasy.NewAgentTool(
+		"calendar_search_events",
+		"Find personal Calendar events by text when the date is unknown. Use this, not calendar_get_schedule, to locate an event the user names: calendar_get_schedule answers for exact dates only, so searching by name through it means guessing dates. Returns whole events with their exact IDs and repeat rules, so a repeating event is found regardless of when it next occurs. Use calendar_get_schedule instead when the user asks what is on a given date.",
+		func(ctx context.Context, input calendarSearchEventsInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
+			result, err := workcalendar.SearchEvents(ctx, app, actorID, input.Query, input.From, input.To)
+			return calendarToolResult(app, actorID, "search events", result, err)
+		},
+	)
 }
 
 func newCalendarGetScheduleTool(app core.App, actorID string) fantasy.AgentTool {
@@ -98,7 +115,7 @@ func newCalendarCreateEventTool(app core.App, actorID string) fantasy.AgentTool 
 func newCalendarUpdateEventTool(app core.App, actorID string) fantasy.AgentTool {
 	return fantasy.NewAgentTool(
 		"calendar_update_event",
-		"Patch an existing personal Calendar event only when explicitly requested. Call calendar_get_schedule first and use an event ID it returned. Omitted fields remain unchanged; editing a repeating event updates the entire series. All date-times use the administrator-configured system timezone. This tool cannot edit Board tasks.",
+		"Patch an existing personal Calendar event only when explicitly requested. Call calendar_search_events or calendar_get_schedule first and use an event ID it returned. Omitted fields remain unchanged; editing a repeating event updates the entire series. All date-times use the administrator-configured system timezone. This tool cannot edit Board tasks.",
 		func(ctx context.Context, input calendarUpdateEventInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
 			location := configs.SystemLocation(app)
 			result, err := executeBatch(input.Items, func(_ int, item calendarUpdateEventItem) (any, error) {
@@ -125,7 +142,7 @@ func newCalendarUpdateEventTool(app core.App, actorID string) fantasy.AgentTool 
 func newCalendarDeleteEventTool(app core.App, actorID string) fantasy.AgentTool {
 	return fantasy.NewAgentTool(
 		"calendar_delete_event",
-		"Permanently delete one personal Calendar event only when explicitly requested. Call calendar_get_schedule first and use an exact returned event ID. Deleting a repeating event removes the entire series. This action always pauses for user approval. If approval is denied, do not retry unless the user explicitly asks again.",
+		"Permanently delete one personal Calendar event only when explicitly requested. Call calendar_search_events or calendar_get_schedule first and use an exact returned event ID. Deleting a repeating event removes the entire series. This action always pauses for user approval. If approval is denied, do not retry unless the user explicitly asks again.",
 		func(ctx context.Context, input calendarDeleteEventInput, call fantasy.ToolCall) (fantasy.ToolResponse, error) {
 			target, err := workcalendar.GetDeletableEvent(ctx, app, actorID, input.EventID)
 			if err != nil {

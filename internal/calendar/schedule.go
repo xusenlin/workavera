@@ -14,7 +14,12 @@ import (
 	"github.com/xusenlin/workavera/internal/configs"
 )
 
-const maxScheduleDates = 31
+const (
+	maxScheduleDates = 31
+	// Search exists to locate an event, not to page through a calendar, so a
+	// small cap keeps the result readable and the context bounded.
+	maxSearchResults = 25
+)
 
 type EventOccurrence struct {
 	Event
@@ -44,6 +49,70 @@ type ScheduleDay struct {
 
 type ScheduleResult struct {
 	Days []ScheduleDay `json:"days"`
+}
+
+type SearchEventsResult struct {
+	Events   []Event `json:"events"`
+	Total    int     `json:"total"`
+	Complete bool    `json:"complete"`
+}
+
+// SearchEvents finds owned events by text, which GetSchedule cannot do: it
+// answers for exact dates, so locating an event by name means guessing dates
+// and scanning. A repeating event makes that worse, because it only surfaces
+// on the dates its recurrence lands on.
+//
+// Results are the events themselves rather than occurrences. The caller wants
+// the record and its ID in order to edit or delete it, and a repeating event
+// has one record however many times it occurs.
+func SearchEvents(ctx context.Context, app core.App, actorID, query, from, to string) (SearchEventsResult, error) {
+	if err := requireActiveActor(ctx, app, actorID); err != nil {
+		return SearchEventsResult{}, err
+	}
+	query = strings.TrimSpace(query)
+	if query == "" {
+		// Listing every event would flood the context and is what the schedule
+		// view is for.
+		return SearchEventsResult{}, errors.New("query is required")
+	}
+
+	filter := "owner = {:actor} && (title ~ {:query} || description ~ {:query})"
+	params := dbx.Params{"actor": actorID, "query": query}
+
+	location := configs.SystemLocation(app)
+	// A date bound applies to the stored start only, so it deliberately does
+	// not exclude repeating events: one that started last year still occurs
+	// inside the window.
+	if from != "" {
+		start, err := time.ParseInLocation(time.DateOnly, from, location)
+		if err != nil {
+			return SearchEventsResult{}, fmt.Errorf("invalid from date %q", from)
+		}
+		filter += " && (recurrence_frequency != 'none' || start_at >= {:from})"
+		params["from"] = start.UTC()
+	}
+	if to != "" {
+		end, err := time.ParseInLocation(time.DateOnly, to, location)
+		if err != nil {
+			return SearchEventsResult{}, fmt.Errorf("invalid to date %q", to)
+		}
+		filter += " && (recurrence_frequency != 'none' || start_at < {:to})"
+		params["to"] = end.AddDate(0, 0, 1).UTC()
+	}
+
+	records, err := app.FindRecordsByFilter(eventsCollection, filter, "-start_at", maxSearchResults+1, 0, params)
+	if err != nil {
+		return SearchEventsResult{}, err
+	}
+	complete := len(records) <= maxSearchResults
+	if !complete {
+		records = records[:maxSearchResults]
+	}
+	events := make([]Event, 0, len(records))
+	for _, record := range records {
+		events = append(events, eventFromRecord(record))
+	}
+	return SearchEventsResult{Events: events, Total: len(events), Complete: complete}, nil
 }
 
 func GetSchedule(ctx context.Context, app core.App, actorID string, dates []string) (ScheduleResult, error) {

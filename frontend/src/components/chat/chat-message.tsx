@@ -38,6 +38,7 @@ import {
 } from "./reading-tool-output"
 import { DocsSearchToolCard, DocsItemToolCard } from "./docs-tool-output"
 import {
+  CalendarSearchToolCard,
   CalendarScheduleToolCard,
   CalendarMutationToolCard,
 } from "./calendar-tool-output"
@@ -179,6 +180,9 @@ function ToolCard({
   }
   if (docItemToolNames.has(part.toolName)) {
     return <DocsItemToolCard part={part} />
+  }
+  if (part.toolName === "calendar_search_events") {
+    return <CalendarSearchToolCard part={part} />
   }
   if (part.toolName === "calendar_get_schedule") {
     return <CalendarScheduleToolCard part={part} />

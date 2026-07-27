@@ -26,6 +26,13 @@ and versions follow [Semantic Versioning](https://semver.org/).
   call time, because the annotation comes from the server being judged.
   Approval-gated remote calls use the existing Chat approval card and name the
   external server and arguments.
+- Chat can find calendar events by name through `calendar_search_events`.
+  Calendar was the only module without a text search, so locating an event the
+  user named meant guessing dates and scanning them with
+  `calendar_get_schedule`, which answers for exact dates only. A repeating
+  event made that worse, since it surfaces only on the dates its recurrence
+  lands on. Search returns whole events with their IDs and repeat rules, so a
+  monthly reminder is found regardless of when it next occurs.
 - Chat can create a personal document folder through `docs_ensure_folder`,
   which resolves a folder by name and only creates one when no folder of that
   name exists. Previously the assistant could list folders but not create

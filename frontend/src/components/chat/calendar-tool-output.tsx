@@ -74,6 +74,12 @@ type ScheduleResult = {
   days: ScheduleDay[]
 }
 
+type SearchEventsResult = {
+  events: CalendarEvent[]
+  total: number
+  complete: boolean
+}
+
 type EventMutationResult = {
   ok?: boolean
   action?: string
@@ -308,7 +314,98 @@ export function CalendarScheduleToolCard({
   )
 }
 
-function EventRow({ event }: { event: CalendarEvent }) {
+export function CalendarSearchToolCard({ part }: { part: DynamicToolUIPart }) {
+  const isError = part.state === "output-error"
+  const isLoading =
+    part.state === "input-streaming" || part.state === "input-available"
+  const result = parseOutput<SearchEventsResult>(part.output)
+  const events = result?.events ?? []
+
+  return (
+    <Collapsible
+      defaultOpen={false}
+      className="group not-prose mb-4 w-full rounded-md border"
+    >
+      <CollapsibleTrigger
+        className={cn(
+          "flex w-full items-center justify-between gap-4 p-3",
+          isLoading && "cursor-default"
+        )}
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          <HugeiconsIcon
+            icon={Calendar03Icon}
+            strokeWidth={2}
+            className="size-4 shrink-0 text-muted-foreground"
+          />
+          <span className="text-sm font-medium">Event Search</span>
+          {events.length > 0 && (
+            <Badge variant="secondary" className="rounded-full px-1.5">
+              {events.length}
+            </Badge>
+          )}
+          {getStatusBadge(part.state)}
+        </div>
+        <HugeiconsIcon
+          icon={ChevronDownIcon}
+          strokeWidth={2}
+          className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180"
+        />
+      </CollapsibleTrigger>
+
+      <CollapsibleContent className="space-y-3 p-4 pt-0 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:animate-in data-[state=open]:slide-in-from-top-2">
+        <ToolInput input={part.input} />
+
+        {isLoading && (
+          <div className="rounded-md border bg-muted/20 px-3 py-2">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <ClockIcon className="size-3.5 animate-spin" />
+              <span>Searching events…</span>
+            </div>
+          </div>
+        )}
+
+        {isError && (
+          <div className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            {part.errorText || "Tool execution failed"}
+          </div>
+        )}
+
+        {part.state === "output-available" && events.length > 0 && (
+          <div className="space-y-2">
+            {events.map((event) => (
+              <EventRow key={event.id} event={event} showDate />
+            ))}
+            {result?.complete === false && (
+              // The backend caps results, so say the list is partial rather
+              // than let it read as the complete set of matches.
+              <p className="pl-1 text-xs text-muted-foreground/70">
+                Showing the first {events.length} matches. Narrow the search to
+                see the rest.
+              </p>
+            )}
+          </div>
+        )}
+
+        {part.state === "output-available" && events.length === 0 && (
+          <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+            No matching events
+          </div>
+        )}
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
+function EventRow({
+  event,
+  showDate = false,
+}: {
+  event: CalendarEvent
+  // Schedule results are grouped under a date heading; search results are a
+  // flat list, so each row has to carry its own date.
+  showDate?: boolean
+}) {
   const color = EVENT_COLORS[event.color] ?? EVENT_COLORS.blue
   const start = event.instanceStart ?? event.startAt
   const end = event.instanceEnd ?? event.endAt
@@ -342,6 +439,14 @@ function EventRow({ event }: { event: CalendarEvent }) {
               )}
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+            {showDate && (
+              <span>
+                {formatDate(start.slice(0, 10))}
+                {event.recurrenceFrequency &&
+                  event.recurrenceFrequency !== "none" &&
+                  " onwards"}
+              </span>
+            )}
             {event.allDay ? (
               <span>All day</span>
             ) : (
