@@ -7,6 +7,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.0.9] - 2026-07-27
+
 ### Added
 
 - Each user can connect their own third-party MCP servers from Settings and use
@@ -341,7 +343,8 @@ First public release.
 - **AI Micro Apps** for self-contained HTML tools with sandboxed preview.
 - **Dashboard**, realtime **Notifications**, and **Settings** with per-user model configurations and model sharing.
 
-[Unreleased]: https://github.com/xusenlin/workavera/compare/v0.0.8...HEAD
+[Unreleased]: https://github.com/xusenlin/workavera/compare/v0.0.9...HEAD
+[0.0.9]: https://github.com/xusenlin/workavera/compare/v0.0.8...v0.0.9
 [0.0.8]: https://github.com/xusenlin/workavera/compare/v0.0.7...v0.0.8
 [0.0.7]: https://github.com/xusenlin/workavera/compare/v0.0.6...v0.0.7
 [0.0.6]: https://github.com/xusenlin/workavera/compare/v0.0.5...v0.0.6

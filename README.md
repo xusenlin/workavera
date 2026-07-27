@@ -46,6 +46,19 @@ Workavera is an attempt at the middle:
 
 ![Workavera Settings with DeepSeek configured as the default model](./screenShot/en/settings.png)
 
+## Mobile apps (preview)
+
+Native Workavera clients for Android and iOS are in active development. They
+connect directly to your self-hosted Workavera server, bringing your workspace
+to phones and tablets without routing its data through a separate service.
+
+- **Workavera for Android** is built with Kotlin and Jetpack Compose.
+- **Workavera for iOS** is built with SwiftUI for iPhone and iPad.
+
+Both apps are early previews. Their source code is not public yet and will be
+open-sourced in the future; features may be incomplete or trail the web app
+while development continues.
+
 ## Quick start
 
 No toolchain needed—run the prebuilt image or binary.
