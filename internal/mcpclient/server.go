@@ -48,6 +48,68 @@ var (
 	headerNamePattern = regexp.MustCompile(`^[A-Za-z0-9-]{1,64}$`)
 )
 
+// preset is a well-known public MCP endpoint offered to a new account so the
+// feature is not an empty screen. Presets need no credentials.
+type preset struct {
+	Name string
+	Slug string
+	URL  string
+}
+
+// presets is deliberately a second copy of the list in the migration that
+// created this collection. The migration is frozen history: it seeds the
+// accounts that existed when it ran, and must keep working when replayed from
+// scratch even after this list changes. Editing this list therefore changes
+// what new accounts get, and backfilling existing accounts needs its own
+// migration.
+var presets = []preset{
+	{Name: "Hugging Face", Slug: "huggingface", URL: "https://hf.co/mcp"},
+	{Name: "DeepWiki", Slug: "deepwiki", URL: "https://mcp.deepwiki.com/mcp"},
+	{Name: "Exa Search", Slug: "exa", URL: "https://mcp.exa.ai/mcp"},
+}
+
+// SeedPresets gives an account the preset endpoints, disabled and with no tool
+// definitions. The user still has to refresh each server and choose tools, so a
+// preset reaches Chat only after the same review every other server goes
+// through. Slugs already present are left alone, so this is safe to re-run.
+func SeedPresets(app core.App, ownerID string) error {
+	if ownerID == "" {
+		return errors.New("preset owner is required")
+	}
+	collection, err := app.FindCollectionByNameOrId(collectionName)
+	if err != nil {
+		return err
+	}
+	existing, err := ownedServers(app, ownerID)
+	if err != nil {
+		return err
+	}
+	taken := make(map[string]bool, len(existing))
+	for _, server := range existing {
+		taken[server.Slug] = true
+	}
+
+	for _, item := range presets {
+		if taken[item.Slug] {
+			continue
+		}
+		record := core.NewRecord(collection)
+		record.Set("owner", ownerID)
+		record.Set("name", item.Name)
+		record.Set("slug", item.Slug)
+		record.Set("transport", "http")
+		record.Set("url", item.URL)
+		record.Set("headers", "{}")
+		record.Set("approval_policy", policyWrites)
+		record.Set("enabled", false)
+		record.Set("tools", "[]")
+		if err := app.Save(record); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ToolDefinition is one locked tool. It is the complete description the
 // assistant is given: nothing is read from upstream when a call is made.
 type ToolDefinition struct {

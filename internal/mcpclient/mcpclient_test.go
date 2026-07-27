@@ -344,3 +344,37 @@ func TestClassifyConnectErrorExplainsRetiredEndpoint(t *testing.T) {
 		t.Fatalf("a 410 must point at the Streamable HTTP endpoint, got %q", reason)
 	}
 }
+
+func TestPresetsMatchDisabledInertShape(t *testing.T) {
+	// A preset must never arrive with tool definitions already in place: that
+	// would put an unreviewed upstream description in front of the model, which
+	// is the one thing the locked-definition model exists to prevent. Guard the
+	// declared list, since SeedPresets writes it verbatim.
+	if len(presets) == 0 {
+		t.Fatal("expected at least one preset")
+	}
+	seen := map[string]bool{}
+	for _, item := range presets {
+		if err := validateSlug(item.Slug); err != nil {
+			t.Fatalf("preset %q has an invalid slug: %v", item.Name, err)
+		}
+		if err := validateName(item.Name); err != nil {
+			t.Fatalf("preset %q has an invalid name: %v", item.Name, err)
+		}
+		if err := validateEndpoint(item.URL); err != nil {
+			t.Fatalf("preset %q has an invalid url: %v", item.Name, err)
+		}
+		if seen[item.Slug] {
+			t.Fatalf("preset slug %q is declared twice; the owner/slug index is unique", item.Slug)
+		}
+		seen[item.Slug] = true
+	}
+}
+
+func TestSeedPresetsRequiresAnOwner(t *testing.T) {
+	// The owner relation is required, so a preset cannot be created without
+	// one; failing here beats writing a record the collection will reject.
+	if err := SeedPresets(nil, ""); err == nil {
+		t.Fatal("seeding without an owner must fail")
+	}
+}

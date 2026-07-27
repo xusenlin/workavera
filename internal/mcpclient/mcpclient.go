@@ -33,6 +33,18 @@ func clientVersion() string {
 func Register(app core.App, appVersion string) {
 	version.Store(appVersion)
 
+	// The migration that created the collection seeded the accounts that
+	// existed then; accounts created later get the same presets here, so both
+	// paths start from the same place.
+	app.OnRecordAfterCreateSuccess("users").BindFunc(func(event *core.RecordEvent) error {
+		if err := SeedPresets(event.App, event.Record.Id); err != nil {
+			// Presets are a convenience, never a precondition for having an
+			// account, so a failure here must not fail the signup.
+			event.App.Logger().Error("failed to seed mcp server presets", "userId", event.Record.Id, "error", err)
+		}
+		return event.Next()
+	})
+
 	app.OnServe().BindFunc(func(event *core.ServeEvent) error {
 		group := event.Router.Group("/api/mcp-servers").Bind(apis.RequireAuth("users"))
 		group.POST("", createServer)

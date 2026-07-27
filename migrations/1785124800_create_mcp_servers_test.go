@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tests"
 )
@@ -79,5 +80,48 @@ func TestMCPServersCollectionMigration(t *testing.T) {
 	}
 	if !foundSlugIndex {
 		t.Fatalf("expected unique owner/slug index, got: %v", servers.Indexes)
+	}
+}
+
+func TestMCPServerPresetsAreInertUntilReviewed(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer app.Cleanup()
+
+	users, err := app.FindRecordsByFilter(usersCollectionName, "", "id", 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(users) == 0 {
+		t.Skip("no accounts to seed presets for")
+	}
+
+	for _, user := range users {
+		for _, preset := range presetServers {
+			record, err := app.FindFirstRecordByFilter(
+				mcpServersCollection,
+				"owner = {:owner} && slug = {:slug}",
+				dbx.Params{"owner": user.Id, "slug": preset.Slug},
+			)
+			if err != nil {
+				t.Fatalf("preset %q missing for user %s: %v", preset.Slug, user.Id, err)
+			}
+			if record.GetString("url") != preset.URL {
+				t.Fatalf("preset %q has url %q, want %q", preset.Slug, record.GetString("url"), preset.URL)
+			}
+			// A preset must reach Chat only after the user refreshes it and
+			// picks tools, so it starts disabled with nothing locked in.
+			if record.GetBool("enabled") {
+				t.Fatalf("preset %q must start disabled", preset.Slug)
+			}
+			if tools := record.GetString("tools"); tools != "[]" {
+				t.Fatalf("preset %q must start with no tool definitions, got %q", preset.Slug, tools)
+			}
+			if record.GetString("approval_policy") == "" {
+				t.Fatalf("preset %q must carry an approval policy", preset.Slug)
+			}
+		}
 	}
 }
