@@ -30,10 +30,12 @@ import { workspaceRecordUrl } from "@/lib/workspace-navigation"
 import { parseBatchToolResult } from "@/lib/tool-batch"
 
 import { BatchToolResultSummary } from "./batch-tool-result"
+import { ToolInput } from "./tool-input"
 
 type BoardMutationResult = {
   ok?: boolean
   action?: string
+  changed?: boolean
   resourceType?: string
   id?: string
   name?: string
@@ -90,37 +92,6 @@ function parseResult(output: unknown): BoardMutationResult | null {
     : null
 }
 
-/** Long input values that should be truncated instead of shown in full. */
-const longKeys = new Set(["html", "content", "find", "replace", "description"])
-
-function formatValue(key: string, value: unknown): string {
-  if (Array.isArray(value)) {
-    if (value.some((item) => item && typeof item === "object")) {
-      return `${value.length} ${value.length === 1 ? "item" : "items"}`
-    }
-    return value.length === 0 ? "[]" : value.join(", ")
-  }
-  if (typeof value === "string") {
-    if (longKeys.has(key) && value.length > 80) {
-      return `${value.slice(0, 80)}… (${value.length} chars)`
-    }
-    return value
-  }
-  if (value === null) return "null"
-  if (value === undefined) return ""
-  return String(value)
-}
-
-function formatInput(input: unknown): { key: string; value: string }[] {
-  if (!input || typeof input !== "object" || Array.isArray(input)) return []
-  return Object.entries(input as Record<string, unknown>)
-    .filter(([, v]) => v !== undefined && v !== "")
-    .map(([key, value]) => ({
-      key: key.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase()),
-      value: formatValue(key, value),
-    }))
-}
-
 function actionText(result: BoardMutationResult): string {
   const action = result.action || "updated"
   const resource = result.resourceType || "resource"
@@ -138,7 +109,6 @@ export function BoardMutationToolCard({ part }: { part: DynamicToolUIPart }) {
     label: part.toolName.replace(/^board_/, "").replace(/_/g, " "),
     icon: KanbanIcon,
   }
-  const params = formatInput(part.input)
   const targetId =
     result?.resourceType === "project" || result?.resourceType === "task"
       ? result.id
@@ -180,24 +150,7 @@ export function BoardMutationToolCard({ part }: { part: DynamicToolUIPart }) {
       </CollapsibleTrigger>
 
       <CollapsibleContent className="space-y-2 p-4 pt-0 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:animate-in data-[state=open]:slide-in-from-top-2">
-        {/* Parameters */}
-        {params.length > 0 && (
-          <div className="rounded-md border bg-muted/20 px-3 py-2">
-            <div className="mb-1 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
-              Parameters
-            </div>
-            <div className="space-y-0.5">
-              {params.map((p) => (
-                <div key={p.key} className="flex gap-2 text-xs">
-                  <span className="shrink-0 font-medium text-muted-foreground">
-                    {p.key}
-                  </span>
-                  <span className="min-w-0 break-words">{p.value}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        <ToolInput input={part.input} />
 
         {/* Loading */}
         {loading && (
@@ -220,7 +173,9 @@ export function BoardMutationToolCard({ part }: { part: DynamicToolUIPart }) {
         {part.state === "output-available" && batch && (
           <BatchToolResultSummary
             batch={batch}
-            getLabel={(item) => item.name || item.id}
+            getLabel={(item) =>
+              `${item.name || item.id}${item.changed === false ? " — no changes" : ""}`
+            }
           />
         )}
 

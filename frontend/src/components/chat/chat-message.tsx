@@ -14,7 +14,6 @@ import {
   Tool,
   ToolContent,
   ToolHeader,
-  ToolInput,
   ToolOutput,
 } from "@/components/ai-elements/tool"
 import { Badge } from "@/components/ui/badge"
@@ -44,6 +43,7 @@ import {
 } from "./calendar-tool-output"
 import { ApprovalToolCard } from "./approval-tool-card"
 import { MemoryToolCard } from "./memory-tool-output"
+import { ToolInput } from "./tool-input"
 
 const boardMutationToolNames = new Set([
   "board_create_project",

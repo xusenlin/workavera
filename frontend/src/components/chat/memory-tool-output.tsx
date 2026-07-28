@@ -27,6 +27,8 @@ import {
 import { pb } from "@/lib/pocketbase"
 import { useMemoriesStore, type MemoryCategory } from "@/store/memories"
 
+import { ToolInput } from "./tool-input"
+
 type ToolMemory = {
   id: string
   category: MemoryCategory
@@ -150,6 +152,7 @@ export function MemoryToolCard({
       </CollapsibleTrigger>
 
       <CollapsibleContent className="space-y-3 px-3 pb-3 pl-14 outline-none">
+        <ToolInput input={part.input} />
         {result?.memory.content && !failed && (
           <p className="text-sm text-muted-foreground">
             {result.memory.content}

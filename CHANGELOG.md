@@ -15,6 +15,16 @@ and versions follow [Semantic Versioning](https://semver.org/).
   `action: "unchanged"` and `changed: false`, and no longer create a database
   write or activity entry.
 
+### Changed
+
+- Every Chat tool card now uses the same lazy, bounded parameter inspector.
+  Collapsed cards show a compact field summary; expanding a parameter panel
+  previews at most 12,000 characters, ten array items, four nesting levels,
+  and 120 values. Large Docs HTML and document content are truncated in the
+  rendered preview, while an explicit copy action still provides the complete
+  persisted parameters. Board batch calls, memory actions, approvals, and
+  generic or MCP tools all use the same behavior.
+
 ## [0.0.9] - 2026-07-27
 
 ### Added

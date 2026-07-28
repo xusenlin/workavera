@@ -20,6 +20,8 @@ import { pb } from "@/lib/pocketbase"
 import { cn } from "@/lib/utils"
 import type { ToolApprovalData } from "@/types/chat"
 
+import { ToolInput } from "./tool-input"
+
 type ApprovalResult = {
   ok?: boolean
   action?: string
@@ -168,6 +170,7 @@ export function ApprovalToolCard({
       </CollapsibleTrigger>
 
       <CollapsibleContent className="space-y-3 px-4 pb-4 pl-12 outline-none">
+        <ToolInput input={part.input} />
         {(approval.target?.name || approval.details?.length) && (
           <div className="space-y-1 rounded-md border bg-background/70 px-3 py-2 text-xs">
             {approval.target?.name && (

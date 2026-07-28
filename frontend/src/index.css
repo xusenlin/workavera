@@ -183,6 +183,10 @@
   justify-self: end;
 }
 
+[data-streamdown="code-block-actions"] {
+  pointer-events: auto;
+}
+
 [data-streamdown="code-block-body"] {
   grid-column: 1 / -1;
   grid-row: 2;
