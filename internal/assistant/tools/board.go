@@ -285,7 +285,7 @@ func newBoardCreateTaskTool(app core.App, actorID string) fantasy.AgentTool {
 func newBoardUpdateTaskTool(app core.App, actorID string) fantasy.AgentTool {
 	return fantasy.NewAgentTool(
 		"board_update_task",
-		"Patch an existing task without changing its project. Call board_get_project first, require capabilities.canEditTasks, and use only returned state, label, and participant IDs. Omitted fields stay unchanged; empty arrays clear relations; null dueDate clears it.",
+		"Patch an existing task without changing its project. Call board_get_project first, require capabilities.canEditTasks, and use only returned state, label, and participant IDs. Every item must include at least one field to update in addition to taskId. Omitted fields stay unchanged; empty arrays clear relations; null dueDate clears it. A valid patch that already matches the stored task succeeds with action=unchanged and changed=false.",
 		func(ctx context.Context, input boardUpdateTaskInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
 			result, err := executeBatch(input.Items, func(_ int, item boardUpdateTaskItem) (any, error) {
 				return board.UpdateTask(ctx, app, actorID, board.UpdateTaskCommand{TaskID: item.TaskID, Title: item.Title, Description: normalizeEscapedTextPtr(item.Description), StateID: item.StateID, Priority: item.Priority, DueDate: item.DueDate, DueDateSet: item.dueDateSet, LabelIDs: item.LabelIDs, AssigneeIDs: item.AssigneeIDs, DocIDs: item.DocumentIDs})

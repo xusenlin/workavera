@@ -206,6 +206,22 @@ func TestBoardUpdateTaskRejectsLegacySingleObjectInput(t *testing.T) {
 	}
 }
 
+func TestBoardUpdateTaskRejectsEmptyPatch(t *testing.T) {
+	response, err := newBoardUpdateTaskTool(nil, "actor-1").Run(context.Background(), fantasy.ToolCall{
+		ID: "call-1", Name: "board_update_task", Input: `{"items":[{"taskId":"task-1"}]}`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var result batchResult
+	if err := json.Unmarshal([]byte(response.Content), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.OK || result.Failed != 1 || len(result.Results) != 1 || !strings.Contains(result.Results[0].Error, "at least one field") {
+		t.Fatalf("empty patch must fail with a useful item error: %#v", result)
+	}
+}
+
 func TestDocsUpsertRequiresDocumentKindAndPromptsForChoice(t *testing.T) {
 	info := newDocsUpsertTool(nil, "actor-1").Info()
 	if !slices.Contains(info.Required, "kind") {

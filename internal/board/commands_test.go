@@ -271,12 +271,27 @@ func TestTaskCommandsValidateRelationsAndPatchClearsFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	sameTitle := "Patch me"
+	unchanged, err := UpdateTask(context.Background(), app, owner.Id, UpdateTaskCommand{
+		TaskID: created.ID,
+		Title:  &sameTitle,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unchanged.Changed == nil || *unchanged.Changed || unchanged.Action != "unchanged" {
+		t.Fatalf("no-op patch must report changed=false: %#v", unchanged)
+	}
 	empty := []string{}
-	if _, err := UpdateTask(context.Background(), app, owner.Id, UpdateTaskCommand{
+	updated, err := UpdateTask(context.Background(), app, owner.Id, UpdateTaskCommand{
 		TaskID: created.ID, DueDateSet: true, DueDate: nil,
 		AssigneeIDs: &empty, LabelIDs: &empty,
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatal(err)
+	}
+	if updated.Changed == nil || !*updated.Changed || updated.Action != "updated" {
+		t.Fatalf("changed patch must report changed=true: %#v", updated)
 	}
 	task, err := app.FindRecordById(boardTasksCollection, created.ID)
 	if err != nil {

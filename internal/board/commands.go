@@ -44,6 +44,7 @@ type MutationResult struct {
 	ID           string `json:"id"`
 	Name         string `json:"name"`
 	ProjectID    string `json:"projectId"`
+	Changed      *bool  `json:"changed,omitempty"`
 }
 
 type CreateProjectCommand struct {
@@ -106,6 +107,17 @@ type UpdateTaskCommand struct {
 	LabelIDs    *[]string
 	AssigneeIDs *[]string
 	DocIDs      *[]string
+}
+
+func (command UpdateTaskCommand) hasPatch() bool {
+	return command.Title != nil ||
+		command.Description != nil ||
+		command.StateID != nil ||
+		command.Priority != nil ||
+		command.DueDateSet ||
+		command.LabelIDs != nil ||
+		command.AssigneeIDs != nil ||
+		command.DocIDs != nil
 }
 
 type TaskDeleteTarget struct {
@@ -564,6 +576,9 @@ func CreateTask(ctx context.Context, app core.App, actorID string, command Creat
 }
 
 func UpdateTask(ctx context.Context, app core.App, actorID string, command UpdateTaskCommand) (MutationResult, error) {
+	if !command.hasPatch() {
+		return MutationResult{}, errors.New("task patch must include at least one field to update")
+	}
 	if err := requireActiveActor(ctx, app, actorID); err != nil {
 		return MutationResult{}, err
 	}
@@ -617,7 +632,8 @@ func UpdateTask(ctx context.Context, app core.App, actorID string, command Updat
 			return err
 		}
 		changes := buildBoardTaskChanges(tx, before, record)
-		if len(changes) > 0 {
+		changed := len(changes) > 0
+		if changed {
 			if err := tx.Save(record); err != nil {
 				return err
 			}
@@ -630,7 +646,11 @@ func UpdateTask(ctx context.Context, app core.App, actorID string, command Updat
 				return err
 			}
 		}
-		result = MutationResult{OK: true, Action: "updated", ResourceType: "task", ID: record.Id, Name: record.GetString("title"), ProjectID: project.Id}
+		action := "unchanged"
+		if changed {
+			action = "updated"
+		}
+		result = MutationResult{OK: true, Action: action, ResourceType: "task", ID: record.Id, Name: record.GetString("title"), ProjectID: project.Id, Changed: &changed}
 		return nil
 	})
 	return result, err

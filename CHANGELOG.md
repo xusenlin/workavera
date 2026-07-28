@@ -7,6 +7,14 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- `board_update_task` now rejects task patches that contain only a task ID,
+  instead of reporting a successful update that could not change anything.
+  Valid patches that already match the stored task return
+  `action: "unchanged"` and `changed: false`, and no longer create a database
+  write or activity entry.
+
 ## [0.0.9] - 2026-07-27
 
 ### Added
