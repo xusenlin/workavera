@@ -23,6 +23,18 @@ Key frontend entry points:
 - `frontend/src/store/` contains Zustand stores.
 - `frontend/src/lib/pocketbase.ts` is the PocketBase client integration.
 
+## Personal Workspace Task Workflow
+
+Users normally identify a task from their personal Workavera workspace as
+`Task:<task-id>:<task title>`. Handle these requests in this order:
+
+1. Fetch and read the exact task details before inspecting or changing code.
+2. Investigate the issue, explain the likely cause to the user, and wait for
+   the user to approve the fix.
+3. After approval, move the task to `进行中` before implementing the fix.
+4. Implement and verify the fix.
+5. After the fix and relevant checks are complete, move the task to `测试中`.
+
 ## Commands
 
 Use the task names in `Taskfile.yml` as the source of truth:
