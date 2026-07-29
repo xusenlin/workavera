@@ -89,45 +89,43 @@ export function TodoCard({ todo, onEdit, onArchive }: TodoCardProps) {
         isDragging && "opacity-50 shadow-lg ring-2 ring-primary/20"
       )}
     >
-      {/* Labels */}
-      {todoLabels.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-1">
-          {todoLabels.map((label) => (
-            <span
-              key={label.id}
-              className="inline-flex h-4.5 items-center rounded-md px-1.5 text-[10px] font-medium text-white"
-              style={{ backgroundColor: label.color }}
+      {/* Labels + archive */}
+      {(todoLabels.length > 0 || onArchive) && (
+        <div className="mb-2 flex items-start gap-2">
+          <div className="min-w-0 flex flex-1 flex-wrap gap-1">
+            {todoLabels.map((label) => (
+              <span
+                key={label.id}
+                className="inline-flex h-4.5 items-center rounded-md px-1.5 text-[10px] font-medium text-white"
+                style={{ backgroundColor: label.color }}
+              >
+                {label.name}
+              </span>
+            ))}
+          </div>
+          {onArchive && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="-mt-1 -mr-1 shrink-0 text-muted-foreground opacity-60 transition-opacity hover:opacity-100 focus-visible:opacity-100"
+              aria-label={`Archive ${todo.title}`}
+              title="Archive task"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                onArchive(todo)
+              }}
             >
-              {label.name}
-            </span>
-          ))}
+              <HugeiconsIcon icon={Archive02Icon} strokeWidth={2} />
+            </Button>
+          )}
         </div>
       )}
 
       {/* Title */}
-      <div className="flex items-start gap-2">
-        <p className="min-w-0 flex-1 text-sm leading-snug font-medium">
-          {todo.title}
-        </p>
-        {onArchive && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            className="-mt-1 -mr-1 shrink-0 text-muted-foreground opacity-60 transition-opacity hover:opacity-100 focus-visible:opacity-100"
-            aria-label={`Archive ${todo.title}`}
-            title="Archive task"
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.preventDefault()
-              event.stopPropagation()
-              onArchive(todo)
-            }}
-          >
-            <HugeiconsIcon icon={Archive02Icon} strokeWidth={2} />
-          </Button>
-        )}
-      </div>
+      <p className="text-sm leading-snug font-medium">{todo.title}</p>
 
       {/* Description indicator */}
       {todo.description && (
