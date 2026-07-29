@@ -615,6 +615,54 @@ func TestPocketBaseApiRulesSeparateActiveAndArchivedConversations(t *testing.T) 
 	}
 }
 
+func TestRenameLandingAfterAnExchangeKeepsItsActivity(t *testing.T) {
+	server := newChatTestServer(t)
+	conversationID := server.createConversation(t)
+
+	// What a client's automatic rename holds: the conversation as it was when
+	// the request arrived, before the exchange below was persisted.
+	stale, err := server.app.FindRecordById(conversationsCollection, conversationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stream := server.streamMessage(t, conversationID)
+	if stream.Code != http.StatusOK {
+		t.Fatalf("stream: %d %s", stream.Code, stream.Body.String())
+	}
+	exchanged, err := server.app.FindRecordById(conversationsCollection, conversationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	messagedAt := exchanged.GetString("last_message_at")
+
+	// The rename lands afterwards, carrying every field it loaded.
+	stale.Set("title", "Roadmap")
+	if err := server.app.Save(stale); err != nil {
+		t.Fatal(err)
+	}
+
+	saved, err := server.app.FindRecordById(conversationsCollection, conversationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.GetString("title") != "Roadmap" {
+		t.Fatalf("the rename must still apply, got %q", saved.GetString("title"))
+	}
+	if got := saved.GetString("last_message_at"); got != messagedAt {
+		t.Fatalf("last_message_at reverted to %q, want %q", got, messagedAt)
+	}
+	if got := saved.GetInt("message_count"); got != 2 {
+		t.Fatalf("message_count reverted to %d, want 2", got)
+	}
+	if got := saved.GetString("model_config"); got != server.modelID {
+		t.Fatalf("model_config reverted to %q, want %q", got, server.modelID)
+	}
+	if got := saved.GetInt("total_tokens"); got == 0 {
+		t.Fatal("token totals reverted to zero")
+	}
+}
+
 func TestNewConversationSortsAheadOfConversationsWithMessages(t *testing.T) {
 	server := newChatTestServer(t)
 	olderID := server.createConversation(t)

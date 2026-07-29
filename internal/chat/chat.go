@@ -71,8 +71,61 @@ func register(app core.App, service *service) {
 		return event.Next()
 	})
 
+	app.OnRecordUpdate(conversationsCollection).BindFunc(func(event *core.RecordEvent) error {
+		if err := keepConversationActivity(event.App, event.Record); err != nil {
+			return err
+		}
+		return event.Next()
+	})
+
 	app.OnTerminate().BindFunc(func(event *core.TerminateEvent) error {
 		service.cancelAll()
 		return event.Next()
 	})
+}
+
+// Fields a chat run owns: only the run that produced them writes them.
+var conversationActivityFields = []string{
+	"last_message_at",
+	"message_count",
+	"model_config",
+	"tool_call_count",
+	"input_tokens",
+	"output_tokens",
+	"total_tokens",
+	"context_tokens",
+	"context_summary",
+	"summary_until_sequence",
+}
+
+// keepConversationActivity stops a save from carrying an activity field back to
+// the value it held when its record was loaded. PocketBase writes the whole
+// record, so a title, pin, or archive request that loaded the conversation
+// before a run persisted an exchange would otherwise revert that exchange's
+// message count, activity date, and model — which is how a conversation that
+// had just been used ended up undated, and last in the list.
+//
+// A save that means to change one of these fields still changes it: only a
+// field the save left at its own stale value is restored, and the read happens
+// inside the save transaction, so it sees whatever a competing run committed.
+func keepConversationActivity(app core.App, record *core.Record) error {
+	original := record.Original()
+	if original == nil {
+		return nil
+	}
+	var stored *core.Record
+	for _, field := range conversationActivityFields {
+		if record.GetString(field) != original.GetString(field) {
+			continue
+		}
+		if stored == nil {
+			found, err := app.FindRecordById(conversationsCollection, record.Id)
+			if err != nil {
+				return err
+			}
+			stored = found
+		}
+		record.Set(field, stored.Get(field))
+	}
+	return nil
 }

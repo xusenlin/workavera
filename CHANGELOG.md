@@ -17,6 +17,13 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A conversation no longer loses the record of an exchange to a request that
+  arrived alongside it. PocketBase writes every column of a record, so the
+  automatic rename that follows a first message could carry the conversation's
+  message count, activity date, and model back to what they were before that
+  exchange was persisted — leaving a conversation that had just been used
+  undated, and last in the list. A save now keeps the stored value of any
+  run-owned field it did not set out to change.
 - A new conversation now appears at the top of the conversation list. A
   conversation is dated when it is created, so one that has yet to receive a
   message no longer sorts below every older conversation, or off the first
