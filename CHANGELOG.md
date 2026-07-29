@@ -17,6 +17,12 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A new conversation now appears at the top of the conversation list. A
+  conversation is dated when it is created, so one that has yet to receive a
+  message no longer sorts below every older conversation, or off the first
+  page entirely. Conversations that were left undated are backfilled from
+  their creation time, and the web list follows the server order instead of
+  re-sorting the page it was given.
 - `board_update_task` now rejects task patches that contain only a task ID,
   instead of reporting a successful update that could not change anything.
   Valid patches that already match the stored task return

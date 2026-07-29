@@ -12,6 +12,7 @@ import (
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tests"
+	"github.com/pocketbase/pocketbase/tools/types"
 	workagent "github.com/xusenlin/workavera/internal/agent"
 	workmemory "github.com/xusenlin/workavera/internal/memory"
 	"github.com/xusenlin/workavera/internal/preferences"
@@ -611,6 +612,50 @@ func TestPocketBaseApiRulesSeparateActiveAndArchivedConversations(t *testing.T) 
 		len(archivedPage.Items) != 1 ||
 		archivedPage.Items[0].ID != archivedID {
 		t.Fatalf("unexpected archived conversations page: %#v", archivedPage)
+	}
+}
+
+func TestNewConversationSortsAheadOfConversationsWithMessages(t *testing.T) {
+	server := newChatTestServer(t)
+	olderID := server.createConversation(t)
+
+	// Date the first conversation in the past, the way its first message would.
+	// Saving it also refreshes "updated", so the list order below can only come
+	// from last_message_at.
+	older, err := server.app.FindRecordById(conversationsCollection, olderID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	past, err := types.ParseDateTime("2020-01-01 00:00:00.000Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	older.Set("last_message_at", past)
+	if err := server.app.Save(older); err != nil {
+		t.Fatal(err)
+	}
+
+	newerID := server.createConversation(t)
+
+	// The conversation lists of every client use this sort.
+	list := server.request(t, http.MethodGet, "/api/collections/chat_conversations/records?filter=(status='active')&sort=-pinned,-last_message_at,-updated", "")
+	if list.Code != http.StatusOK {
+		t.Fatalf("list conversations: %d %s", list.Code, list.Body.String())
+	}
+	var page struct {
+		Items []struct {
+			ID            string `json:"id"`
+			LastMessageAt string `json:"last_message_at"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(list.Body.Bytes(), &page); err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 2 || page.Items[0].ID != newerID || page.Items[1].ID != olderID {
+		t.Fatalf("a new conversation must sort first: %#v", page.Items)
+	}
+	if page.Items[0].LastMessageAt == "" {
+		t.Fatal("a new conversation must carry a last_message_at")
 	}
 }
 

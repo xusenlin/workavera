@@ -312,13 +312,12 @@ export function ConversationList() {
       ? conversations.filter((c) => c.title.toLowerCase().includes(q))
       : conversations
 
-    const sorted = [...filtered].sort(
-      (a, b) => new Date(b.updated).getTime() - new Date(a.updated).getTime()
-    )
-
+    // The store keeps the server order ("-pinned,-last_message_at,-updated"),
+    // which already ranks conversations by latest activity, so the groups are
+    // only split out of it.
     return {
-      pinned: sorted.filter((c) => c.pinned),
-      recent: sorted.filter((c) => !c.pinned),
+      pinned: filtered.filter((c) => c.pinned),
+      recent: filtered.filter((c) => !c.pinned),
     }
   }, [conversations, query])
 

@@ -7,6 +7,7 @@ import (
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tools/types"
 	workagent "github.com/xusenlin/workavera/internal/agent"
 	assistanttools "github.com/xusenlin/workavera/internal/assistant/tools"
 )
@@ -42,6 +43,11 @@ func register(app core.App, service *service) {
 		if strings.TrimSpace(event.Record.GetString("title")) == "" {
 			event.Record.Set("title", "New conversation")
 		}
+		// Conversation lists sort by "-pinned,-last_message_at,-updated", where
+		// an empty last_message_at sorts below every dated conversation. Seeding
+		// it at creation keeps a brand-new conversation at the top of the list
+		// until its first message updates the value.
+		event.Record.Set("last_message_at", types.NowDateTime())
 		return event.Next()
 	})
 
