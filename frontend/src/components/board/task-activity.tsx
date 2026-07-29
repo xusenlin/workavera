@@ -16,7 +16,7 @@ type OperationLogRecord = RecordModel & {
   task_title: string
   actor: string
   actor_name: string
-  action: "create" | "update" | "move" | "delete"
+  action: "create" | "update" | "move" | "delete" | "archive" | "restore"
   changes: Record<string, Change>
   created: string
   expand?: {
@@ -67,6 +67,8 @@ function text(value: unknown) {
 function describeLog(log: OperationLog) {
   if (log.action === "create") return ["created this task"]
   if (log.action === "delete") return ["deleted this task"]
+  if (log.action === "archive") return ["archived this task"]
+  if (log.action === "restore") return ["restored this task"]
 
   const descriptions: string[] = []
   const changes = log.changes

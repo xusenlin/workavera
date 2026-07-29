@@ -153,6 +153,8 @@ type BoardState = {
   removeMember: (id: string) => Promise<void>
   addTodo: (todo: TodoInput) => Promise<void>
   updateTodo: (id: string, patch: Partial<Omit<Todo, "id">>) => Promise<void>
+  archiveTodo: (id: string) => Promise<void>
+  restoreTodo: (id: string) => Promise<void>
   removeTodo: (id: string) => Promise<void>
   moveTodo: (id: string, toStateId: string, toIndex: number) => Promise<void>
 }
@@ -219,6 +221,7 @@ type TodoRecord = RecordModel & {
   documents: string[]
   due_date: string
   rank: number
+  archived: boolean
 }
 
 const COLLECTIONS = {
@@ -410,7 +413,10 @@ async function loadProjectRelations(projectIds: string[]) {
       filter,
       sort: "sort_order",
     }),
-    listAllPages<TodoRecord>(COLLECTIONS.tasks, { filter, sort: "rank" }),
+    listAllPages<TodoRecord>(COLLECTIONS.tasks, {
+      filter: `(${filter}) && archived = false`,
+      sort: "rank",
+    }),
     listAllPages<LabelRecord>(COLLECTIONS.labels, { filter, sort: "name" }),
     listAllPages<MemberRecord>(COLLECTIONS.members, {
       filter,
@@ -531,6 +537,20 @@ async function connectRealtime(
               return {
                 [key]: current.filter((item) => item.id !== event.record.id),
               } as Partial<BoardState>
+            }
+            if (
+              key === "todos" &&
+              (event.record as unknown as TodoRecord).archived
+            ) {
+              return {
+                todos: state.todos.filter(
+                  (item) => item.id !== event.record.id
+                ),
+                openedTask:
+                  state.openedTask?.id === event.record.id
+                    ? null
+                    : state.openedTask,
+              }
             }
             const mapped = mapRecord(event.record)
             if (key === "projects") {
@@ -685,6 +705,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         const record = await pb
           .collection(COLLECTIONS.tasks)
           .getOne<TodoRecord>(taskId, { requestKey: null })
+        if (record.archived) return null
         task = toTodo(record)
       } catch (error) {
         if (error instanceof ClientResponseError && error.status === 404) {
@@ -1244,6 +1265,46 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       }))
     } catch (error) {
       const message = messageFromError(error, "Could not update the task")
+      set({ error: message })
+      toast.error(message)
+      throw new Error(message, { cause: error })
+    }
+  },
+
+  archiveTodo: async (id) => {
+    try {
+      await pb
+        .collection(COLLECTIONS.tasks)
+        .update<TodoRecord>(id, { archived: true }, { requestKey: null })
+      set((state) => ({
+        todos: state.todos.filter((item) => item.id !== id),
+        openedTask: state.openedTask?.id === id ? null : state.openedTask,
+      }))
+      toast.success("Task archived.")
+    } catch (error) {
+      const message = messageFromError(error, "Could not archive the task")
+      set({ error: message })
+      toast.error(message)
+      throw new Error(message, { cause: error })
+    }
+  },
+
+  restoreTodo: async (id) => {
+    try {
+      const record = await pb
+        .collection(COLLECTIONS.tasks)
+        .update<TodoRecord>(id, { archived: false }, { requestKey: null })
+      const restored = toTodo(record)
+      set((state) => ({
+        todos: state.projects.some(
+          (project) => project.id === restored.projectId
+        )
+          ? upsertById(state.todos, restored)
+          : state.todos,
+      }))
+      toast.success("Task restored.")
+    } catch (error) {
+      const message = messageFromError(error, "Could not restore the task")
       set({ error: message })
       toast.error(message)
       throw new Error(message, { cause: error })

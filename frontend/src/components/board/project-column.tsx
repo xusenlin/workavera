@@ -49,6 +49,7 @@ import {
   type ProjectState,
   type Todo,
 } from "@/store/board"
+import { ArchivedTasksDialog } from "./archived-tasks-dialog"
 import { StatusColumn } from "./status-column"
 
 type ProjectColumnProps = {
@@ -72,6 +73,7 @@ export function ProjectColumn({
   const archiveProject = useBoardStore((store) => store.archiveProject)
   const removeProject = useBoardStore((store) => store.removeProject)
   const moveProject = useBoardStore((store) => store.moveProject)
+  const archiveTodo = useBoardStore((store) => store.archiveTodo)
   const projects = useBoardStore((store) => store.projects)
   const projectPage = useBoardStore((store) => store.projectPage)
   const projectTotalItems = useBoardStore((store) => store.projectTotalItems)
@@ -80,6 +82,7 @@ export function ProjectColumn({
   const members = useBoardStore((store) => store.members)
   const currentUser = useAuthStore((store) => store.user)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [archivedTasksOpen, setArchivedTasksOpen] = useState(false)
 
   const projectTodos = todos.filter((todo) => todo.projectId === project.id)
   const projectStates = [...states]
@@ -192,6 +195,22 @@ export function ProjectColumn({
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={`View archived tasks in ${project.name}`}
+                  onClick={() => setArchivedTasksOpen(true)}
+                >
+                  <HugeiconsIcon icon={Archive02Icon} strokeWidth={2} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Archived tasks</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           {isOwner && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -241,7 +260,7 @@ export function ProjectColumn({
           project.collapsed && "hidden"
         )}
       >
-        {projectStates.map((state) => (
+        {projectStates.map((state, index) => (
           <StatusColumn
             key={state.id}
             state={state}
@@ -250,6 +269,11 @@ export function ProjectColumn({
               .sort((a, b) => a.rank - b.rank)}
             onAddTask={(stateId) => onAddTask(project.id, stateId)}
             onEditTask={onEditTask}
+            onArchiveTask={
+              index === projectStates.length - 1
+                ? (todo) => void archiveTodo(todo.id).catch(() => {})
+                : undefined
+            }
           />
         ))}
 
@@ -298,6 +322,12 @@ export function ProjectColumn({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ArchivedTasksDialog
+        project={project}
+        open={archivedTasksOpen}
+        onOpenChange={setArchivedTasksOpen}
+      />
     </div>
   )
 }

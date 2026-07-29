@@ -421,6 +421,7 @@ func loadProjectStatesWithCountsBulk(ctx context.Context, app core.App, projects
 		return nil, err
 	}
 	taskFilter, taskParams := fieldMatchesAny("project", "taskProject", projectIDs)
+	taskFilter = "(" + taskFilter + ") && archived = false"
 	taskRecords, err := app.FindRecordsByFilter(boardTasksCollection, taskFilter, "", 0, 0, taskParams)
 	if err != nil {
 		return nil, err
@@ -464,7 +465,7 @@ func loadProjectStatesWithCounts(ctx context.Context, app core.App, projectID st
 	// per-state queries and avoids PocketBase array-operator pitfalls.
 	taskCounts := make(map[string]int)
 	if len(stateRecords) > 0 {
-		taskRecords, err := app.FindRecordsByFilter(boardTasksCollection, "project = {:project}", "", 0, 0, dbx.Params{"project": projectID})
+		taskRecords, err := app.FindRecordsByFilter(boardTasksCollection, "project = {:project} && archived = false", "", 0, 0, dbx.Params{"project": projectID})
 		if err != nil {
 			return nil, err
 		}
@@ -632,7 +633,7 @@ func SearchVisibleTasks(ctx context.Context, app core.App, actorID string, optio
 	}
 
 	projectFilter, params := fieldMatchesAny("project", "project", projectIDs)
-	clauses := []string{projectFilter}
+	clauses := []string{projectFilter, "archived = false"}
 	if len(options.StateIDs) > 0 {
 		stateClauses := make([]string, 0, len(options.StateIDs))
 		for i, sid := range options.StateIDs {

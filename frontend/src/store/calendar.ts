@@ -39,6 +39,8 @@ type TaskRecord = RecordModel & {
   description: string
   priority: TaskPriority
   due_date: string
+  archived: boolean
+  assignees: string[]
   expand?: { project?: ProjectRecord; state?: StateRecord }
 }
 
@@ -129,13 +131,19 @@ function errorMessage(error: unknown, fallback: string) {
 }
 
 async function loadCalendar() {
+  const userId = pb.authStore.record?.id
+  if (!userId) throw new Error("Authentication is required")
+  const taskFilter = pb.filter(
+    'due_date != "" && archived = false && assignees ?= {:user}',
+    { user: userId }
+  )
   const [events, tasks, config] = await Promise.all([
     pb.collection("calendar_events").getFullList<EventRecord>({
       sort: "start_at",
       requestKey: null,
     }),
     pb.collection("board_tasks").getFullList<TaskRecord>({
-      filter: 'due_date != ""',
+      filter: taskFilter,
       sort: "due_date",
       expand: "project,state",
       requestKey: null,
@@ -162,6 +170,8 @@ async function connectRealtime(
       | ((state: CalendarState) => Partial<CalendarState>)
   ) => void
 ) {
+  const userId = pb.authStore.record?.id
+  if (!userId) throw new Error("Authentication is required")
   unsubscribers.forEach((unsubscribe) => unsubscribe())
   unsubscribers = []
 
@@ -186,7 +196,12 @@ async function connectRealtime(
       "*",
       (message) => {
         set((state) => {
-          if (message.action === "delete" || !message.record.due_date) {
+          if (
+            message.action === "delete" ||
+            !message.record.due_date ||
+            message.record.archived ||
+            !message.record.assignees?.includes(userId)
+          ) {
             return {
               tasks: state.tasks.filter(
                 (task) => task.id !== message.record.id

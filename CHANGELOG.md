@@ -7,6 +7,14 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Tasks in the final Board column can be archived and restored from a
+  paginated project-level archive. Archived tasks keep their original state
+  and rank while staying out of normal Board, dashboard, calendar, and
+  assistant queries. Calendar task deadlines are also limited to tasks
+  assigned to the signed-in user.
+
 ### Fixed
 
 - `board_update_task` now rejects task patches that contain only a task ID,

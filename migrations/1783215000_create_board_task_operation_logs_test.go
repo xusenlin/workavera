@@ -1,6 +1,7 @@
 package migrations
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/pocketbase/pocketbase/core"
@@ -29,7 +30,7 @@ func TestBoardTaskOperationLogsMigration(t *testing.T) {
 		t.Fatalf("unexpected project field: %#v", project)
 	}
 	action, ok := logs.Fields.GetByName("action").(*core.SelectField)
-	if !ok || len(action.Values) != 4 {
+	if !ok || !slices.Equal(action.Values, []string{"create", "update", "move", "delete", "archive", "restore"}) {
 		t.Fatalf("unexpected action field: %#v", action)
 	}
 }

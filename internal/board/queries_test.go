@@ -68,6 +68,11 @@ func TestSearchVisibleProjectsFiltersByTaskAssigneeIncludingOwner(t *testing.T) 
 	project := createQueryTestProject(t, app, owner.Id, "Assigned", false)
 	state := createQueryTestState(t, app, project.Id)
 	createQueryTestTask(t, app, project.Id, state.Id, owner.Id, []string{owner.Id})
+	archivedTask := createQueryTestTask(t, app, project.Id, state.Id, owner.Id, []string{owner.Id})
+	archivedTask.Set("archived", true)
+	if err := app.Save(archivedTask); err != nil {
+		t.Fatal(err)
+	}
 
 	result, err := SearchVisibleProjects(context.Background(), app, owner.Id, ProjectSearchOptions{
 		Limit:   20,
@@ -118,6 +123,12 @@ func TestSearchVisibleTasksFindsKeywordsAcrossVisibleProjects(t *testing.T) {
 	setQueryTestTaskText(t, app, createQueryTestTask(t, app, shared.Id, sharedState.Id, other.Id, []string{other.Id}), "Shared work", "add memory search")
 	setQueryTestTaskText(t, app, createQueryTestTask(t, app, hidden.Id, hiddenState.Id, other.Id, []string{other.Id}), "memory secret", "")
 	setQueryTestTaskText(t, app, createQueryTestTask(t, app, archived.Id, archivedState.Id, actor.Id, []string{actor.Id}), "memory archive", "")
+	archivedTask := createQueryTestTask(t, app, owned.Id, ownedState.Id, actor.Id, []string{actor.Id})
+	setQueryTestTaskText(t, app, archivedTask, "memory archived task", "")
+	archivedTask.Set("archived", true)
+	if err := app.Save(archivedTask); err != nil {
+		t.Fatal(err)
+	}
 
 	result, err := SearchVisibleTasks(context.Background(), app, actor.Id, TaskSearchOptions{Query: "memory", Limit: 20})
 	if err != nil {

@@ -3,6 +3,7 @@ import { CSS } from "@dnd-kit/utilities"
 
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
+  Archive02Icon,
   Calendar03Icon,
   File01Icon,
   TextAlignLeftIcon,
@@ -10,6 +11,7 @@ import {
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import {
   PRIORITY_META,
@@ -21,6 +23,7 @@ import {
 type TodoCardProps = {
   todo: Todo
   onEdit: (todo: Todo) => void
+  onArchive?: (todo: Todo) => void
 }
 
 function isOverdue(dueDate?: string) {
@@ -38,7 +41,7 @@ function formatDate(dueDate: string) {
   })
 }
 
-export function TodoCard({ todo, onEdit }: TodoCardProps) {
+export function TodoCard({ todo, onEdit, onArchive }: TodoCardProps) {
   const labels = useBoardStore((s) => s.labels)
   const members = useBoardStore((s) => s.members)
   const projects = useBoardStore((s) => s.projects)
@@ -102,7 +105,29 @@ export function TodoCard({ todo, onEdit }: TodoCardProps) {
       )}
 
       {/* Title */}
-      <p className="text-sm leading-snug font-medium">{todo.title}</p>
+      <div className="flex items-start gap-2">
+        <p className="min-w-0 flex-1 text-sm leading-snug font-medium">
+          {todo.title}
+        </p>
+        {onArchive && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            className="-mt-1 -mr-1 shrink-0 text-muted-foreground opacity-60 transition-opacity hover:opacity-100 focus-visible:opacity-100"
+            aria-label={`Archive ${todo.title}`}
+            title="Archive task"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              onArchive(todo)
+            }}
+          >
+            <HugeiconsIcon icon={Archive02Icon} strokeWidth={2} />
+          </Button>
+        )}
+      </div>
 
       {/* Description indicator */}
       {todo.description && (

@@ -55,6 +55,12 @@ func validateBoardTaskRequest(event *core.RecordRequestEvent) error {
 		action = "update"
 		if _, moved := changes["state"]; moved {
 			action = "move"
+		} else if _, archived := changes["archived"]; archived {
+			if event.Record.GetBool("archived") {
+				action = "archive"
+			} else {
+				action = "restore"
+			}
 		}
 	}
 

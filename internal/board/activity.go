@@ -56,6 +56,12 @@ func buildBoardTaskChanges(app core.App, before, after *core.Record) map[string]
 	if before.GetString("description") != after.GetString("description") {
 		changes["description"] = map[string]any{"changed": true}
 	}
+	if before.GetBool("archived") != after.GetBool("archived") {
+		changes["archived"] = map[string]any{
+			"from": before.GetBool("archived"),
+			"to":   after.GetBool("archived"),
+		}
+	}
 
 	beforeState := before.GetString("state")
 	afterState := after.GetString("state")

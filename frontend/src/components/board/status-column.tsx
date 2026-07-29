@@ -14,6 +14,7 @@ type StatusColumnProps = {
   todos: Todo[]
   onAddTask: (stateId: string) => void
   onEditTask: (todo: Todo) => void
+  onArchiveTask?: (todo: Todo) => void
 }
 
 export function StatusColumn({
@@ -21,6 +22,7 @@ export function StatusColumn({
   todos,
   onAddTask,
   onEditTask,
+  onArchiveTask,
 }: StatusColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: `state:${state.id}`,
@@ -62,7 +64,12 @@ export function StatusColumn({
           strategy={verticalListSortingStrategy}
         >
           {todos.map((todo) => (
-            <TodoCard key={todo.id} todo={todo} onEdit={onEditTask} />
+            <TodoCard
+              key={todo.id}
+              todo={todo}
+              onEdit={onEditTask}
+              onArchive={onArchiveTask}
+            />
           ))}
         </SortableContext>
 

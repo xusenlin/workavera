@@ -134,7 +134,7 @@ async function loadDashboard(): Promise<DashboardData> {
   nextWeek.setDate(nextWeek.getDate() + 7)
   const nowValue = dateFilterValue(now)
   const nextWeekValue = dateFilterValue(nextWeek)
-  const openTaskFilter = 'state.category != "completed"'
+  const openTaskFilter = 'state.category != "completed" && archived = false'
   const upcomingEventFilter = `start_at >= "${nowValue}" && start_at < "${nextWeekValue}"`
 
   const [
