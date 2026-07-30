@@ -9,6 +9,10 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Chat can list every personal custom Calendar event through
+  `calendar_search_events` without inventing a keyword. Its `query` parameter
+  is now optional, and an empty query returns all events owned by the signed-in
+  user instead of failing or truncating the result.
 - Calendar shows unfinished Board task deadlines assigned to the signed-in
   user again, whether they own or participate in the project. The personal
   filter now matches assignee relation IDs and excludes completed states;

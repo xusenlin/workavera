@@ -152,6 +152,18 @@ func TestBoardSearchTasksSupportsCrossProjectKeywords(t *testing.T) {
 	}
 }
 
+func TestCalendarSearchEventsAllowsListingWithoutAQuery(t *testing.T) {
+	info := newCalendarSearchEventsTool(nil, "actor-1").Info()
+	if slices.Contains(info.Required, "query") {
+		t.Fatalf("query must be optional when listing all personal events: %#v", info.Required)
+	}
+	for _, field := range []string{"query", "from", "to"} {
+		if _, ok := info.Parameters[field]; !ok {
+			t.Fatalf("calendar_search_events missing input field %q: %#v", field, info.Parameters)
+		}
+	}
+}
+
 func TestBoardProjectArchiveIsNotExposedToAssistant(t *testing.T) {
 	info := newBoardUpdateProjectTool(nil, "actor-1").Info()
 	if _, ok := info.Parameters["archived"]; ok {

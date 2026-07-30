@@ -308,20 +308,45 @@ func TestSearchEventsKeepsRepeatingEventsInsideDateBounds(t *testing.T) {
 	}
 }
 
-func TestSearchEventsRequiresAQuery(t *testing.T) {
+func TestSearchEventsListsAllOwnedEventsWithoutAQuery(t *testing.T) {
 	app, err := tests.NewTestApp()
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(app.Cleanup)
 	actor := createCalendarTestUser(t, app, "calendar-empty@example.com")
+	other := createCalendarTestUser(t, app, "calendar-empty-other@example.com")
+	ctx := context.Background()
 
-	// Listing every event would flood the model's context; the schedule view
-	// is what answers "show me everything".
-	if _, err := SearchEvents(context.Background(), app, actor.Id, "   ", "", ""); err == nil {
-		t.Fatal("a blank query must be rejected")
+	for range 26 {
+		if _, err := CreateEvent(ctx, app, actor.Id, CreateEventCommand{
+			Title: "Owned event", StartAt: "2026-07-20T14:00:00+08:00",
+			EndAt: "2026-07-20T15:00:00+08:00",
+		}); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if _, err := SearchEvents(context.Background(), app, actor.Id, "standup", "not-a-date", ""); err == nil {
+	if _, err := CreateEvent(ctx, app, other.Id, CreateEventCommand{
+		Title: "Someone else's event", StartAt: "2026-07-20T14:00:00+08:00",
+		EndAt: "2026-07-20T15:00:00+08:00",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := SearchEvents(ctx, app, actor.Id, "   ", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Total != 26 || len(result.Events) != 26 || !result.Complete {
+		t.Fatalf("blank query must return every owned event: %#v", result)
+	}
+	for _, event := range result.Events {
+		if event.Title == "Someone else's event" {
+			t.Fatal("listing all events must not cross owners")
+		}
+	}
+
+	if _, err := SearchEvents(ctx, app, actor.Id, "standup", "not-a-date", ""); err == nil {
 		t.Fatal("an invalid from date must be rejected")
 	}
 }

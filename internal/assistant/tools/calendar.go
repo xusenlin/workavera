@@ -19,7 +19,7 @@ type calendarGetScheduleInput struct {
 }
 
 type calendarSearchEventsInput struct {
-	Query string `json:"query" description:"Text matched against event titles and descriptions"`
+	Query string `json:"query,omitempty" description:"Optional text matched against event titles and descriptions; omit or leave empty to list all personal events"`
 	From  string `json:"from,omitempty" description:"Optional earliest start date in YYYY-MM-DD format; repeating events are always included"`
 	To    string `json:"to,omitempty" description:"Optional latest start date in YYYY-MM-DD format; repeating events are always included"`
 }
@@ -66,7 +66,7 @@ type calendarDeleteEventInput struct {
 func newCalendarSearchEventsTool(app core.App, actorID string) fantasy.AgentTool {
 	return fantasy.NewAgentTool(
 		"calendar_search_events",
-		"Find personal Calendar events by text when the date is unknown. Use this, not calendar_get_schedule, to locate an event the user names: calendar_get_schedule answers for exact dates only, so searching by name through it means guessing dates. Returns whole events with their exact IDs and repeat rules, so a repeating event is found regardless of when it next occurs. Use calendar_get_schedule instead when the user asks what is on a given date.",
+		"List all personal Calendar events when query is omitted, or find them by title and description when query is provided. Use this, not calendar_get_schedule, when the date is unknown: calendar_get_schedule answers for exact dates only. Returns whole events with their exact IDs and repeat rules, so a repeating event is found regardless of when it next occurs. Use calendar_get_schedule instead when the user asks what is on a given date.",
 		func(ctx context.Context, input calendarSearchEventsInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
 			result, err := workcalendar.SearchEvents(ctx, app, actorID, input.Query, input.From, input.To)
 			return calendarToolResult(app, actorID, "search events", result, err)
