@@ -134,7 +134,7 @@ async function loadCalendar() {
   const userId = pb.authStore.record?.id
   if (!userId) throw new Error("Authentication is required")
   const taskFilter = pb.filter(
-    'due_date != "" && archived = false && assignees ?= {:user}',
+    'due_date != "" && archived = false && assignees.id ?= {:user}',
     { user: userId }
   )
   const [events, tasks, config] = await Promise.all([

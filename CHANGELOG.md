@@ -7,6 +7,12 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Calendar shows Board task deadlines assigned to the signed-in user again.
+  The personal filter now matches assignee relation IDs instead of comparing
+  the multi-select relation itself, which silently returned no tasks.
+
 ## [0.0.10] - 2026-07-30
 
 Workavera for Android and iOS 1.0.2 need this release: their task archiving
