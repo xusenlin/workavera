@@ -59,6 +59,20 @@ Both apps are early previews. Their source code is not public yet and will be
 open-sourced in the future; features may be incomplete or trail the web app
 while development continues.
 
+### Server compatibility
+
+An app talks to the server's collections directly, so it needs a server new
+enough to have the ones it queries. Upgrade the server first, then the apps.
+
+| Android / iOS | Requires server | Because |
+| --- | --- | --- |
+| 1.0.2 | 0.0.10 or newer | task archiving reads `board_tasks.archived` |
+| 1.0.1 | 0.0.9 or newer | user-owned MCP servers read `mcp_servers` |
+
+A newer server keeps older apps working, minus what they do not know about: an
+app older than 1.0.2 does not filter archived tasks, so archived tasks stay
+visible on its Board.
+
 ## Quick start
 
 No toolchain needed—run the prebuilt image or binary.

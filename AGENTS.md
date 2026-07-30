@@ -58,6 +58,70 @@ Frontend commands should be run from `frontend/`:
 - `pnpm typecheck`
 - `pnpm format`
 
+## Release and Version Workflow
+
+`VERSION` holds the version being developed, never the last one released. It is
+raised immediately after a release, so a release promotes what has accumulated
+under that number instead of choosing a new one.
+
+The server (`workavera`), Android (`../workavera-android`), and iOS
+(`../workavera-ios`) repositories each carry their own `VERSION`,
+`CHANGELOG.md`, and tags, and reach their own version numbers. The process
+below is the same in all three; only the version files a bump touches and the
+artifacts a release produces differ, because the platforms require it.
+
+### While developing
+
+- Leave `VERSION` alone. Record every user-visible change under
+  `## [Unreleased]` in `CHANGELOG.md`, in the Keep a Changelog sections
+  (`Added`, `Changed`, `Fixed`, `Removed`).
+- Never write a dated version heading ahead of time. A version is dated only
+  when the user calls the release.
+
+### When the user calls a release
+
+Only an explicit instruction starts this. In each repository being released:
+
+1. Check that `VERSION` holds the version being released, that the tree is
+   clean, and that the checks under `## Verification` pass.
+2. Promote the changelog: insert `## [<version>] - <YYYY-MM-DD>` directly below
+   `## [Unreleased]`, so the accumulated sections become that version's and
+   `## [Unreleased]` is left empty above them. Date it the actual release day.
+3. Update the link references at the bottom of the changelog: point
+   `[Unreleased]` at `compare/v<version>...HEAD` and add
+   `[<version>]: compare/v<previous>...v<version>` — or
+   `releases/tag/v<version>` when there is no earlier tag to compare against.
+4. Commit the promotion on its own as `release: v<version>`, in every
+   repository, and tag that commit `v<version>`.
+5. Give the user the GitHub release text to paste, both title and body, in
+   English and in Chinese. The title is `v<version> — <short summary>`, naming
+   what the release is about rather than repeating the number alone. The body
+   comes from the section just promoted, in its own wording, and leads with the
+   compatibility note when there is one.
+6. Remind the user which artifacts to publish, since none are built by
+   releasing:
+   - server: `task release` for the archives in `dist/`, and `task push` for
+     the `ghcr.io/xusenlin/workavera` image tagged `<version>` and `latest`
+   - Android: `task build` for the signed APK in `dist/`
+   - iOS: an App Store build from Xcode
+7. Do not push. The user pushes commits and tags.
+
+### Opening the next cycle
+
+Right after the release, raise the version for continued development in its own
+commit, `chore: bump development version to <next>`, touching every file that
+repeats the version:
+
+- server: `VERSION`
+- Android: `VERSION`, and `versionCode` in `app/build.gradle.kts` — Play
+  requires that integer to increase on every upload, and it is the one number
+  `VERSION` cannot supply (`versionName` already reads the file)
+- iOS: `VERSION`, and `MARKETING_VERSION` in
+  `Workavera.xcodeproj/project.pbxproj`, which is kept in step by hand
+
+Work for the next version then continues on that number until the user calls
+the next release.
+
 ## Development Guidelines
 
 - Bias toward simple, verified changes: state assumptions when they matter, ask when requirements are unclear, and make a brief plan for multi-step or risky work.

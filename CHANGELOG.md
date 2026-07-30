@@ -7,6 +7,11 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.0.10] - 2026-07-30
+
+Workavera for Android and iOS 1.0.2 need this release: their task archiving
+reads a field it adds. The README carries the client compatibility table.
+
 ### Added
 
 - Tasks in the final Board column can be archived and restored from a
@@ -382,7 +387,8 @@ First public release.
 - **AI Micro Apps** for self-contained HTML tools with sandboxed preview.
 - **Dashboard**, realtime **Notifications**, and **Settings** with per-user model configurations and model sharing.
 
-[Unreleased]: https://github.com/xusenlin/workavera/compare/v0.0.9...HEAD
+[Unreleased]: https://github.com/xusenlin/workavera/compare/v0.0.10...HEAD
+[0.0.10]: https://github.com/xusenlin/workavera/compare/v0.0.9...v0.0.10
 [0.0.9]: https://github.com/xusenlin/workavera/compare/v0.0.8...v0.0.9
 [0.0.8]: https://github.com/xusenlin/workavera/compare/v0.0.7...v0.0.8
 [0.0.7]: https://github.com/xusenlin/workavera/compare/v0.0.6...v0.0.7
