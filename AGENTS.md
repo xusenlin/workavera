@@ -92,19 +92,23 @@ Only an explicit instruction starts this. In each repository being released:
    `[<version>]: compare/v<previous>...v<version>` — or
    `releases/tag/v<version>` when there is no earlier tag to compare against.
 4. Commit the promotion on its own as `release: v<version>`, in every
-   repository, and tag that commit `v<version>`.
+   repository, and tag that commit with an annotated tag:
+   `git tag -a v<version> -m "<the release title>"`.
 5. Give the user the GitHub release text to paste, both title and body, in
-   English and in Chinese. The title is `v<version> — <short summary>`, naming
-   what the release is about rather than repeating the number alone. The body
-   comes from the section just promoted, in its own wording, and leads with the
-   compatibility note when there is one.
-6. Remind the user which artifacts to publish, since none are built by
-   releasing:
-   - server: `task release` for the archives in `dist/`, and `task push` for
-     the `ghcr.io/xusenlin/workavera` image tagged `<version>` and `latest`
-   - Android: `task build` for the signed APK in `dist/`
-   - iOS: an App Store build from Xcode
-7. Do not push. The user pushes commits and tags.
+   English and in Chinese. The title is
+   `Workavera v<version> — <short summary>`, naming what the release is about
+   rather than repeating the number alone. The body comes from the section just
+   promoted, in its own wording, and leads with the compatibility note when
+   there is one.
+6. Build the artifacts that can be built here, from the release commit and
+   before the version is raised again:
+   - server: `task release`, which packages the archives into `dist/`
+   - Android: `task build`, which packages the signed APK into `dist/`
+
+   Then tell the user to upload them to the GitHub releases, and that the rest
+   is theirs: the `ghcr.io/xusenlin/workavera` image through `task push`, and
+   the iOS build through Xcode.
+7. Do not push. The user pushes commits and tags, unless that turn asks for it.
 
 ### Opening the next cycle
 
