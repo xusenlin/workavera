@@ -134,7 +134,7 @@ async function loadCalendar() {
   const userId = pb.authStore.record?.id
   if (!userId) throw new Error("Authentication is required")
   const taskFilter = pb.filter(
-    'due_date != "" && archived = false && assignees.id ?= {:user}',
+    'state.category != "completed" && due_date != "" && archived = false && assignees.id ?= {:user}',
     { user: userId }
   )
   const [events, tasks, config] = await Promise.all([
@@ -200,7 +200,8 @@ async function connectRealtime(
             message.action === "delete" ||
             !message.record.due_date ||
             message.record.archived ||
-            !message.record.assignees?.includes(userId)
+            !message.record.assignees?.includes(userId) ||
+            message.record.expand?.state?.category === "completed"
           ) {
             return {
               tasks: state.tasks.filter(
