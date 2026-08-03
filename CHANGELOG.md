@@ -7,6 +7,16 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- PocketBase is updated from 0.39.4 to 0.39.10, which also brings SQLite 3.53.3
+  (`modernc.org/sqlite` 1.55.0) and the `fexpr` 0.6.0 filter parser. A panic in
+  a Workavera command exits with a non-zero status again: PocketBase 0.39.7 had
+  turned CLI panics into a successful exit as a side effect of its worker fix,
+  which hid failures from process supervisors, container restart policies, and
+  CI. 0.39.10 restores the old behavior for the command path while keeping the
+  worker recovery.
+
 ### Fixed
 
 - Chat can list every personal custom Calendar event through
@@ -17,6 +27,19 @@ and versions follow [Semantic Versioning](https://semver.org/).
   user again, whether they own or participate in the project. The personal
   filter now matches assignee relation IDs and excludes completed states;
   comparing the multi-select relation itself silently returned no tasks.
+
+### Security
+
+- An unhandled panic in an internal PocketBase worker goroutine no longer takes
+  down the server. Workavera embeds PocketBase rather than running it as a
+  separate binary, so such a panic ended the whole workspace process instead of
+  failing one request; those workers now recover and return an error
+  (PocketBase 0.39.7).
+- `ozzo-validation` is replaced by the `github.com/pocketbase/ozzo-validation`
+  fork, after the original module changed owners upstream and PocketBase judged
+  the new maintainer untrusted. Workavera reaches the library only through
+  PocketBase and imports it nowhere, so the original module is gone from
+  `go.mod` and `go.sum` with no source change.
 
 ## [0.0.10] - 2026-07-30
 
