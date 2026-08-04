@@ -7,6 +7,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.0.11] - 2026-08-04
+
 ### Changed
 
 - PocketBase is updated from 0.39.4 to 0.39.10, which also brings SQLite 3.53.3
@@ -421,7 +423,8 @@ First public release.
 - **AI Micro Apps** for self-contained HTML tools with sandboxed preview.
 - **Dashboard**, realtime **Notifications**, and **Settings** with per-user model configurations and model sharing.
 
-[Unreleased]: https://github.com/xusenlin/workavera/compare/v0.0.10...HEAD
+[Unreleased]: https://github.com/xusenlin/workavera/compare/v0.0.11...HEAD
+[0.0.11]: https://github.com/xusenlin/workavera/compare/v0.0.10...v0.0.11
 [0.0.10]: https://github.com/xusenlin/workavera/compare/v0.0.9...v0.0.10
 [0.0.9]: https://github.com/xusenlin/workavera/compare/v0.0.8...v0.0.9
 [0.0.8]: https://github.com/xusenlin/workavera/compare/v0.0.7...v0.0.8
