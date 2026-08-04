@@ -51,11 +51,12 @@ Workavera 尝试站在两者中间：
 Workavera 原生 Android 和 iOS 客户端正在积极开发中。它们会直接连接你的
 Workavera 自托管服务，无需通过额外的第三方服务，即可在手机和平板上访问工作区。
 
-- **Workavera Android 客户端**使用 Kotlin 与 Jetpack Compose 开发。
-- **Workavera iOS 客户端**使用 SwiftUI 开发，适配 iPhone 与 iPad。
+- **[Workavera Android 客户端](https://github.com/xusenlin/workavera-android)**
+  使用 Kotlin 与 Jetpack Compose 开发，源码已开源。
+- **Workavera iOS 客户端**使用 SwiftUI 开发，适配 iPhone 与 iPad，源码暂未开放，
+  稍后开源。
 
-两个客户端目前均为早期预览版，源码暂未开放，后续将会开源。部分功能仍在开发中，
-功能进度可能暂时落后于 Web 版。
+两个客户端目前均为早期预览版，部分功能仍在开发中，功能进度可能暂时落后于 Web 版。
 
 ### 服务端版本要求
 
