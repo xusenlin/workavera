@@ -107,14 +107,16 @@ Only an explicit instruction starts this. In each repository being released:
 
    Then tell the user to upload them to the GitHub releases, and that the rest
    is theirs: the `ghcr.io/xusenlin/workavera` image through `task push`, and
-   the iOS build through Xcode.
+   the iOS build through Xcode. `task push` tags the image from `VERSION`, so
+   say that it has to run while that file still holds the released version —
+   raising it first publishes the image under a version that does not exist.
 7. Do not push. The user pushes commits and tags, unless that turn asks for it.
 
 ### Opening the next cycle
 
-Right after the release, raise the version for continued development in its own
-commit, `chore: bump development version to <next>`, touching every file that
-repeats the version:
+Once the user confirms the image is pushed, raise the version for continued
+development in its own commit, `chore: bump development version to <next>`,
+touching every file that repeats the version:
 
 - server: `VERSION`
 - Android: `VERSION`, and `versionCode` in `app/build.gradle.kts` — Play
