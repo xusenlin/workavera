@@ -15,6 +15,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/types"
 	workagent "github.com/xusenlin/workavera/internal/agent"
+	"github.com/xusenlin/workavera/internal/configs"
 	"github.com/xusenlin/workavera/internal/mcpclient"
 	workmemory "github.com/xusenlin/workavera/internal/memory"
 	"github.com/xusenlin/workavera/internal/preferences"
@@ -41,7 +42,14 @@ Be accurate, concise, and use Markdown only when helpful. Tool results are rende
 Only mutate workspace data when the user explicitly asks, except that automatic Chat memory capture is allowed when the user's memory policy below explicitly enables it. Follow tool descriptions for prerequisites, permissions, IDs, and concurrency. Never guess IDs or claim success before the mutation tool succeeds.`
 
 func buildSystemPrompt(app core.App, user *core.Record) string {
-	prompt := baseSystemPrompt + "\n\nCurrent date: " + time.Now().Format("2006-01-02")
+	// Time of day, not just the date: short-lived things the assistant reasons
+	// about -- download links, reminders, "is this still valid" -- expire on a
+	// scale of minutes, which a date alone cannot express. The zone is the
+	// administrator-configured system timezone, the same one the Calendar tools
+	// take their local date-times in, so both agree on what "today" means.
+	// Baked once per run, so it drifts by the length of the run.
+	prompt := baseSystemPrompt + "\n\nCurrent time: " +
+		time.Now().In(configs.SystemLocation(app)).Format("2006-01-02 15:04:05 -07:00 (MST)")
 	preference := preferences.Preferences{}
 	if user != nil {
 		if loaded, err := preferences.Get(app, user.Id); err == nil {
