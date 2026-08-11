@@ -52,10 +52,12 @@ Native Workavera clients for Android and iOS are in active development. They
 connect directly to your self-hosted Workavera server, bringing your workspace
 to phones and tablets without routing its data through a separate service.
 
-- **[Workavera for Android](https://github.com/xusenlin/workavera-android)** is
-  built with Kotlin and Jetpack Compose. Its source is already open.
-- **Workavera for iOS** is built with SwiftUI for iPhone and iPad. Its source is
-  not public yet and will be open-sourced later.
+- **[Download Workavera for Android](https://github.com/xusenlin/workavera-android/releases/latest)**
+  from GitHub Releases. It is built with Kotlin and Jetpack Compose, and its
+  [source code](https://github.com/xusenlin/workavera-android) is open.
+- **[Get Workavera for iOS on the App Store](https://apps.apple.com/app/workavera/id6794339518).**
+  The native SwiftUI app supports iPhone and iPad; its source is not public yet
+  and will be open-sourced later.
 
 Both apps are early previews; features may be incomplete or trail the web app
 while development continues.
