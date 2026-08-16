@@ -1,57 +1,35 @@
+const MARK_PATH =
+  "M5.66 9.89C6.98 19.38 8.95 23.9 10.92 23.9C12.9 23.9 15.4 15.35 16 15.35C16.6 15.35 19.1 23.9 21.08 23.9C23.05 23.9 25.02 19.38 26.34 9.89"
+
 export function Logo({ className }: { className?: string }) {
   return (
     <svg
       className={`logo ${className ?? ""}`}
-      viewBox="0 0 118.5926 99.2841"
+      viewBox="0 0 32 32"
       aria-hidden="true"
     >
+      {/* 落地投影：主体沿地平线 y=25.4 压扁斜切而成 */}
+      <g
+        opacity=".28"
+        transform="translate(0 25.4) skewX(-46) scale(1 .2) translate(0 -25.4)"
+      >
+        <path
+          className="stroke-foreground"
+          d={MARK_PATH}
+          fill="none"
+          strokeWidth="3.01"
+          strokeLinecap="round"
+        />
+        <circle className="fill-foreground" cx="16" cy="8.29" r="2.07" />
+      </g>
       <path
-        className="fill-foreground"
-        d="M104.4756,67.533v-13.78a2,2,0,0,0-2-2h-84a2,2,0,0,0-2,2V67.3573c0,1.7735-.0317,18.7616-.0383,22.2665a1.9715,1.9715,0,0,0,.3608,1.1457c1.0679,1.5193,4.2463,6.0392,6.0988,8.6542a2,2,0,0,0,1.6214.8291h9.0845a2,2,0,0,0,1.6913-.9326l1.6629-2.6348a2,2,0,0,1,1.6914-.9326h43.694a2,2,0,0,1,1.7.9461l1.6168,2.6078a2,2,0,0,0,1.7.9461h9.2706a2,2,0,0,0,1.6247-.8336l5.81-8.0926a1.9887,1.9887,0,0,0,.3754-1.1593C104.4459,86.6082,104.4756,69.3037,104.4756,67.533Z"
-        transform="translate(-1.1793 -0.9687)"
+        className="stroke-foreground"
+        d={MARK_PATH}
+        fill="none"
+        strokeWidth="3.01"
+        strokeLinecap="round"
       />
-      <rect
-        className="fill-foreground"
-        x="103.7963"
-        y="60.5296"
-        width="14.7963"
-        height="24.7034"
-        rx="2"
-      />
-      <rect
-        className="fill-foreground"
-        y="60.5296"
-        width="14.7963"
-        height="24.7034"
-        rx="2"
-      />
-      <path
-        className="fill-foreground"
-        d="M99.4015,19.4593A10.6162,10.6162,0,0,0,88.7853,8.8431h-56.62A10.6162,10.6162,0,0,0,21.55,19.4593V46A1.7693,1.7693,0,0,0,23.319,47.769h3.8631q-.4065,1.7651-.7844,3.53h6.0335c.2119-1.1845.43-2.3547.6432-3.53h53.259l.6826,3.5388h6.467c-.2516-1.1875-.489-2.3607-.7313-3.5388h4.88A1.7693,1.7693,0,0,0,99.4015,46Z"
-        transform="translate(-1.1793 -0.9687)"
-      />
-      <path
-        className="fill-foreground"
-        d="M82.2553,1.212l-3.19-.2383a1.762,1.762,0,0,0-1.7479,1.0441q-.7938,1.7964-2.8015,6.3742h10.43Q84.1825,4.4047,83.8623,2.65A1.76,1.76,0,0,0,82.2553,1.212Z"
-        transform="translate(-1.1793 -0.9687)"
-      />
-      <path
-        className="fill-foreground"
-        d="M41.7721,1.0746l-3.5545.5144A1.7685,1.7685,0,0,0,36.74,2.9752q-.3513,1.6709-1.1236,5.4168H46.4092q-1.9573-4.437-2.7639-6.2782A1.7663,1.7663,0,0,0,41.7721,1.0746Z"
-        transform="translate(-1.1793 -0.9687)"
-      />
-      <circle
-        className="eye fill-background"
-        cx="43.1636"
-        cy="25.1695"
-        r="6.1975"
-      />
-      <circle
-        className="eye fill-background"
-        cx="75.3906"
-        cy="25.1695"
-        r="6.1975"
-      />
+      <circle className="dot fill-foreground" cx="16" cy="8.29" r="2.07" />
     </svg>
   )
 }

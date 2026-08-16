@@ -129,14 +129,14 @@
   }
 }
 
-.logo .eye {
+.logo .dot {
   animation-duration: 4s;
   animation-timing-function: linear;
   animation-iteration-count: infinite;
   animation-name: marewood-running;
 }
 
-.logo:hover .eye {
+.logo:hover .dot {
   fill: #4caf50;
 }
 
