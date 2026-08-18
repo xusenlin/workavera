@@ -22,7 +22,29 @@ Workavera 尝试站在两者中间：
 - **感知权限的 AI 工具调用。** Chat 可以搜索你的上下文，并操作 Board、Calendar、Docs、Reading 和 Contacts——但只限于你账号本来就有的权限范围，且服务端对每次工具调用重新鉴权（身份、角色、所有权、revision）。AI 永远不是一个高权限服务账号。
 - **单个自包含二进制。** 前端通过 `go:embed` 内嵌，数据存于 PocketBase/SQLite——不需要 Postgres、Redis 或向量数据库。一条 `docker run` 或一个下载的二进制就能部署。
 - **可以从你已有的 AI 工具接入。** 同一批工具通过 MCP 暴露在 `/api/mcp`，Claude Code、Cursor 等客户端可以用带权限范围的 API Key 直接操作你的工作区。
-- **自带模型。** 配置你已经在付费的服务商 API Key 即可；Workavera 不内置模型，也不自行推理，基于 Apache-2.0 开源。
+- **自带模型。** 配置你已经在付费的服务商 API Key 即可，也可以把 Chat 指向跑在你自己硬件上的模型；Workavera 不内置模型，也不自行推理，基于 Apache-2.0 开源。
+
+## 数据隐私
+
+自托管本身已经解决了大半：项目、任务、文档、日历、稍后读、联系人以及完整的对话记录，全部存在你自己机器上的 `pb_data` SQLite 文件里。Workavera 没有任何遥测，也没有厂商后端。唯一会离开这台服务器的流量，都是你自己配置出来的——你在 Settings 里添加的模型服务商，以及你自己接入的外部 MCP 服务。
+
+模型调用通常是最后一份交给第三方的数据，而这一份同样可以留在本地。本地推理服务在 Settings 里的添加方式和在线服务商完全一样，且四种协议都可以用于本地——OpenAI、OpenAI 兼容、Anthropic Messages、Google——所以 LM Studio、Ollama、vLLM、llama.cpp 都能接；按你的推理服务实际暴露的端点选协议即可。
+
+| 字段 | 值 |
+| --- | --- |
+| 协议 | 按推理服务暴露的端点选。LM Studio 同时提供 OpenAI 兼容与 Anthropic 兼容端点，Ollama 提供 OpenAI 兼容端点 |
+| Base URL | 服务地址，Anthropic 协议填 `http://127.0.0.1:1234`，OpenAI 系协议填 `http://127.0.0.1:1234/v1`（Ollama 端口为 11434） |
+| Model ID | 推理服务报告的模型名，例如 `qwen/qwen3.8-27b` |
+| API Key | 留空即可，本地服务不校验 |
+
+这条路是实际支持的，不是纸面选项。一台 Apple 芯片 Mac 上用 LM Studio 跑 27B 级别的本地模型（Qwen3.8 27B，MLX 4bit，磁盘占用约 16 GB），经由它的 Anthropic 兼容端点接入，足以完整驱动 Chat：多轮推理、调用 Board / Calendar / Docs / Reading 的工作区工具，以及在此之上的外部 MCP 工具。这种配置下，整条链路——你的工作区数据、由它拼装出的提示词、工具返回的结果——都留在你自己的硬件上，拔掉网线 Workavera 依然能用。
+
+依赖它之前有两点需要知道：
+
+- **模型变小时，最先崩掉的是工具调用。** 回答质量随模型缩小是平滑下降的，而“连续多轮都能输出格式正确的工具调用”这件事不是。请优先选择工具调用能力扎实的模型；27B 的 4bit 量化大约需要 16 GB 空闲内存。
+- **本地模型并不会让外部 MCP 服务也变成本地的。** 如果你接入了托管的 MCP 服务（比如联网搜索），模型发给它的参数仍然会离开你的机器。
+
+Base URL 是由 Workavera 服务端发起请求的，不是浏览器。如果 Workavera 跑在容器里、且容器的网络模式看不到宿主机的 `127.0.0.1`，把地址换成 `http://host.docker.internal:1234` 即可。
 
 ## 产品截图
 

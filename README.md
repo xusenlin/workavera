@@ -22,7 +22,29 @@ Workavera is an attempt at the middle:
 - **Permission-aware AI tool calling.** Chat can search your context and operate Board, Calendar, Docs, Reading, and Contacts—but only within the permissions your account already has, and the server re-authorizes every tool call (identity, role, ownership, revision). The AI is never a privileged service account.
 - **One self-contained binary.** The frontend is embedded via `go:embed` and data lives in PocketBase/SQLite—no Postgres, Redis, or vector-database stack. Deploy with a single `docker run` or a single downloaded binary.
 - **Reachable from the AI tools you already use.** The same tools are exposed over MCP at `/api/mcp`, so clients such as Claude Code and Cursor can work against your workspace with a scoped API key.
-- **Bring your own model.** Configure API keys for providers you already pay for. Workavera ships no model and runs no inference of its own, and it is open source under Apache-2.0.
+- **Bring your own model.** Configure API keys for providers you already pay for, or point Chat at a model running on your own hardware. Workavera ships no model and runs no inference of its own, and it is open source under Apache-2.0.
+
+## Data privacy
+
+Self-hosting settles most of it: projects, tasks, docs, calendar, reading list, contacts, and the full chat history live in the `pb_data` SQLite file on your own machine. Workavera has no telemetry and no vendor backend. The only traffic that leaves the server is traffic you configured—calls to the model provider you added in Settings, and any external MCP servers you connected.
+
+The model call is usually the last piece of data that goes to a third party, and you can keep that in-house too. A local server is added in Settings exactly like a hosted provider, and all four protocols are available for it—OpenAI, OpenAI-compatible, Anthropic Messages, and Google—so LM Studio, Ollama, vLLM, and llama.cpp all fit; pick the protocol matching the endpoint your server exposes.
+
+| Field | Value |
+| --- | --- |
+| Protocol | whichever endpoint the server exposes. LM Studio serves both OpenAI-compatible and Anthropic-compatible; Ollama serves OpenAI-compatible |
+| Base URL | the server's origin, e.g. `http://127.0.0.1:1234` for Anthropic, `http://127.0.0.1:1234/v1` for the OpenAI protocols (Ollama: port 11434) |
+| Model ID | whatever the server reports, e.g. `qwen/qwen3.8-27b` |
+| API key | leave empty—local servers do not check it |
+
+This is a supported path, not a theoretical one. A 27B-class local model—Qwen3.8 27B, MLX 4-bit, about 16 GB on disk—served by LM Studio on a single Apple silicon Mac, reached over its Anthropic-compatible endpoint, runs Chat end to end: multi-turn reasoning, workspace tool calls against Board, Calendar, Docs and Reading, and external MCP tools on top. With that setup the whole loop—your workspace data, the prompts built from it, the tool results—stays on your own hardware, and Workavera keeps working with the network unplugged.
+
+Two things worth knowing before you rely on it:
+
+- **Tool calling is where small models break first.** Answer quality degrades gently as models get smaller; the ability to emit well-formed tool calls turn after turn does not. Prefer a model with solid tool-calling support, and expect roughly 16 GB of free memory for a 27B 4-bit quantization.
+- **A local model does not make external MCP servers local.** If you connect a hosted MCP server (web search, for example), the arguments the model sends it still leave your machine.
+
+The base URL is dialed by the Workavera server, not by your browser. If Workavera runs in a container whose network mode cannot see the host's `127.0.0.1`, point it at `http://host.docker.internal:1234` instead.
 
 ## Screenshots
 
