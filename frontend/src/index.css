@@ -127,6 +127,15 @@
   html {
     @apply font-sans;
   }
+  /* Tailwind v4's preflight sets `cursor: default` on buttons. The Button
+     component opts back in through its own class, so this covers the plain
+     `<button>` elements and third-party markup that do not. Utilities outrank
+     the base layer, so the components that deliberately choose
+     `cursor-default` keep it. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
 }
 
 .logo .dot {
