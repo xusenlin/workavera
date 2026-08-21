@@ -3,7 +3,7 @@ import {
   MessageContent,
   MessageResponse,
 } from "@/components/ai-elements/message"
-import { memo } from "react"
+import { memo, useEffect, useState } from "react"
 import {
   Reasoning,
   ReasoningContent,
@@ -44,6 +44,42 @@ import {
 import { ApprovalToolCard } from "./approval-tool-card"
 import { MemoryToolCard } from "./memory-tool-output"
 import { ToolInput } from "./tool-input"
+
+/**
+ * Shown while a run is active but nothing is arriving yet: before the first
+ * token, and between a finished tool call and the model's next output. Slow
+ * self-hosted models can sit there for a while, so the elapsed seconds are
+ * spelled out — an animation alone still looks like a frozen page.
+ */
+export function ThinkingIndicator({ className }: { className?: string }) {
+  const [seconds, setSeconds] = useState(0)
+
+  useEffect(() => {
+    const startedAt = Date.now()
+    const timer = window.setInterval(() => {
+      setSeconds(Math.floor((Date.now() - startedAt) / 1000))
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  return (
+    <Shimmer as="span" className={cn("text-sm", className)}>
+      {seconds >= 2 ? `Thinking… ${seconds}s` : "Thinking…"}
+    </Shimmer>
+  )
+}
+
+/**
+ * Reports whether a part is still producing something on its own, so the
+ * thinking indicator stays out of the way while text streams, a tool runs, or
+ * an approval waits on the user.
+ */
+function isPartPending(part: ChatUIMessage["parts"][number]): boolean {
+  if (part.type === "dynamic-tool") {
+    return part.state === "input-streaming" || part.state === "input-available"
+  }
+  return "state" in part && part.state === "streaming"
+}
 
 const boardMutationToolNames = new Set([
   "board_create_project",
@@ -377,6 +413,9 @@ function ChatMessageItemComponent({
 
       <MessageContent>
         <MessageParts message={message} runActive={runActive} />
+        {!isUser && runActive && !message.parts.some(isPartPending) && (
+          <ThinkingIndicator />
+        )}
       </MessageContent>
 
       {!isUser &&

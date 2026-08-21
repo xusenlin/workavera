@@ -10,6 +10,7 @@ import {
   ConversationEmptyState,
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation"
+import { Message, MessageContent } from "@/components/ai-elements/message"
 import { Button } from "@/components/ui/button"
 import { useChatRuntime } from "@/lib/chat-runtime"
 import { useChatStore } from "@/store/chat"
@@ -19,7 +20,7 @@ import type {
 } from "@/types/chat"
 
 import { ChatHeader } from "./chat-header"
-import { ChatMessageItem } from "./chat-message"
+import { ChatMessageItem, ThinkingIndicator } from "./chat-message"
 import { ChatPromptInput, type ChatContextInfo } from "./chat-prompt-input"
 
 /**
@@ -93,6 +94,12 @@ function ActiveChat({ conversation }: { conversation: ChatConversation }) {
   const loadingMessages = runtimeState.loading && !runtimeState.hydrated
   const effectiveStatus =
     runtimeState.activeRunId && status === "ready" ? "submitted" : status
+  // The assistant message only appears once its first chunk arrives, so until
+  // then the run has nothing to render itself into.
+  const awaitingReply =
+    effectiveStatus === "submitted" &&
+    messages.length > 0 &&
+    messages[messages.length - 1].role !== "assistant"
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
@@ -115,6 +122,16 @@ function ActiveChat({ conversation }: { conversation: ChatConversation }) {
                 }
               />
             ))
+          )}
+          {awaitingReply && (
+            <Message from="assistant">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="font-medium">Assistant</span>
+              </div>
+              <MessageContent>
+                <ThinkingIndicator />
+              </MessageContent>
+            </Message>
           )}
           {(error || runtimeState.recoveryError) && (
             <div className="flex items-center gap-2 text-sm text-destructive">
