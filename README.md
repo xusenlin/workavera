@@ -6,7 +6,7 @@
 
 > **A self-hosted AI workspace for freelancers and small teams** — projects, docs, calendar, and reading in one binary on your own server, with an assistant that can actually operate them, inside your own permissions.
 
-> ⚠️ **Early-stage software (0.0.x).** Features and data schemas are still changing quickly, and releases may include breaking changes (see the [changelog](./CHANGELOG.md)). Back up `pb_data` before upgrading. It is not ready for production use yet.
+> ⚠️ **Early-stage software (0.x).** Features and data schemas are still changing quickly, and releases may include breaking changes (see the [changelog](./CHANGELOG.md)). Back up `pb_data` before upgrading. It is not ready for production use yet.
 
 Workavera keeps your projects, tasks, documents, calendar, saved links, and contacts in one place, and Chat is how you put them in motion: the assistant works through the same capabilities your account already has—finding context, creating and updating records—and the server re-authorizes every action against your own permissions before it is applied.
 
@@ -132,7 +132,7 @@ The demo user is seeded only when the `users` collection is empty, so upgrades d
 One line each; the [product documentation](#product-documentation) below carries the detail.
 
 - **Board** manages Kanban projects with custom workflow states, labels, members and roles, due dates, task activity history, and ten bilingual project templates.
-- **Docs** stores private and project documents with rich-text editing, explicit versions and conflict detection, Markdown/HTML export, and AI editing.
+- **Docs** stores private and project documents with rich-text editing, explicit versions and conflict detection, Markdown/HTML export, AI editing, and public links that serve a published revision to readers without an account.
 - **Calendar** combines personal events and visible Board deadlines in one view, with recurrence and in-app reminders.
 - **Chat** is where you work with the model: durable streaming conversations that survive browser disconnects, with visible reasoning and tool calls, automatic compaction of long conversations, and optional long-term memory that is off by default.
 - **Reading** saves external links and notes with projects, tags, read state, and AI summaries.
