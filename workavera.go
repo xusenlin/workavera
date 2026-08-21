@@ -3,6 +3,8 @@ package main
 import (
 	"io/fs"
 	"log"
+	"path"
+	"strings"
 
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/apis"
@@ -29,6 +31,12 @@ import (
 )
 
 var version = "dev"
+
+const (
+	assetsPrefix           = "/assets/"
+	immutableCacheControl  = "public, max-age=31536000, immutable"
+	revalidateCacheControl = "no-cache"
+)
 
 func main() {
 	app := pocketbase.New()
@@ -59,7 +67,34 @@ func main() {
 	}
 
 	app.OnServe().BindFunc(func(event *core.ServeEvent) error {
-		event.Router.GET("/{path...}", apis.Static(distFS, true))
+		// PocketBase compresses and caches only its own admin UI, so the app's
+		// assets need the same treatment or every visitor re-downloads the
+		// whole bundle uncompressed.
+		event.Router.GET("/{path...}", apis.Static(distFS, true)).
+			BindFunc(func(e *core.RequestEvent) error {
+				urlPath := e.Request.URL.Path
+
+				switch {
+				case strings.HasPrefix(urlPath, assetsPrefix):
+					// Vite fingerprints everything under /assets, so those
+					// URLs never change meaning.
+					e.Response.Header().Set("Cache-Control", immutableCacheControl)
+				case path.Ext(urlPath) == "":
+					// Extension-less paths are app routes served by the
+					// index.html fallback. Embedded files carry no modtime and
+					// so no validator, so without this an unlucky heuristic
+					// cache could pin a visitor to an old index.html long
+					// after the deploy that removed the bundles it names.
+					e.Response.Header().Set("Cache-Control", revalidateCacheControl)
+				}
+
+				return e.Next()
+			}).
+			Bind(apis.GzipWithConfig(apis.GzipConfig{
+				// Below roughly a packet, the gzip header costs more than it
+				// saves.
+				MinLength: 1024,
+			}))
 
 		return event.Next()
 	})

@@ -5,6 +5,23 @@
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Workavera</title>
+    <script>
+      // A shared document is the one page anonymous visitors reach, and its
+      // fetch would otherwise wait for the whole app bundle to load and route.
+      // Starting it here runs it alongside the bundle instead of after it.
+      ;(function () {
+        var slug = /^\/s\/([^/?#]+)\/?$/.exec(location.pathname)
+        if (!slug) return
+        var request = fetch("/api/public/docs/" + slug[1]).then(function (res) {
+          if (!res.ok) throw new Error("HTTP " + res.status)
+          return res.json()
+        })
+        // The page attaches its own handler once it mounts; this one only
+        // keeps an early failure from surfacing as an unhandled rejection.
+        request.catch(function () {})
+        window.__publicDoc = { slug: slug[1], request: request }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

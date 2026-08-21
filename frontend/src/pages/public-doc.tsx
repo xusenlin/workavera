@@ -26,6 +26,26 @@ type LoadState =
   | { status: "ready"; document: PublicDocument }
   | { status: "unavailable" }
 
+declare global {
+  interface Window {
+    /** Started by the inline script in index.html. */
+    __publicDoc?: { slug: string; request: Promise<PublicDocument> }
+  }
+}
+
+/**
+ * Prefer the request index.html already has in flight; fall back to a fresh one
+ * when the page was reached by client-side navigation rather than a cold load.
+ */
+function loadPublicDoc(slug: string): Promise<PublicDocument> {
+  const preloaded = window.__publicDoc
+  if (preloaded?.slug === slug) return preloaded.request
+  return pb.send<PublicDocument>(
+    `/api/public/docs/${encodeURIComponent(slug)}`,
+    { requestKey: null }
+  )
+}
+
 export function PublicDocPage() {
   const { slug = "" } = useParams()
   const [state, setState] = useState<LoadState>({ status: "loading" })
@@ -34,10 +54,7 @@ export function PublicDocPage() {
 
   useEffect(() => {
     let active = true
-    void pb
-      .send<PublicDocument>(`/api/public/docs/${encodeURIComponent(slug)}`, {
-        requestKey: null,
-      })
+    void loadPublicDoc(slug)
       .then((result) => {
         if (active) setState({ status: "ready", document: result })
       })
