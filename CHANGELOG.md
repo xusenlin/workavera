@@ -7,6 +7,18 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Documents can be shared publicly. The creator publishes a document from its
+  toolbar and gets an unguessable link that anyone can open without an account,
+  optionally with an expiry date. The link serves the revision that was
+  published, so editing continues privately until the creator publishes again;
+  Markdown renders read-only and HTML renders in the same sandbox as the editor
+  preview. Revoking a link, letting it expire, or archiving the document all
+  make it unavailable at once, and only attachments the published snapshot
+  references are reachable through it. A shared Markdown document reads with a
+  scroll progress bar and a jumpable outline of its own headings.
+
 ## [0.0.11] - 2026-08-04
 
 ### Changed

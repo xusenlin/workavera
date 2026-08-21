@@ -22,6 +22,7 @@ Project documents can be linked to Board tasks in the same project.
 - Support one-level personal folders, personal pins, search, pagination, archive, restore, and permanent deletion.
 - Let Chat search, read, create, fully update, precisely replace Markdown, and stream large document writes in chunks.
 - Let Board tasks link active documents from their own project.
+- Let a creator publish a document snapshot to an unguessable link that anyone can read without signing in.
 
 ## 3. Non-goals
 
@@ -31,7 +32,8 @@ Project documents can be linked to Board tasks in the same project.
 - Nested folders, project folders, backlinks, graph views, block references, or semantic/vector search.
 - Custom per-document collaborators outside Board project membership.
 - Persisting editor-specific JSON, MDX, JSX, or multi-file HTML application bundles.
-- Public publishing.
+- Public links that follow the live document, are guessable, are listable, or accept comments and edits.
+- Password-protected links, view counters, or an instance-wide switch that disables sharing.
 
 ## 4. Core rules
 
@@ -51,6 +53,10 @@ Project documents can be linked to Board tasks in the same project.
 14. `project` and `folder` are mutually exclusive; documents with neither are directly in `My documents`.
 15. Personal folders only organize their owner's private documents; deleting a folder returns its documents to `My documents` without deleting them or creating versions.
 16. HTML documents must remain self-contained and are rendered in a sandboxed opaque origin; development-server asset references are rejected.
+17. Publishing pins the revision that is public. The link keeps serving that snapshot while the document is edited; only an explicit republish moves it, and changing a link's expiry never does.
+18. Only the document creator can publish, republish, expire, or revoke a link, matching archive and delete. Project membership grants no sharing rights.
+19. A link stops working the moment it expires, is revoked, or its document is archived or deleted. All of these answer alike, so a link never reveals which happened.
+20. A published snapshot serves only the attachments it references; attachments uploaded afterwards stay private.
 
 ## 5. Data model
 
@@ -108,6 +114,19 @@ Assets inherit document visibility. Uploads use the authenticated Docs asset end
 | `created` | autodate | Save time |
 
 Version list requests return up to 100 revisions in descending order. List entries omit full content; an individual version request returns the complete body.
+
+### `doc_shares`
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `doc` | relation → docs | Required, unique, cascade delete |
+| `slug` | text | Unique 22-character lowercase alphanumeric public identifier |
+| `revision` | number | The published revision, read from `doc_versions` |
+| `expires` | date | Optional; empty means the link does not expire |
+| `created_by` | relation → users | Publishing creator |
+| `created`, `updated` | autodate | Record timestamps |
+
+A share is a separate record so publishing, expiring, and revoking never touch the document and never create a revision. Owners read their own shares through PocketBase list/view rules; every write goes through the Docs API so a client can neither choose a slug nor pin a revision by hand. Revoking deletes the record, so publishing again issues a new slug instead of reviving the old link.
 
 ### `doc_pins`
 
@@ -172,6 +191,9 @@ The same `draftContent` powers each kind's source and rendered modes. Mode switc
 - Pin/unpin is available for accessible documents.
 - Creator-only actions include archive and permanent delete; delete confirmation states that all versions are removed.
 - The archive dialog uses 10 items per page and lets creators restore or permanently delete documents.
+- Creators share from the document toolbar: the dialog creates a link, copies it, shows the published revision against the current one, publishes the latest revision on request, sets or clears an expiry, and revokes.
+- A shared document opens at `/s/{slug}` outside the authenticated shell, with no page chrome around the document: the document's own heading is the page's, and its title only names the browser tab. An unavailable link says only that it is unavailable.
+- Shared Markdown gets two reading aids: a scroll progress bar across the top, and an outline of the document's own headings beside the text on wide viewports, which highlights the current section and jumps to any of them. Shared HTML renders in the same sandboxed opaque origin as the editor preview and gets neither, because its content is opaque to the page.
 - The document URL uses the shared `open` query parameter for deep links from Chat, Board, Dashboard, and other modules, plus `view` and optional `location` parameters for Docs navigation state.
 
 ## 9. HTTP API
@@ -188,8 +210,13 @@ The same `draftContent` powers each kind's source and rendered modes. Mode switc
 - `GET /api/docs/{id}/versions`
 - `GET /api/docs/{id}/versions/{revision}`
 - `POST /api/docs/{id}/restore/{revision}`
+- `GET /api/docs/{id}/share`
+- `POST /api/docs/{id}/share`
+- `DELETE /api/docs/{id}/share`
+- `GET /api/public/docs/{slug}`
+- `GET /api/public/docs/{slug}/assets/{assetId}`
 
-All endpoints require `users` authentication. Inaccessible private/project documents use not-found semantics where appropriate to avoid revealing record existence.
+The two `/api/public/docs` routes are the only ones an anonymous visitor may reach. They resolve a slug to one published snapshot and return the title, kind, content, revision, and publication time; owner, project, folder, and editor identities never leave the server. They exist as custom endpoints because built-in rules cannot resolve a slug into another collection's record, apply expiry, and strip private fields. Attachments are proxied per slug because protected files require a file token no anonymous visitor can obtain. Every other endpoint requires `users` authentication. Inaccessible private/project documents use not-found semantics where appropriate to avoid revealing record existence.
 
 Personal folders use PocketBase `/api/collections/doc_folders/records` CRUD. Document location changes use the Docs move endpoint so private and project destinations share the same permission and relation-cleanup rules.
 
