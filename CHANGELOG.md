@@ -7,6 +7,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-08-21
+
 ### Added
 
 - Documents can be shared publicly. The creator publishes a document from its
@@ -18,6 +20,27 @@ and versions follow [Semantic Versioning](https://semver.org/).
   make it unavailable at once, and only attachments the published snapshot
   references are reachable through it. A shared Markdown document reads with a
   scroll progress bar and a jumpable outline of its own headings.
+- Chat shows a thinking indicator with the elapsed seconds while a run has
+  produced no output yet, both before the first token and between a finished
+  tool call and the next one. Self-hosted models can be slow enough that an
+  idle transcript otherwise reads as a frozen page.
+
+### Changed
+
+- The application logo is an arced W with a floating dot and a cast shadow,
+  replacing the robot mark. Both layers share one path and follow the theme
+  foreground, so the mark needs no hard-coded colour in light or dark mode.
+
+### Fixed
+
+- The assistant knows the time of day, not just the date. The system prompt
+  carried only `Current date`, which left anything expiring on a scale of
+  minutes unjudgeable; it now renders the local time with its offset and zone,
+  taken from the same administrator-configured system timezone the Calendar
+  tools use.
+- Plain `<button>` elements show a pointer cursor again. Tailwind v4's preflight
+  sets `cursor: default` on buttons, and only the ones built from the Button
+  component opted back in.
 
 ## [0.0.11] - 2026-08-04
 
@@ -435,7 +458,8 @@ First public release.
 - **AI Micro Apps** for self-contained HTML tools with sandboxed preview.
 - **Dashboard**, realtime **Notifications**, and **Settings** with per-user model configurations and model sharing.
 
-[Unreleased]: https://github.com/xusenlin/workavera/compare/v0.0.11...HEAD
+[Unreleased]: https://github.com/xusenlin/workavera/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/xusenlin/workavera/compare/v0.0.11...v0.1.0
 [0.0.11]: https://github.com/xusenlin/workavera/compare/v0.0.10...v0.0.11
 [0.0.10]: https://github.com/xusenlin/workavera/compare/v0.0.9...v0.0.10
 [0.0.9]: https://github.com/xusenlin/workavera/compare/v0.0.8...v0.0.9
