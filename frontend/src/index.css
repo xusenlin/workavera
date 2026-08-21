@@ -439,3 +439,100 @@
 .doc-code-editor .cm-editor.cm-focused {
   outline: none;
 }
+
+/* A published document is read rather than edited, but it should keep the
+   rhythm it was written in. Streamdown's defaults are tuned for chat messages,
+   so the editor's type scale (@blocknote/core, mirrored in .doc-rich-area
+   above) is restated here over Streamdown's markup. */
+.workavera-doc-reader {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.workavera-doc-reader :is(h1, h2, h3, h4, h5, h6) {
+  margin: 0;
+  /* BlockNote pads headings 18px on top; the 0.4em below matches the editor
+     override that keeps the next paragraph off the heading. */
+  padding-top: 1.125rem;
+  padding-bottom: 0.4em;
+  font-weight: 700;
+  line-height: 1.25;
+  scroll-margin-top: 2.5rem;
+}
+
+.workavera-doc-reader h1 {
+  font-size: 3em;
+}
+
+.workavera-doc-reader h2 {
+  font-size: 2em;
+}
+
+.workavera-doc-reader h3 {
+  font-size: 1.3em;
+}
+
+.workavera-doc-reader h4 {
+  font-size: 1em;
+}
+
+.workavera-doc-reader h5 {
+  font-size: 0.9em;
+}
+
+.workavera-doc-reader h6 {
+  font-size: 0.8em;
+}
+
+/* The editor separates blocks with 3px above and below rather than a large
+   paragraph margin; its generous line height does the rest. */
+.workavera-doc-reader :is(p, ul, ol, blockquote, table),
+.workavera-doc-reader [data-streamdown="code-block"] {
+  margin-block: 3px;
+}
+
+.workavera-doc-reader :is(ul, ol) {
+  padding-left: 1.5rem;
+}
+
+.workavera-doc-reader li {
+  padding-block: 3px;
+}
+
+.workavera-doc-reader hr {
+  margin-block: 1.25em;
+  border-top-color: var(--border);
+}
+
+.workavera-doc-reader blockquote {
+  border-left: 2px solid var(--border);
+  padding-left: 1em;
+}
+
+/* Streamdown renders links as buttons so it can confirm outbound navigation,
+   which means an anchor's styling does not reach them. */
+.workavera-doc-reader :is(a, [data-streamdown="link"]) {
+  color: var(--primary);
+  text-decoration-color: var(--muted-foreground);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.15em;
+}
+
+/* Overlay scrollbars stay invisible until they are used, which hides that a
+   long outline scrolls at all. Styling the WebKit pseudo-elements replaces the
+   overlay with a track that is always drawn while the outline overflows.
+   Setting the standard `scrollbar-width` here would be counterproductive:
+   Chrome then ignores these rules and keeps the overlay. */
+.workavera-doc-outline::-webkit-scrollbar {
+  width: 4px;
+}
+
+.workavera-doc-outline::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+.workavera-doc-outline::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border-radius: 9999px;
+}

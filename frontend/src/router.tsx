@@ -54,6 +54,12 @@ const DocsPage = lazy(() =>
   import("@/pages/docs").then((module) => ({ default: module.DocsPage }))
 )
 
+const PublicDocPage = lazy(() =>
+  import("@/pages/public-doc").then((module) => ({
+    default: module.PublicDocPage,
+  }))
+)
+
 export function AppRouter() {
   return (
     <BrowserRouter>
@@ -66,6 +72,8 @@ export function AppRouter() {
       >
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          {/* Shared documents are readable without an account. */}
+          <Route path="/s/:slug" element={<PublicDocPage />} />
 
           <Route element={<ProtectedRoute />}>
             <Route element={<DashboardLayout />}>

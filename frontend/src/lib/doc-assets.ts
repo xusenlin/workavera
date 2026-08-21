@@ -83,6 +83,20 @@ export function isDocAssetURL(value: string): boolean {
   return parseDocAssetURL(value) !== undefined
 }
 
+const DOC_ASSET_PATH = /\/api\/files\/doc_assets\/(\w+)\/[^\s)"'<>]+/g
+
+/**
+ * Point attachment URLs at the public share endpoint. A visitor without a
+ * session cannot obtain the file token that protected files require, so a
+ * published document serves its attachments through its own slug.
+ */
+export function withPublicDocAssets(content: string, slug: string): string {
+  return content.replace(
+    DOC_ASSET_PATH,
+    (_match, id: string) => `/api/public/docs/${slug}/assets/${id}`
+  )
+}
+
 export function docAssetDownloadURL(value: string): string {
   const parsed = parseDocAssetURL(value)
   if (!parsed) return value

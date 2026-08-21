@@ -6,6 +6,7 @@ import {
   Add01Icon,
   Archive02Icon,
   ArchiveRestoreIcon,
+  Copy01Icon,
   Delete02Icon,
   DocumentAttachmentIcon,
   Download01Icon,
@@ -20,6 +21,7 @@ import {
   MoreHorizontalIcon,
   Pin02Icon,
   Search02Icon,
+  Share01Icon,
   SourceCodeIcon,
 } from "@hugeicons/core-free-icons"
 import { ClientResponseError, type RecordModel } from "pocketbase"
@@ -143,6 +145,15 @@ type DocumentResult = {
   status: "draft" | "archived"
   revision: number
   lastEditedBy: string
+  created: string
+  updated: string
+}
+
+type DocumentShare = {
+  docId: string
+  slug: string
+  revision: number
+  expires?: string
   created: string
   updated: string
 }
@@ -881,6 +892,9 @@ export function DocsPage() {
                     Load latest
                   </Button>
                 )}
+                {persisted.ownerId === pb.authStore.record?.id && (
+                  <ShareDocumentButton document={persisted} />
+                )}
                 {persisted.kind === "html" ? (
                   <HeaderIconButton
                     label={
@@ -1073,6 +1087,7 @@ function HeaderIconButton({
   active = false,
   loading = false,
   disabled = false,
+  className,
   onClick,
 }: {
   label: string
@@ -1080,6 +1095,7 @@ function HeaderIconButton({
   active?: boolean
   loading?: boolean
   disabled?: boolean
+  className?: string
   onClick: () => void
 }) {
   return (
@@ -1090,6 +1106,7 @@ function HeaderIconButton({
           size="icon-sm"
           aria-label={label}
           disabled={disabled}
+          className={className}
           onClick={onClick}
         >
           {loading ? (
@@ -1987,6 +2004,231 @@ function MoveDocumentButton({
       </DialogContent>
     </Dialog>
   )
+}
+
+/**
+ * Publishing pins the revision that is public, so the link keeps serving that
+ * snapshot while editing continues. Changing the expiry leaves the snapshot
+ * alone; only "Publish latest" moves it.
+ */
+function ShareDocumentButton({ document }: { document: DocumentResult }) {
+  const [open, setOpen] = useState(false)
+  // Tied to the document it describes: selecting another document leaves the
+  // ids mismatched, which reads as "not loaded yet" instead of showing the
+  // previous document's link as if it were this one's.
+  const [loaded, setLoaded] = useState<{
+    docId: string
+    share: DocumentShare | null
+  } | null>(null)
+  const [expiry, setExpiry] = useState<ShareExpiry>("never")
+  const [working, setWorking] = useState(false)
+  const current = loaded?.docId === document.id ? loaded : null
+  const share = current?.share ?? null
+
+  useEffect(() => {
+    let active = true
+    void pb
+      .send<DocumentShare | null>(`/api/docs/${document.id}/share`, {})
+      .then((existing) => {
+        if (!active) return
+        setLoaded({ docId: document.id, share: existing })
+        setExpiry(existing?.expires ? "keep" : "never")
+      })
+      .catch((error) => {
+        if (!active || isRequestAbort(error)) return
+        toast.error(extractErrorMessage(error, "Could not load share link."))
+      })
+    return () => {
+      active = false
+    }
+  }, [document.id])
+
+  const publish = async (republish: boolean, nextExpiry: ShareExpiry) => {
+    setWorking(true)
+    try {
+      const updated = await pb.send<DocumentShare>(
+        `/api/docs/${document.id}/share`,
+        {
+          method: "POST",
+          body: {
+            expires: shareExpiryValue(nextExpiry, share),
+            republish,
+          },
+        }
+      )
+      setLoaded({ docId: document.id, share: updated })
+      setExpiry(updated.expires ? "keep" : "never")
+      toast.success(republish ? "Latest revision published." : "Link updated.")
+    } catch (error) {
+      toast.error(extractErrorMessage(error, "Could not update share link."))
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  const revoke = async () => {
+    setWorking(true)
+    try {
+      await pb.send(`/api/docs/${document.id}/share`, { method: "DELETE" })
+      setLoaded({ docId: document.id, share: null })
+      setExpiry("never")
+      toast.success("Link revoked.")
+    } catch (error) {
+      toast.error(extractErrorMessage(error, "Could not revoke share link."))
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  const url = share ? `${window.location.origin}/s/${share.slug}` : ""
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url)
+      toast.success("Link copied.")
+    } catch {
+      toast.error("Could not copy to clipboard.")
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <HeaderIconButton
+        label={share ? "Shared publicly" : "Share"}
+        icon={Share01Icon}
+        className={
+          share ? "text-emerald-500 hover:text-emerald-500" : undefined
+        }
+        onClick={() => setOpen(true)}
+      />
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Share document</DialogTitle>
+          <DialogDescription>
+            Anyone with the link can read this document without signing in. The
+            link serves the revision you publish, so later edits stay private
+            until you publish again.
+          </DialogDescription>
+        </DialogHeader>
+        {!current ? (
+          <div className="flex justify-center py-6">
+            <Spinner className="size-5" />
+          </div>
+        ) : share ? (
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-2">
+              <Input readOnly value={url} onFocus={(e) => e.target.select()} />
+              <Button
+                variant="outline"
+                size="icon"
+                aria-label="Copy link"
+                onClick={() => void copy()}
+              >
+                <HugeiconsIcon icon={Copy01Icon} strokeWidth={2} />
+              </Button>
+            </div>
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="text-muted-foreground">
+                Published revision {share.revision}
+                {share.revision < document.revision
+                  ? ` · document is at ${document.revision}`
+                  : " · up to date"}
+              </span>
+              {share.revision < document.revision && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={working}
+                  onClick={() => void publish(true, expiry)}
+                >
+                  Publish latest
+                </Button>
+              )}
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label>Expires</Label>
+              <Select
+                value={expiry}
+                onValueChange={(value) => {
+                  const next = value as ShareExpiry
+                  setExpiry(next)
+                  void publish(false, next)
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {share.expires && (
+                    <SelectItem value="keep">
+                      {formatShareExpiry(share.expires)}
+                    </SelectItem>
+                  )}
+                  <SelectItem value="never">No expiry</SelectItem>
+                  <SelectItem value="7">7 days from now</SelectItem>
+                  <SelectItem value="30">30 days from now</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <Label>Expires</Label>
+            <Select
+              value={expiry}
+              onValueChange={(value) => setExpiry(value as ShareExpiry)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="never">No expiry</SelectItem>
+                <SelectItem value="7">7 days from now</SelectItem>
+                <SelectItem value="30">30 days from now</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        <DialogFooter>
+          {share ? (
+            <Button
+              variant="outline"
+              disabled={working}
+              onClick={() => void revoke()}
+            >
+              Revoke link
+            </Button>
+          ) : (
+            <Button
+              disabled={working || !current}
+              onClick={() => void publish(false, expiry)}
+            >
+              {working ? "Creating…" : "Create link"}
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/** "keep" leaves an existing expiry untouched while other fields change. */
+type ShareExpiry = "keep" | "never" | "7" | "30"
+
+function shareExpiryValue(
+  expiry: ShareExpiry,
+  share: DocumentShare | null
+): string {
+  if (expiry === "keep") return share?.expires ?? ""
+  if (expiry === "never") return ""
+  const expires = new Date()
+  expires.setDate(expires.getDate() + Number(expiry))
+  return expires.toISOString()
+}
+
+function formatShareExpiry(value: string): string {
+  const parsed = new Date(value.replace(" ", "T"))
+  if (Number.isNaN(parsed.getTime())) return "Keep current expiry"
+  return `Keep ${parsed.toLocaleDateString()}`
 }
 
 function HistoryDialog({

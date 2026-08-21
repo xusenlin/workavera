@@ -24,10 +24,18 @@ func Register(app core.App) {
 		router.POST("/api/docs/{id}/pin", pinRequest).Bind(apis.RequireAuth("users"))
 		router.POST("/api/docs/{id}/archive", archiveRequest).Bind(apis.RequireAuth("users"))
 		router.POST("/api/docs/{id}/unarchive", unarchiveRequest).Bind(apis.RequireAuth("users"))
+		router.GET("/api/docs/{id}/share", getShareRequest).Bind(apis.RequireAuth("users"))
+		router.POST("/api/docs/{id}/share", shareRequest).Bind(apis.RequireAuth("users"))
+		router.DELETE("/api/docs/{id}/share", unshareRequest).Bind(apis.RequireAuth("users"))
 		router.DELETE("/api/docs/{id}", deleteRequest).Bind(apis.RequireAuth("users"))
 		router.GET("/api/docs/{id}/versions", versionsRequest).Bind(apis.RequireAuth("users"))
 		router.GET("/api/docs/{id}/versions/{revision}", versionRequest).Bind(apis.RequireAuth("users"))
 		router.POST("/api/docs/{id}/restore/{revision}", restoreRequest).Bind(apis.RequireAuth("users"))
+		// The only routes in the application an anonymous visitor may reach.
+		// They resolve an unguessable slug to one published snapshot: no
+		// listing, no document ID, no owner identity.
+		router.GET("/api/public/docs/{slug}", publicDocRequest)
+		router.GET("/api/public/docs/{slug}/assets/{assetId}", publicAssetRequest)
 		return event.Next()
 	})
 }
@@ -193,8 +201,65 @@ func restoreRequest(event *core.RequestEvent) error {
 	return event.JSON(http.StatusOK, doc)
 }
 
+func getShareRequest(event *core.RequestEvent) error {
+	share, err := GetShare(event.Request.Context(), event.App, event.Auth.Id, event.Request.PathValue("id"))
+	if err != nil {
+		if errors.Is(err, ErrShareNotFound) {
+			return event.JSON(http.StatusOK, nil)
+		}
+		return requestError(event, err)
+	}
+	return event.JSON(http.StatusOK, share)
+}
+
+func shareRequest(event *core.RequestEvent) error {
+	var input ShareInput
+	if err := event.BindBody(&input); err != nil {
+		return event.BadRequestError("Invalid share data.", err)
+	}
+	share, err := Publish(event.Request.Context(), event.App, event.Auth.Id, event.Request.PathValue("id"), input)
+	if err != nil {
+		return requestError(event, err)
+	}
+	return event.JSON(http.StatusOK, share)
+}
+
+func unshareRequest(event *core.RequestEvent) error {
+	if err := Unpublish(event.Request.Context(), event.App, event.Auth.Id, event.Request.PathValue("id")); err != nil {
+		return requestError(event, err)
+	}
+	return event.NoContent(http.StatusNoContent)
+}
+
+func publicDocRequest(event *core.RequestEvent) error {
+	doc, err := PublicDoc(event.Request.Context(), event.App, event.Request.PathValue("slug"))
+	if err != nil {
+		return requestError(event, err)
+	}
+	return event.JSON(http.StatusOK, doc)
+}
+
+func publicAssetRequest(event *core.RequestEvent) error {
+	asset, err := PublicAsset(event.Request.Context(), event.App, event.Request.PathValue("slug"), event.Request.PathValue("assetId"))
+	if err != nil {
+		return requestError(event, err)
+	}
+	filename := asset.GetString("file")
+	fsys, err := event.App.NewFilesystem()
+	if err != nil {
+		return event.InternalServerError("Filesystem initialization failure.", err)
+	}
+	defer fsys.Close()
+	if err := fsys.Serve(event.Response, event.Request, asset.BaseFilesPath()+"/"+filename, filename); err != nil {
+		return event.NotFoundError("Attachment not found.", err)
+	}
+	return nil
+}
+
 func requestError(event *core.RequestEvent, err error) error {
 	switch {
+	case errors.Is(err, ErrShareNotFound):
+		return event.NotFoundError("This link is no longer available.", err)
 	case errors.Is(err, ErrNotFound):
 		return event.NotFoundError("Document not found.", err)
 	case errors.Is(err, ErrForbidden):
