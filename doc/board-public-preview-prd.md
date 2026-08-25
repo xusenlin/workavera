@@ -196,8 +196,9 @@ state and, within a group, are packed into lanes after sorting by start date —
 tasks that do not overlap in time share a row, so the height follows how much
 runs in parallel rather than how many tasks exist, and dozens of tasks still fit
 one screen while the state grouping lays out "how many in each state" by itself.
-Bars carry their state's color and the task title, and a completed bar dims and
-leads with a check. Today runs through it as a vertical line. A span wider than
+Bars carry their state's color, and their title when they are wide enough for it
+— a narrow bar leaves that to its tooltip. A completed bar dims and leads with a
+check. Today runs through it as a vertical line. A span wider than
 the screen scrolls horizontally and lands on today at first load; a very long
 span switches the axis to weekly ticks without moving the bars. Clicking a bar
 opens the task detail.
@@ -267,9 +268,14 @@ share dialog's expiry reuses `ui/date-picker`.
 - The axis comes from `eachDayOfInterval`; a bar starts at
   `differenceInCalendarDays(taskStart, rangeStart) + 1` and spans the days
   between its dates plus one.
-- Column width follows the span: 48px per day up to 60 days, with titles inside
-  the bars; 24px from 61 to 180 days, with titles moving to tooltips; beyond 180
-  days one column per week, positioned with `differenceInCalendarWeeks`.
+- Column width follows the span: 48px per day up to 60 days, 24px from 61 to
+  180 days, and beyond 180 days one column per week, positioned with
+  `differenceInCalendarWeeks`.
+- Whether a bar carries its title depends on that bar's own width rather than on
+  the width tier: below 72px it shows only its color and its completion mark and
+  leaves the title to its tooltip. A single-day task in a 48px column fits two
+  or three clipped characters, which reads worse than nothing, while a ten-day
+  task still gets 240px in a 24px column and reads fine.
 - The axis stacks a month row over a day row and sticks to the top, weekend
   columns take a light background, today is an absolutely positioned line, and
   the first load scrolls it a third of the way in from the left.

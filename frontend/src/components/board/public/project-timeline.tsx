@@ -8,6 +8,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import {
+  barFitsLabel,
   columnIndex,
   packLanes,
   placeSpan,
@@ -214,6 +215,7 @@ function TimelineBar({
   if (!span) return null
   const placement = placeSpan(span, range, scale)
   const completed = state.category === "completed"
+  const showLabel = barFitsLabel(placement, scale)
 
   return (
     <Tooltip>
@@ -231,9 +233,7 @@ function TimelineBar({
           )}
         >
           {completed && <span aria-hidden>✓</span>}
-          {scale.showBarLabels && (
-            <span className="truncate">{task.title}</span>
-          )}
+          {showLabel && <span className="truncate">{task.title}</span>}
         </button>
       </TooltipTrigger>
       <TooltipContent>{task.title}</TooltipContent>

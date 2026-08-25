@@ -23,8 +23,6 @@ export type TimelineScale = {
   columnWidth: number
   /** The first day of every column, in order. */
   columns: Date[]
-  /** Bars only carry their title where a column is wide enough to read it. */
-  showBarLabels: boolean
 }
 
 export type TimelinePlacement = {
@@ -80,15 +78,27 @@ export function timelineScale(range: TimelineSpan): TimelineScale {
         { start: range.start, end: range.end },
         { weekStartsOn: 1 }
       ),
-      showBarLabels: false,
     }
   }
   return {
     unit: "day",
     columnWidth: days > 60 ? 24 : 48,
     columns: eachDayOfInterval({ start: range.start, end: range.end }),
-    showBarLabels: days <= 60,
   }
+}
+
+/**
+ * Below this a bar shows a couple of clipped characters rather than a title,
+ * which reads worse than no title at all — those bars rely on their tooltip.
+ */
+const MIN_LABEL_BAR_WIDTH = 72
+
+/** Whether a bar is wide enough for its title to be worth rendering. */
+export function barFitsLabel(
+  placement: TimelinePlacement,
+  scale: TimelineScale
+) {
+  return placement.span * scale.columnWidth >= MIN_LABEL_BAR_WIDTH
 }
 
 /** The 0-based column a date falls in, clamped to the timeline. */
