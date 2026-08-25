@@ -16,6 +16,7 @@ import {
   FolderTransferIcon,
   Folder01Icon,
   HistoryIcon,
+  LinkSquare02Icon,
   Maximize01Icon,
   Minimize01Icon,
   MoreHorizontalIcon,
@@ -2121,9 +2122,19 @@ function ShareDocumentButton({ document }: { document: DocumentResult }) {
                 variant="outline"
                 size="icon"
                 aria-label="Copy link"
+                title="Copy link"
                 onClick={() => void copy()}
               >
                 <HugeiconsIcon icon={Copy01Icon} strokeWidth={2} />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                aria-label="Open in a new tab"
+                title="Open in a new tab"
+                onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+              >
+                <HugeiconsIcon icon={LinkSquare02Icon} strokeWidth={2} />
               </Button>
             </div>
             <div className="flex items-center justify-between gap-3 text-sm">
