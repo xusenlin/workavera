@@ -116,6 +116,7 @@ Board 数据持久化在 PocketBase 中并实时同步。每个项目拥有独�
 | `description` | text | 可选的 Markdown/纯文本，最长 10,000 个字符 |
 | `priority` | select | `none`、`low`、`medium`、`high` 或 `urgent` |
 | `rank` | number | 状态列内的顺序 |
+| `start_date` | date | 可选开始日期；设置时不得晚于 `due_date` |
 | `due_date` | date | 可选截止日期 |
 | `assignees` | multi-relation → users | 最多 20 位项目参与者 |
 | `labels` | multi-relation → board_project_labels | 最多 20 个项目标签 |
@@ -180,10 +181,12 @@ Board 订阅 `board_projects`、`board_project_states`、`board_project_members`
 - `POST /api/board/projects/{id}/archive`：归档 Owner 管理的项目。
 - `POST /api/board/projects/{id}/unarchive`：恢复 Owner 管理的项目。
 - `PATCH /api/board/projects/{id}/owner`：在事务中转移所有权。
+- `GET`、`POST`、`DELETE /api/board/projects/{id}/share`：管理项目的公开预览链接，仅
+  Owner 可用，详见 [Board 公开预览 PRD](./board-public-preview-prd.zh-CN.md)。
 - 项目、状态、标签、成员和任务的授权 CRUD 使用 PocketBase Records API。
-- 服务端请求 Hook 校验所有权、角色、跨项目关系、状态删除和活动记录。
+- 服务端请求 Hook 校验所有权、角色、跨项目关系、任务日期区间、状态删除和活动记录。
 
-所有用户操作都要求通过 `users` 集合认证。
+除 `/api/public/board` 下的匿名公开预览路由外，所有用户操作都要求通过 `users` 集合认证。
 
 ## 9. Assistant 工具
 
@@ -206,7 +209,7 @@ Board 订阅 `board_projects`、`board_project_states`、`board_project_members`
 - `board_create_task`
 - `board_update_task`
 
-`board_get_project` 返回调用者角色，以及 `canEditProject`、`canManageWorkflow`、`canManageMembers` 和 `canEditTasks` 能力。修改已有数据前必须先读取详情，以使用真实 ID 和最新状态。状态、标签、成员、任务创建和任务更新工具要求通过 `items` 数组提交 1 至 50 条记录；单条写入使用一个元素，旧的顶层单记录输入会被拒绝。服务端按顺序执行并返回逐条结果，因此某条无效记录不会隐藏或撤销同批次中已成功的记录。任务更新采用 patch 语义；空数组清空负责人、标签或文档，空截止日期清除截止时间。
+`board_get_project` 返回调用者角色，以及 `canEditProject`、`canManageWorkflow`、`canManageMembers` 和 `canEditTasks` 能力。修改已有数据前必须先读取详情，以使用真实 ID 和最新状态。状态、标签、成员、任务创建和任务更新工具要求通过 `items` 数组提交 1 至 50 条记录；单条写入使用一个元素，旧的顶层单记录输入会被拒绝。服务端按顺序执行并返回逐条结果，因此某条无效记录不会隐藏或撤销同批次中已成功的记录。任务更新采用 patch 语义；空数组清空负责人、标签或文档，空的开始或截止日期清除对应日期。
 
 系统不注册 AI 项目归档、恢复、删除或所有权转移工具。此类项目生命周期操作必须由用户前往 Board 完成。
 

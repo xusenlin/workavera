@@ -7,6 +7,36 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Projects can be shared publicly. The owner publishes a project from its
+  options menu and gets an unguessable link that anyone can open without an
+  account, optionally with an expiry date. The page shows the project, its date
+  span, how many tasks sit in each state, the team by name and avatar, and a
+  calendar timeline where every task runs from its start date to its due date
+  and each day lists what it holds and what is already done, folding a busy day
+  behind a `+3 more` once it holds more than six tasks. Unlike a shared
+  document, the link reports the project as it stands, with a refresh button to
+  pull the latest progress. Revoking the link, letting it expire, or archiving
+  the project all make it unavailable at once, and task assignees, member
+  emails, roles, and archived tasks never leave the server. A task's linked
+  documents open through their own public links, and documents the author has
+  not shared are named but not reachable. The project name, its counts, and the
+  refresh button stay at the top of the page while the timeline scrolls, and
+  adding `?lang=zh` to the link reads every date in Chinese formatting instead
+  of the English default. Sharing is a share icon in the project title row that
+  turns green while a link is live, and its dialog can open the link in a new
+  tab and append the Chinese-date parameter for you.
+
+### Changed
+
+- The document share dialog can open the shared link in a new tab instead of
+  only copying it.
+- Tasks carry an optional start date alongside their due date, so a task is a
+  span rather than a single deadline. The board task form, the Board API, and
+  the `board_create_task` and `board_update_task` assistant tools all accept it,
+  and a start date after the due date is refused.
+
 ## [0.1.0] - 2026-08-21
 
 ### Added

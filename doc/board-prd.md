@@ -116,6 +116,7 @@ State categories are `pending`, `active`, and `completed`. Built-in templates ar
 | `description` | text | Optional Markdown/plain text, max 10,000 characters |
 | `priority` | select | `none`, `low`, `medium`, `high`, or `urgent` |
 | `rank` | number | Order within a state |
+| `start_date` | date | Optional start date; when set, not after `due_date` |
 | `due_date` | date | Optional deadline |
 | `assignees` | multi-relation → users | Up to 20 project participants |
 | `labels` | multi-relation → board_project_labels | Up to 20 project labels |
@@ -180,10 +181,11 @@ The Board subscribes to `board_projects`, `board_project_states`, `board_project
 - `POST /api/board/projects/{id}/archive` archives an owner-controlled project.
 - `POST /api/board/projects/{id}/unarchive` restores an owner-controlled project.
 - `PATCH /api/board/projects/{id}/owner` transfers ownership transactionally.
+- `GET`, `POST`, and `DELETE /api/board/projects/{id}/share` manage a project's public preview link, owner only; see the [Board Public Preview PRD](./board-public-preview-prd.md).
 - Standard PocketBase Records APIs handle permitted project, state, label, member, and task CRUD.
-- Server request hooks validate ownership, roles, cross-project relationships, state deletion, and activity logging.
+- Server request hooks validate ownership, roles, cross-project relationships, task date spans, state deletion, and activity logging.
 
-All user-facing operations require authenticated `users` records.
+Every user-facing operation requires an authenticated `users` record, except the anonymous public preview routes under `/api/public/board`.
 
 ## 9. Assistant tools
 
@@ -212,7 +214,7 @@ Mutation tools:
 - `board_create_task`
 - `board_update_task`
 
-`board_get_project` returns the caller's role and `canEditProject`, `canManageWorkflow`, `canManageMembers`, and `canEditTasks` capabilities. Existing data must be read before mutation so the assistant uses real IDs and the latest state. State, label, member, task-create, and task-update tools require an `items` array containing one to 50 records; a single mutation is represented by one item, and legacy top-level single-record inputs are rejected. Each item is executed in order and reports its own result, so one invalid item does not hide or discard successful siblings. Task updates use patch semantics; empty arrays clear assignees, labels, or documents, and a null due date clears the deadline.
+`board_get_project` returns the caller's role and `canEditProject`, `canManageWorkflow`, `canManageMembers`, and `canEditTasks` capabilities. Existing data must be read before mutation so the assistant uses real IDs and the latest state. State, label, member, task-create, and task-update tools require an `items` array containing one to 50 records; a single mutation is represented by one item, and legacy top-level single-record inputs are rejected. Each item is executed in order and reports its own result, so one invalid item does not hide or discard successful siblings. Task updates use patch semantics; empty arrays clear assignees, labels, or documents, and a null start or due date clears that date.
 
 No AI archive, restore, deletion, or ownership-transfer tool is registered. The assistant must direct users to Board for these project-lifecycle actions.
 

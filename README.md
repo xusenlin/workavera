@@ -160,6 +160,7 @@ All tasks are defined in [`Taskfile.yml`](./Taskfile.yml); frontend-only command
 | Module | English | 简体中文 |
 | --- | --- | --- |
 | Board | [Board PRD](./doc/board-prd.md) | [Board PRD](./doc/board-prd.zh-CN.md) |
+| Board Public Preview | [Board Public Preview PRD](./doc/board-public-preview-prd.md) | [Board 公开预览 PRD](./doc/board-public-preview-prd.zh-CN.md) |
 | Calendar | [Calendar PRD](./doc/calendar-prd.md) | [Calendar PRD](./doc/calendar-prd.zh-CN.md) |
 | Chat | [Chat PRD and Fantasy architecture](./doc/chat-fantasy-plan.md) | [Chat PRD 与 Fantasy 架构](./doc/chat-fantasy-plan.zh-CN.md) |
 | Chat Memory | [Chat Memory PRD](./doc/chat-memory-prd.md) | [Chat 记忆 PRD](./doc/chat-memory-prd.zh-CN.md) |

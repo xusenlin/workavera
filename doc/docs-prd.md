@@ -191,7 +191,7 @@ The same `draftContent` powers each kind's source and rendered modes. Mode switc
 - Pin/unpin is available for accessible documents.
 - Creator-only actions include archive and permanent delete; delete confirmation states that all versions are removed.
 - The archive dialog uses 10 items per page and lets creators restore or permanently delete documents.
-- Creators share from the document toolbar: the dialog creates a link, copies it, shows the published revision against the current one, publishes the latest revision on request, sets or clears an expiry, and revokes.
+- Creators share from the document toolbar: the dialog creates a link, copies it, opens it in a new tab, shows the published revision against the current one, publishes the latest revision on request, sets or clears an expiry, and revokes.
 - A shared document opens at `/s/{slug}` outside the authenticated shell, with no page chrome around the document: the document's own heading is the page's, and its title only names the browser tab. An unavailable link says only that it is unavailable.
 - Shared Markdown gets two reading aids: a scroll progress bar across the top, and an outline of the document's own headings beside the text on wide viewports, which highlights the current section and jumps to any of them. Shared HTML renders in the same sandboxed opaque origin as the editor preview and gets neither, because its content is opaque to the page.
 - The document URL uses the shared `open` query parameter for deep links from Chat, Board, Dashboard, and other modules, plus `view` and optional `location` parameters for Docs navigation state.
