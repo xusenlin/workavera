@@ -96,6 +96,11 @@ func TestBoardCollectionsMigration(t *testing.T) {
 	if err := dropDocsCollections(app); err != nil {
 		t.Fatalf("drop docs collections: %v", err)
 	}
+	// board_project_shares references board_projects and is normally rolled
+	// back first.
+	if err := dropBoardProjectSharesCollection(app); err != nil {
+		t.Fatalf("drop board project shares: %v", err)
+	}
 	if err := dropBoardProjectOperationLogs(app); err != nil {
 		t.Fatalf("drop project operation logs: %v", err)
 	}

@@ -50,6 +50,7 @@ import {
   type Todo,
 } from "@/store/board"
 import { ArchivedTasksDialog } from "./archived-tasks-dialog"
+import { ShareProjectButton } from "./project-share-button"
 import { StatusColumn } from "./status-column"
 
 type ProjectColumnProps = {
@@ -211,6 +212,7 @@ export function ProjectColumn({
               <TooltipContent side="top">Archived tasks</TooltipContent>
             </Tooltip>
           </TooltipProvider>
+          {isOwner && <ShareProjectButton project={project} />}
           {isOwner && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -328,6 +330,7 @@ export function ProjectColumn({
         open={archivedTasksOpen}
         onOpenChange={setArchivedTasksOpen}
       />
+
     </div>
   )
 }

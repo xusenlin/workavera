@@ -10,4 +10,5 @@ const (
 	boardTaskOperationLogs        = "board_task_operation_logs"
 	boardProjectOperationLogs     = "board_project_operation_logs"
 	docsCollection                = "docs"
+	docSharesCollection           = "doc_shares"
 )

@@ -17,6 +17,16 @@ func Register(app *pocketbase.PocketBase) {
 			Bind(apis.RequireAuth("users"))
 		event.Router.PATCH("/api/board/projects/{id}/owner", transferBoardProjectOwnerRequest).
 			Bind(apis.RequireAuth("users"))
+		event.Router.GET("/api/board/projects/{id}/share", getBoardProjectShareRequest).
+			Bind(apis.RequireAuth("users"))
+		event.Router.POST("/api/board/projects/{id}/share", publishBoardProjectRequest).
+			Bind(apis.RequireAuth("users"))
+		event.Router.DELETE("/api/board/projects/{id}/share", unpublishBoardProjectRequest).
+			Bind(apis.RequireAuth("users"))
+
+		// The only routes an anonymous visitor can reach.
+		event.Router.GET("/api/public/board/{slug}", publicBoardRequest)
+		event.Router.GET("/api/public/board/{slug}/avatars/{index}", publicBoardAvatarRequest)
 		return event.Next()
 	})
 

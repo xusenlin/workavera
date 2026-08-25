@@ -2,43 +2,17 @@ import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 
 import { HugeiconsIcon } from "@hugeicons/react"
-import {
-  Archive02Icon,
-  Calendar03Icon,
-  File01Icon,
-  TextAlignLeftIcon,
-} from "@hugeicons/core-free-icons"
+import { Archive02Icon } from "@hugeicons/core-free-icons"
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
+import { TaskCardContent } from "@/components/board/task-card-content"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-import {
-  PRIORITY_META,
-  projectParticipants,
-  useBoardStore,
-  type Todo,
-} from "@/store/board"
+import { projectParticipants, useBoardStore, type Todo } from "@/store/board"
 
 type TodoCardProps = {
   todo: Todo
   onEdit: (todo: Todo) => void
   onArchive?: (todo: Todo) => void
-}
-
-function isOverdue(dueDate?: string) {
-  if (!dueDate) return false
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  return new Date(dueDate) < today
-}
-
-function formatDate(dueDate: string) {
-  const date = new Date(dueDate)
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  })
 }
 
 export function TodoCard({ todo, onEdit, onArchive }: TodoCardProps) {
@@ -70,12 +44,14 @@ export function TodoCard({ todo, onEdit, onArchive }: TodoCardProps) {
   const todoLabels = labels.filter((l) => todo.labels.includes(l.id))
   const project = projects.find((item) => item.id === todo.projectId)
   const todoMembers = project
-    ? projectParticipants(project, members).filter((participant) =>
-        todo.members.includes(participant.userId)
-      )
+    ? projectParticipants(project, members)
+        .filter((participant) => todo.members.includes(participant.userId))
+        .map((participant) => ({
+          id: participant.userId,
+          name: participant.name,
+          avatar: participant.avatar,
+        }))
     : []
-  const priorityMeta = PRIORITY_META.find((p) => p.value === todo.priority)
-  const overdue = isOverdue(todo.dueDate)
 
   return (
     <div
@@ -89,21 +65,17 @@ export function TodoCard({ todo, onEdit, onArchive }: TodoCardProps) {
         isDragging && "opacity-50 shadow-lg ring-2 ring-primary/20"
       )}
     >
-      {/* Labels + archive */}
-      {(todoLabels.length > 0 || onArchive) && (
-        <div className="mb-2 flex items-start gap-2">
-          <div className="min-w-0 flex flex-1 flex-wrap gap-1">
-            {todoLabels.map((label) => (
-              <span
-                key={label.id}
-                className="inline-flex h-4.5 items-center rounded-md px-1.5 text-[10px] font-medium text-white"
-                style={{ backgroundColor: label.color }}
-              >
-                {label.name}
-              </span>
-            ))}
-          </div>
-          {onArchive && (
+      <TaskCardContent
+        title={todo.title}
+        description={todo.description}
+        priority={todo.priority}
+        labels={todoLabels}
+        members={todoMembers}
+        startDate={todo.startDate}
+        dueDate={todo.dueDate}
+        documentCount={todo.documents.length}
+        action={
+          onArchive && (
             <Button
               type="button"
               variant="ghost"
@@ -120,107 +92,9 @@ export function TodoCard({ todo, onEdit, onArchive }: TodoCardProps) {
             >
               <HugeiconsIcon icon={Archive02Icon} strokeWidth={2} />
             </Button>
-          )}
-        </div>
-      )}
-
-      {/* Title */}
-      <p className="text-sm leading-snug font-medium">{todo.title}</p>
-
-      {/* Description indicator */}
-      {todo.description && (
-        <div className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground">
-          <HugeiconsIcon
-            icon={TextAlignLeftIcon}
-            strokeWidth={2}
-            className="size-3"
-          />
-          <span className="truncate">{todo.description}</span>
-        </div>
-      )}
-
-      {/* Footer */}
-      <div className="mt-2.5 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5">
-          {/* Priority */}
-          {priorityMeta && (
-            <Badge
-              variant="secondary"
-              className="h-4.5 gap-1 px-1.5 text-[10px]"
-              style={{ color: priorityMeta.color }}
-            >
-              <span
-                className="size-1.5 rounded-full"
-                style={{ backgroundColor: priorityMeta.color }}
-              />
-              {priorityMeta.label}
-            </Badge>
-          )}
-
-          {/* Due date */}
-          {todo.dueDate && (
-            <span
-              className={cn(
-                "flex items-center gap-0.5 text-[10px]",
-                overdue
-                  ? "font-medium text-destructive"
-                  : "text-muted-foreground"
-              )}
-            >
-              <HugeiconsIcon
-                icon={Calendar03Icon}
-                strokeWidth={2}
-                className="size-3"
-              />
-              {formatDate(todo.dueDate)}
-            </span>
-          )}
-
-          {/* Linked documents */}
-          {todo.documents.length > 0 && (
-            <span
-              className="flex items-center gap-0.5 text-[10px] text-muted-foreground"
-              title={`${todo.documents.length} linked document${todo.documents.length === 1 ? "" : "s"}`}
-            >
-              <HugeiconsIcon
-                icon={File01Icon}
-                strokeWidth={2}
-                className="size-3"
-              />
-              {todo.documents.length}
-            </span>
-          )}
-        </div>
-
-        {/* Members */}
-        {todoMembers.length > 0 && (
-          <div className="flex -space-x-1.5">
-            {todoMembers.slice(0, 3).map((member) => (
-              <Avatar
-                key={member.userId}
-                size="sm"
-                className="ring-2 ring-card"
-              >
-                {member.avatar && (
-                  <AvatarImage
-                    src={member.avatar}
-                    alt={member.name}
-                    className="object-cover"
-                  />
-                )}
-                <AvatarFallback className="text-[9px]">
-                  {member.name.charAt(0).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-            ))}
-            {todoMembers.length > 3 && (
-              <div className="flex size-6 items-center justify-center rounded-full bg-muted text-[9px] text-muted-foreground ring-2 ring-card">
-                +{todoMembers.length - 3}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+          )
+        }
+      />
     </div>
   )
 }
