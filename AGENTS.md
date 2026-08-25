@@ -45,7 +45,7 @@ Use the task names in `Taskfile.yml` as the source of truth:
 - `task build:go` builds the `workavera` binary with the version from `VERSION`.
 - `task build` builds the frontend and then the self-contained binary.
 - `task release` cross-compiles self-contained binaries for Linux/macOS/Windows and packages them as `workavera_<version>_<os>_<arch>.tar.gz`/`.zip` archives in the git-ignored `dist/` directory.
-- `task run` builds and runs the Go binary.
+- `task run` builds the frontend and the binary, then runs it.
 - `task build:docker` builds frontend assets and the local Docker image.
 - `task test` runs `go test ./...`.
 - `task tidy` runs `go mod tidy`.
@@ -154,4 +154,4 @@ Choose checks based on the files changed:
 - Backend code or migrations: `task test`, or focused `go test ./internal/...`.
 - Frontend TypeScript or components: run `pnpm typecheck` and `pnpm lint` from `frontend/`.
 - Frontend build behavior: run `pnpm build` from `frontend/`, or run `task build:ui`.
-- Full packaged app behavior: run `task build:ui`, then `task dev:go` or `task run`.
+- Full packaged app behavior: run `task run`, which rebuilds the frontend first, or `task build:ui` followed by `task dev:go`.

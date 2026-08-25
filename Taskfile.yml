@@ -72,9 +72,9 @@ tasks:
       - echo "Release archives generated in dist/ (version {{.VERSION}})"
 
   run:
-    desc: Build and run the Go binary
+    desc: Build and run the Go binary + frontend
     deps:
-      - build:go
+      - build
     cmds:
       - ./workavera serve
 
