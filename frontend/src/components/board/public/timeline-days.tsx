@@ -166,7 +166,7 @@ export function TimelineDays({
                       key={entry.task.id}
                       type="button"
                       onClick={() => onSelect(entry.task)}
-                      className="flex items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-left text-xs transition-colors hover:border-border hover:bg-muted/40"
+                      className="flex min-w-0 items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-left text-xs transition-colors hover:border-border hover:bg-muted/40"
                     >
                       <span
                         className="size-2 shrink-0 rounded-full"
@@ -198,7 +198,7 @@ export function TimelineDays({
                         onSelect(entry.task)
                       }
                     }}
-                    className="cursor-pointer rounded-xl border border-border/60 bg-card p-3 shadow-sm transition-all hover:border-border hover:shadow-md"
+                    className="min-w-0 cursor-pointer rounded-xl border border-border/60 bg-card p-3 shadow-sm transition-all hover:border-border hover:shadow-md"
                   >
                     <TaskCardContent
                       title={entry.task.title}
@@ -240,7 +240,7 @@ export function TimelineDays({
                     onSelect(task)
                   }
                 }}
-                className="cursor-pointer rounded-xl border border-border/60 bg-card p-3 shadow-sm transition-all hover:border-border hover:shadow-md"
+                className="min-w-0 cursor-pointer rounded-xl border border-border/60 bg-card p-3 shadow-sm transition-all hover:border-border hover:shadow-md"
               >
                 <TaskCardContent
                   title={task.title}

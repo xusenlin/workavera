@@ -103,7 +103,8 @@ export function TaskCardContent({
             className="mt-0.5 size-3.5 shrink-0 text-emerald-500"
           />
         )}
-        <span className="min-w-0">{title}</span>
+        {/* A long unbroken token would otherwise widen the whole card. */}
+        <span className="min-w-0 break-words">{title}</span>
       </p>
 
       {/* Description indicator */}
