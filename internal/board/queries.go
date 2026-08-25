@@ -545,6 +545,7 @@ type TaskSummary struct {
 	Title       string                `json:"title"`
 	Description string                `json:"description,omitempty"`
 	Priority    string                `json:"priority,omitempty"`
+	StartDate   string                `json:"startDate,omitempty"`
 	DueDate     string                `json:"dueDate,omitempty"`
 	Project     TaskProjectSummary    `json:"project"`
 	State       TaskStateSummary      `json:"state"`
@@ -802,6 +803,7 @@ func SearchVisibleTasks(ctx context.Context, app core.App, actorID string, optio
 			Title:       tr.GetString("title"),
 			Description: tr.GetString("description"),
 			Priority:    tr.GetString("priority"),
+			StartDate:   tr.GetString("start_date"),
 			DueDate:     tr.GetString("due_date"),
 			Project:     projectsByID[tr.GetString("project")],
 			State:       statesByID[stateID],

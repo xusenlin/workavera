@@ -81,6 +81,7 @@ type boardCreateTaskItem struct {
 	Title       string   `json:"title" description:"Task title"`
 	Description string   `json:"description,omitempty" description:"Optional task description"`
 	Priority    string   `json:"priority,omitempty" description:"Priority: none, low, medium, high, or urgent; defaults to medium"`
+	StartDate   string   `json:"startDate,omitempty" description:"Optional start date in YYYY-MM-DD format; cannot be after the due date"`
 	DueDate     string   `json:"dueDate,omitempty" description:"Optional due date in YYYY-MM-DD format"`
 	LabelIDs    []string `json:"labelIds,omitempty" description:"Optional label IDs belonging to the project"`
 	AssigneeIDs []string `json:"assigneeIds,omitempty" description:"Optional user IDs; each must be the project owner or a member"`
@@ -98,11 +99,14 @@ type boardUpdateTaskItem struct {
 	Description *string   `json:"description,omitempty" description:"Optional replacement description; pass an empty string to clear it"`
 	StateID     *string   `json:"stateId,omitempty" description:"Optional state ID belonging to the same project"`
 	Priority    *string   `json:"priority,omitempty" description:"Optional priority: none, low, medium, high, or urgent"`
+	StartDate   *string   `json:"startDate,omitempty" description:"Optional start date in YYYY-MM-DD format, not after the due date; pass null to clear it"`
 	DueDate     *string   `json:"dueDate,omitempty" description:"Optional due date in YYYY-MM-DD format; pass null to clear it"`
 	LabelIDs    *[]string `json:"labelIds,omitempty" description:"Optional replacement label IDs; pass an empty array to clear"`
 	AssigneeIDs *[]string `json:"assigneeIds,omitempty" description:"Optional replacement assignee user IDs; pass an empty array to clear"`
 	DocumentIDs *[]string `json:"documentIds,omitempty" description:"Optional replacement linked document IDs, each belonging to the same project; pass an empty array to clear"`
-	dueDateSet  bool
+
+	startDateSet bool
+	dueDateSet   bool
 }
 
 type boardUpdateTaskInput struct {
@@ -124,6 +128,7 @@ func (input *boardUpdateTaskItem) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &fields); err != nil {
 		return err
 	}
+	_, input.startDateSet = fields["startDate"]
 	_, input.dueDateSet = fields["dueDate"]
 	return nil
 }
@@ -275,7 +280,7 @@ func newBoardCreateTaskTool(app core.App, actorID string) fantasy.AgentTool {
 		"Create a task. Call board_get_project first, require capabilities.canEditTasks, and use only returned state, label, and participant IDs. Server authorization permits owner, admin, and member roles but denies viewers.",
 		func(ctx context.Context, input boardCreateTaskInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
 			result, err := executeBatch(input.Items, func(_ int, item boardCreateTaskItem) (any, error) {
-				return board.CreateTask(ctx, app, actorID, board.CreateTaskCommand{ProjectID: input.ProjectID, StateID: item.StateID, Title: item.Title, Description: normalizeEscapedText(item.Description), Priority: item.Priority, DueDate: item.DueDate, LabelIDs: item.LabelIDs, AssigneeIDs: item.AssigneeIDs, DocIDs: item.DocumentIDs})
+				return board.CreateTask(ctx, app, actorID, board.CreateTaskCommand{ProjectID: input.ProjectID, StateID: item.StateID, Title: item.Title, Description: normalizeEscapedText(item.Description), Priority: item.Priority, StartDate: item.StartDate, DueDate: item.DueDate, LabelIDs: item.LabelIDs, AssigneeIDs: item.AssigneeIDs, DocIDs: item.DocumentIDs})
 			})
 			return batchToolResponse(result, err)
 		},
@@ -285,10 +290,10 @@ func newBoardCreateTaskTool(app core.App, actorID string) fantasy.AgentTool {
 func newBoardUpdateTaskTool(app core.App, actorID string) fantasy.AgentTool {
 	return fantasy.NewAgentTool(
 		"board_update_task",
-		"Patch an existing task without changing its project. Call board_get_project first, require capabilities.canEditTasks, and use only returned state, label, and participant IDs. Every item must include at least one field to update in addition to taskId. Omitted fields stay unchanged; empty arrays clear relations; null dueDate clears it. A valid patch that already matches the stored task succeeds with action=unchanged and changed=false.",
+		"Patch an existing task without changing its project. Call board_get_project first, require capabilities.canEditTasks, and use only returned state, label, and participant IDs. Every item must include at least one field to update in addition to taskId. Omitted fields stay unchanged; empty arrays clear relations; a null startDate or dueDate clears it. A valid patch that already matches the stored task succeeds with action=unchanged and changed=false.",
 		func(ctx context.Context, input boardUpdateTaskInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
 			result, err := executeBatch(input.Items, func(_ int, item boardUpdateTaskItem) (any, error) {
-				return board.UpdateTask(ctx, app, actorID, board.UpdateTaskCommand{TaskID: item.TaskID, Title: item.Title, Description: normalizeEscapedTextPtr(item.Description), StateID: item.StateID, Priority: item.Priority, DueDate: item.DueDate, DueDateSet: item.dueDateSet, LabelIDs: item.LabelIDs, AssigneeIDs: item.AssigneeIDs, DocIDs: item.DocumentIDs})
+				return board.UpdateTask(ctx, app, actorID, board.UpdateTaskCommand{TaskID: item.TaskID, Title: item.Title, Description: normalizeEscapedTextPtr(item.Description), StateID: item.StateID, Priority: item.Priority, StartDate: item.StartDate, StartDateSet: item.startDateSet, DueDate: item.DueDate, DueDateSet: item.dueDateSet, LabelIDs: item.LabelIDs, AssigneeIDs: item.AssigneeIDs, DocIDs: item.DocumentIDs})
 			})
 			return batchToolResponse(result, err)
 		},

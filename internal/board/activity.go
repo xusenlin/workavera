@@ -51,6 +51,7 @@ func buildBoardTaskChanges(app core.App, before, after *core.Record) map[string]
 	changes := map[string]any{}
 	addTextChange(changes, "title", before.GetString("title"), after.GetString("title"))
 	addTextChange(changes, "priority", before.GetString("priority"), after.GetString("priority"))
+	addTextChange(changes, "start_date", before.GetString("start_date"), after.GetString("start_date"))
 	addTextChange(changes, "due_date", before.GetString("due_date"), after.GetString("due_date"))
 
 	if before.GetString("description") != after.GetString("description") {

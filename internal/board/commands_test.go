@@ -306,6 +306,60 @@ func TestTaskCommandsValidateRelationsAndPatchClearsFields(t *testing.T) {
 	}
 }
 
+func TestTaskSpanKeepsStartOnOrBeforeDue(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(app.Cleanup)
+	owner := createQueryTestUser(t, app, "span-owner@example.com", "Owner")
+	project := createQueryTestProject(t, app, owner.Id, "Span", false)
+	state := createQueryTestState(t, app, project.Id)
+
+	if _, err := CreateTask(context.Background(), app, owner.Id, CreateTaskCommand{
+		ProjectID: project.Id, StateID: state.Id, Title: "Inverted",
+		StartDate: "2026-08-10", DueDate: "2026-08-03",
+	}); err == nil {
+		t.Fatal("a start date after the due date was accepted")
+	}
+
+	// Either date alone is a valid task: only the order of a full span is
+	// constrained.
+	startOnly, err := CreateTask(context.Background(), app, owner.Id, CreateTaskCommand{
+		ProjectID: project.Id, StateID: state.Id, Title: "Start only", StartDate: "2026-08-03",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	span, err := CreateTask(context.Background(), app, owner.Id, CreateTaskCommand{
+		ProjectID: project.Id, StateID: state.Id, Title: "Span",
+		StartDate: "2026-08-03", DueDate: "2026-08-07",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	inverted := "2026-08-20"
+	if _, err := UpdateTask(context.Background(), app, owner.Id, UpdateTaskCommand{
+		TaskID: span.ID, StartDateSet: true, StartDate: &inverted,
+	}); err == nil {
+		t.Fatal("a patch may not invert a span")
+	}
+
+	if _, err := UpdateTask(context.Background(), app, owner.Id, UpdateTaskCommand{
+		TaskID: startOnly.ID, StartDateSet: true, StartDate: nil,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	cleared, err := app.FindRecordById(boardTasksCollection, startOnly.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cleared.GetString("start_date") != "" {
+		t.Fatalf("a null start date must clear it: %#v", cleared)
+	}
+}
+
 func TestDeleteTaskReauthorizesAndWritesActivity(t *testing.T) {
 	app, err := tests.NewTestApp()
 	if err != nil {

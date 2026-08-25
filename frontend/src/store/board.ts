@@ -87,6 +87,7 @@ export type Todo = {
   labels: string[]
   members: string[]
   documents: string[]
+  startDate?: string
   dueDate?: string
   rank: number
 }
@@ -219,6 +220,7 @@ type TodoRecord = RecordModel & {
   labels: string[]
   assignees: string[]
   documents: string[]
+  start_date: string
   due_date: string
   rank: number
   archived: boolean
@@ -338,6 +340,7 @@ function toTodo(record: TodoRecord): Todo {
     labels: record.labels || [],
     members: record.assignees || [],
     documents: record.documents || [],
+    startDate: record.start_date ? record.start_date.slice(0, 10) : undefined,
     dueDate: record.due_date ? record.due_date.slice(0, 10) : undefined,
     rank: record.rank,
   }
@@ -369,6 +372,7 @@ function todoPatchToRecord(patch: Partial<Omit<Todo, "id">>) {
   if (patch.labels !== undefined) body.labels = patch.labels
   if (patch.members !== undefined) body.assignees = patch.members
   if (patch.documents !== undefined) body.documents = patch.documents
+  if (patch.startDate !== undefined) body.start_date = patch.startDate || ""
   if (patch.dueDate !== undefined) body.due_date = patch.dueDate || ""
   if (patch.rank !== undefined) body.rank = patch.rank
   return body
@@ -1239,6 +1243,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         labels: todo.labels,
         assignees: todo.members,
         documents: todo.documents,
+        start_date: todo.startDate || "",
         due_date: todo.dueDate || "",
         rank,
       })

@@ -34,6 +34,9 @@ func validateBoardTaskRequest(event *core.RecordRequestEvent) error {
 	); err != nil {
 		return event.BadRequestError(err.Error(), err)
 	}
+	if err := validateTaskSpan(event.Record); err != nil {
+		return event.BadRequestError(err.Error(), err)
+	}
 
 	if event.Auth != nil {
 		if _, err := requireTaskWriter(event.App, event.Auth.Id, projectID); err != nil {

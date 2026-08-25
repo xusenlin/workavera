@@ -82,6 +82,7 @@ type FormState = {
   labels: string[]
   members: string[]
   documents: string[]
+  startDate: string
   dueDate: string
 }
 
@@ -93,6 +94,7 @@ const emptyForm: FormState = {
   labels: [],
   members: [],
   documents: [],
+  startDate: "",
   dueDate: "",
 }
 
@@ -106,6 +108,7 @@ function initialForm(todo: Todo | null, defaultStateId?: string): FormState {
     labels: [...todo.labels],
     members: [...todo.members],
     documents: [...todo.documents],
+    startDate: todo.startDate ?? "",
     dueDate: todo.dueDate ?? "",
   }
 }
@@ -188,8 +191,14 @@ export function TodoCardSheet({
     ? projectParticipants(currentProject, members)
     : []
 
+  // The server rejects an inverted span, so the form says so before a save
+  // can fail on it.
+  const invertedSpan = Boolean(
+    form.startDate && form.dueDate && form.startDate > form.dueDate
+  )
+
   const handleSave = async () => {
-    if (!form.title.trim() || !form.stateId) return
+    if (!form.title.trim() || !form.stateId || invertedSpan) return
 
     const data = {
       title: form.title.trim(),
@@ -199,6 +208,7 @@ export function TodoCardSheet({
       labels: form.labels,
       members: form.members,
       documents: form.documents,
+      startDate: form.startDate || undefined,
       dueDate: form.dueDate || undefined,
     }
 
@@ -368,14 +378,28 @@ export function TodoCardSheet({
             </div>
           </div>
 
-          {/* Due date */}
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="todo-due">Due date</Label>
-            <DatePicker
-              value={form.dueDate}
-              onChange={(v) => setField("dueDate", v)}
-            />
+          {/* Dates */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="todo-start">Start date</Label>
+              <DatePicker
+                value={form.startDate}
+                onChange={(v) => setField("startDate", v)}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="todo-due">Due date</Label>
+              <DatePicker
+                value={form.dueDate}
+                onChange={(v) => setField("dueDate", v)}
+              />
+            </div>
           </div>
+          {invertedSpan && (
+            <p className="-mt-2 text-xs text-destructive">
+              The start date cannot be after the due date.
+            </p>
+          )}
 
           {/* Labels */}
           <div className="flex flex-col gap-2">
@@ -547,7 +571,7 @@ export function TodoCardSheet({
             </SheetClose>
             <Button
               onClick={() => void handleSave()}
-              disabled={!form.title.trim() || !form.stateId}
+              disabled={!form.title.trim() || !form.stateId || invertedSpan}
             >
               {todo ? "Save changes" : "Add task"}
             </Button>

@@ -90,6 +90,7 @@ type CreateTaskCommand struct {
 	Title       string
 	Description string
 	Priority    string
+	StartDate   string
 	DueDate     string
 	LabelIDs    []string
 	AssigneeIDs []string
@@ -97,16 +98,18 @@ type CreateTaskCommand struct {
 }
 
 type UpdateTaskCommand struct {
-	TaskID      string
-	Title       *string
-	Description *string
-	StateID     *string
-	Priority    *string
-	DueDate     *string
-	DueDateSet  bool
-	LabelIDs    *[]string
-	AssigneeIDs *[]string
-	DocIDs      *[]string
+	TaskID       string
+	Title        *string
+	Description  *string
+	StateID      *string
+	Priority     *string
+	StartDate    *string
+	StartDateSet bool
+	DueDate      *string
+	DueDateSet   bool
+	LabelIDs     *[]string
+	AssigneeIDs  *[]string
+	DocIDs       *[]string
 }
 
 func (command UpdateTaskCommand) hasPatch() bool {
@@ -114,6 +117,7 @@ func (command UpdateTaskCommand) hasPatch() bool {
 		command.Description != nil ||
 		command.StateID != nil ||
 		command.Priority != nil ||
+		command.StartDateSet ||
 		command.DueDateSet ||
 		command.LabelIDs != nil ||
 		command.AssigneeIDs != nil ||
@@ -556,12 +560,16 @@ func CreateTask(ctx context.Context, app core.App, actorID string, command Creat
 		record.Set("title", command.Title)
 		record.Set("description", strings.TrimSpace(command.Description))
 		record.Set("priority", command.Priority)
+		record.Set("start_date", command.StartDate)
 		record.Set("due_date", command.DueDate)
 		record.Set("labels", command.LabelIDs)
 		record.Set("assignees", command.AssigneeIDs)
 		record.Set("documents", command.DocIDs)
 		record.Set("created_by", actorID)
 		record.Set("rank", nextTaskRank(tx, project.Id, command.StateID))
+		if err := validateTaskSpan(record); err != nil {
+			return err
+		}
 		if err := tx.Save(record); err != nil {
 			return err
 		}
@@ -612,6 +620,13 @@ func UpdateTask(ctx context.Context, app core.App, actorID string, command Updat
 			}
 			record.Set("priority", *command.Priority)
 		}
+		if command.StartDateSet {
+			if command.StartDate == nil {
+				record.Set("start_date", "")
+			} else {
+				record.Set("start_date", strings.TrimSpace(*command.StartDate))
+			}
+		}
 		if command.DueDateSet {
 			if command.DueDate == nil {
 				record.Set("due_date", "")
@@ -629,6 +644,9 @@ func UpdateTask(ctx context.Context, app core.App, actorID string, command Updat
 			record.Set("documents", *command.DocIDs)
 		}
 		if err := validateTaskRelations(tx, project, record.GetString("state"), record.GetStringSlice("labels"), record.GetStringSlice("assignees"), record.GetStringSlice("documents")); err != nil {
+			return err
+		}
+		if err := validateTaskSpan(record); err != nil {
 			return err
 		}
 		changes := buildBoardTaskChanges(tx, before, record)
@@ -783,6 +801,21 @@ func validateTaskRelations(app core.App, project *core.Record, stateID string, l
 		if err != nil || doc.GetString("project") != project.Id {
 			return errors.New("a linked document does not belong to this project")
 		}
+	}
+	return nil
+}
+
+// validateTaskSpan keeps a task's dates in an order a timeline can draw. Both
+// dates stay optional: a task may carry only a deadline, only a start, or
+// neither.
+func validateTaskSpan(record *core.Record) error {
+	start := record.GetDateTime("start_date")
+	due := record.GetDateTime("due_date")
+	if start.IsZero() || due.IsZero() {
+		return nil
+	}
+	if start.Time().After(due.Time()) {
+		return errors.New("task start date cannot be after its due date")
 	}
 	return nil
 }
