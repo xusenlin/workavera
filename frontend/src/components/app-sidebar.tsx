@@ -15,11 +15,17 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar"
+import { useSidebar } from "@/components/ui/sidebar-context"
 import { Logo } from "@/components/logo"
 import { navGroups } from "@/lib/navigation"
 
 export function AppSidebar() {
   const { pathname } = useLocation()
+  const { setOpenMobile } = useSidebar()
+  // On a phone the sidebar is a sheet that does not close itself, so without
+  // this it would stay over the page it just navigated to. On a wider screen
+  // the sidebar is not a sheet and this does nothing.
+  const closeMobileSidebar = () => setOpenMobile(false)
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
@@ -30,7 +36,7 @@ export function AppSidebar() {
               asChild
               className="data-[slot=sidebar-menu-button]:!p-2"
             >
-              <NavLink to="/dashboard">
+              <NavLink to="/dashboard" onClick={closeMobileSidebar}>
                 <Logo className="!size-[30px] shrink-0 group-data-[collapsible=icon]:!size-4" />
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-semibold">Workavera</span>
@@ -60,7 +66,7 @@ export function AppSidebar() {
                         pathname.startsWith(item.url + "/")
                       }
                     >
-                      <NavLink to={item.url}>
+                      <NavLink to={item.url} onClick={closeMobileSidebar}>
                         <HugeiconsIcon icon={item.icon} strokeWidth={2} />
                         <span>{item.title}</span>
                       </NavLink>

@@ -57,6 +57,11 @@ and versions follow [Semantic Versioning](https://semver.org/).
   being restored from the address bar a moment after the click and snapped back
   to the item that was open before, which left the list stuck on one entry as
   soon as it held more than a single item.
+- The navigation menu can be dismissed on a phone. It opens as a sheet that
+  ignores taps outside it and hides its close button, so with no Escape key it
+  could not be closed at all; tapping the dimmed area now closes it, and so
+  does following any link inside it, which previously left the menu covering
+  the page it had just opened.
 
 ## [0.1.0] - 2026-08-21
 
