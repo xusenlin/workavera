@@ -463,6 +463,12 @@ export const useReadingStore = create<ReadingState>((set, get) => ({
   },
 }))
 
+export const SUMMARY_LANGUAGES = [
+  { value: "English", label: "English" },
+  { value: "中文", label: "中文" },
+  { value: "日本語", label: "日本語" },
+]
+
 export const READING_STATUS_META: Record<
   ReadingStatus,
   { label: string; variant: "default" | "secondary" | "outline" }

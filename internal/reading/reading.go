@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -84,13 +83,31 @@ type SummarizeResult struct {
 }
 
 func Register(app core.App) {
+	// The migration that created reading_sources seeded the accounts that
+	// existed then; accounts created later get the same presets here, so both
+	// paths start from the same place.
+	app.OnRecordAfterCreateSuccess("users").BindFunc(func(event *core.RecordEvent) error {
+		if err := SeedPresets(event.App, event.Record.Id); err != nil {
+			// Presets are a convenience, never a precondition for having an
+			// account, so a failure here must not fail the signup.
+			event.App.Logger().Error("failed to seed reading source presets", "userId", event.Record.Id, "error", err)
+		}
+		return event.Next()
+	})
+
 	app.OnServe().BindFunc(func(event *core.ServeEvent) error {
 		event.Router.POST("/api/reading/items/read-all", markAllRead).Bind(apis.RequireAuth("users"))
 		event.Router.POST("/api/reading/items/{id}/summarize", summarizeItem).Bind(apis.RequireAuth("users"))
 		event.Router.POST("/api/reading/items/{id}/pin", pinItem).Bind(apis.RequireAuth("users"))
+		// Subscriptions themselves live on PocketBase's own CRUD; only
+		// reaching out to them needs a route.
+		event.Router.POST("/api/reading/discover", discoverItems).Bind(apis.RequireAuth("users"))
+		event.Router.POST("/api/reading/discover/summarize", summarizeCandidate).Bind(apis.RequireAuth("users"))
 		return event.Next()
 	})
 	app.OnRecordUpdateRequest(itemsCollection).BindFunc(validateItemUpdate)
+	app.OnRecordCreateRequest(sourcesCollection).BindFunc(validateSourceRequest)
+	app.OnRecordUpdateRequest(sourcesCollection).BindFunc(validateSourceRequest)
 }
 
 func validateItemUpdate(event *core.RecordRequestEvent) error {
@@ -423,28 +440,21 @@ func fetchReadableText(ctx context.Context, rawURL string) (string, error) {
 		return "", errors.New("only HTTP and HTTPS URLs are supported")
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parsed.String(), nil)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("User-Agent", "Workavera/1.0 (+https://github.com/xusenlin/workavera)")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("unexpected status %d", resp.StatusCode)
+	// A repository page is mostly navigation chrome, while its README is the
+	// text a summary should be built from, so prefer the README and fall back
+	// to the page when there is none under that name.
+	if readme := githubReadmeURL(parsed); readme != "" {
+		if data, _, err := fetchBytes(ctx, readme, "text/plain", maxFetchBytes); err == nil {
+			if text := normalizeWhitespace(string(data)); text != "" {
+				return text, nil
+			}
+		}
 	}
 
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxFetchBytes))
+	data, contentType, err := fetchBytes(ctx, parsed.String(), "", maxFetchBytes)
 	if err != nil {
 		return "", err
 	}
-	if len(data) == 0 {
-		return "", errors.New("empty response")
-	}
-	contentType := strings.ToLower(resp.Header.Get("Content-Type"))
 	if strings.Contains(contentType, "html") || strings.Contains(strings.ToLower(string(data[:min(len(data), 200)])), "<html") {
 		text := htmlText(string(data))
 		if text != "" {
@@ -452,6 +462,19 @@ func fetchReadableText(ctx context.Context, rawURL string) (string, error) {
 		}
 	}
 	return normalizeWhitespace(string(data)), nil
+}
+
+// githubReadmeURL maps a repository page to the raw README beside it, and
+// returns an empty string for any other link.
+func githubReadmeURL(parsed *url.URL) string {
+	if !strings.EqualFold(parsed.Host, "github.com") {
+		return ""
+	}
+	segments := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+	if len(segments) != 2 || segments[0] == "" || segments[1] == "" {
+		return ""
+	}
+	return "https://raw.githubusercontent.com/" + segments[0] + "/" + segments[1] + "/HEAD/README.md"
 }
 
 func htmlText(source string) string {

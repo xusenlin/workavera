@@ -9,6 +9,20 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Reading has a discovery panel behind the sparkle button in its sidebar. It
+  keeps a list of subscriptions the user owns, either an RSS or Atom feed of
+  their own — a site, a newsletter, or a repository's `releases.atom` — or
+  GitHub's trending board for one language over a day, week, or month, which
+  is where the star gain that no GitHub API reports is published. Fetching
+  reads every enabled subscription at once, or whichever subset is selected,
+  and shows what came back as candidates that are not stored yet: a trending
+  row carries its star gain for the period, its star total, and its language.
+  Any candidate can be summarized into English, Chinese, or Japanese before a
+  decision, and only the ones kept become reading items, carrying the summary
+  along. Anything already in the reading list is marked as such, a subscription
+  that fails to load reports its error against itself and leaves the rest of
+  the panel intact, and a new account starts with the Go, Rust, and TypeScript
+  weekly boards plus the Hacker News front page.
 - Projects can be shared publicly. The owner publishes a project from its
   options menu and gets an unguessable link that anyone can open without an
   account, optionally with an expiry date. The page shows the project, its date
@@ -36,6 +50,13 @@ and versions follow [Semantic Versioning](https://semver.org/).
   span rather than a single deadline. The board task form, the Board API, and
   the `board_create_task` and `board_update_task` assistant tools all accept it,
   and a start date after the due date is refused.
+
+### Fixed
+
+- Picking a different item in the reading list works again. The selection was
+  being restored from the address bar a moment after the click and snapped back
+  to the item that was open before, which left the list stuck on one entry as
+  soon as it held more than a single item.
 
 ## [0.1.0] - 2026-08-21
 

@@ -14,9 +14,11 @@ import {
   MoreHorizontalIcon,
   Pin02Icon,
   Search02Icon,
+  SparklesIcon,
   Tick02Icon,
 } from "@hugeicons/core-free-icons"
 
+import { ReadingDiscoverDialog } from "@/components/reading/discover-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -74,6 +76,7 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import {
   READING_STATUS_META,
+  SUMMARY_LANGUAGES,
   readingErrorMessage,
   toReadingItem,
   useReadingStore,
@@ -119,12 +122,6 @@ const emptyForm: ItemForm = {
   summaryLanguage: "English",
 }
 
-const SUMMARY_LANGUAGES = [
-  { value: "English", label: "English" },
-  { value: "中文", label: "中文" },
-  { value: "日本語", label: "日本語" },
-]
-
 export function ReadingPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -139,6 +136,7 @@ export function ReadingPage() {
   const [summarizeError, setSummarizeError] = useState<string | null>(null)
   const [summarizeConfirmOpen, setSummarizeConfirmOpen] = useState(false)
   const [archivedOpen, setArchivedOpen] = useState(false)
+  const [discoverOpen, setDiscoverOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<ReadingItem | null>(null)
 
   const items = useReadingStore((s) => s.items)
@@ -196,6 +194,17 @@ export function ReadingPage() {
 
   useEffect(() => {
     if (loading || requestedReadingId === selectedId) return
+    // Selecting an item updates the selection and the URL together, and this
+    // effect can still run in between with the previous location in hand.
+    // Reopening from that stale location would undo the click that just
+    // happened, so only the location the browser is actually on may reopen an
+    // item.
+    if (
+      requestedReadingId !==
+      requestedRecordId(new URLSearchParams(window.location.search))
+    ) {
+      return
+    }
     if (requestedReadingId) {
       let active = true
       void openItem(requestedReadingId).then((item) => {
@@ -302,31 +311,23 @@ export function ReadingPage() {
       {/* Left sidebar */}
       <aside className="flex h-full w-80 shrink-0 flex-col border-r bg-sidebar">
         <div className="flex flex-col gap-2 border-b p-3">
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
               <span className="text-sm font-semibold">Reading</span>
-              <p className="text-xs text-muted-foreground">
+              <p className="truncate text-xs text-muted-foreground">
                 {totalItems} {hasActiveFilters ? "matching" : "active"} ·{" "}
                 {unreadCount} unread
               </p>
             </div>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={unreadCount === 0 || markingAllRead}
-                onClick={() => void handleMarkAllRead()}
-              >
-                Mark all read
-              </Button>
+            <div className="flex shrink-0 items-center gap-1">
               <Button
                 variant="ghost"
                 size="icon-sm"
-                onClick={() => setArchivedOpen(true)}
-                aria-label="Archived"
+                onClick={() => setDiscoverOpen(true)}
+                aria-label="Discover"
               >
                 <HugeiconsIcon
-                  icon={Archive02Icon}
+                  icon={SparklesIcon}
                   strokeWidth={2}
                   className="size-4"
                 />
@@ -343,6 +344,40 @@ export function ReadingPage() {
                   className="size-4"
                 />
               </Button>
+              {/* The occasional actions fold away so the header stays on one
+                  line at the sidebar's width. */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon-sm" aria-label="More">
+                    <HugeiconsIcon
+                      icon={MoreHorizontalIcon}
+                      strokeWidth={2}
+                      className="size-4"
+                    />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    disabled={unreadCount === 0 || markingAllRead}
+                    onClick={() => void handleMarkAllRead()}
+                  >
+                    <HugeiconsIcon
+                      icon={Tick02Icon}
+                      strokeWidth={2}
+                      className="size-4"
+                    />
+                    Mark all read
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setArchivedOpen(true)}>
+                    <HugeiconsIcon
+                      icon={Archive02Icon}
+                      strokeWidth={2}
+                      className="size-4"
+                    />
+                    Archived
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
           <div className="relative">
@@ -642,6 +677,12 @@ export function ReadingPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Discover dialog */}
+      <ReadingDiscoverDialog
+        open={discoverOpen}
+        onOpenChange={setDiscoverOpen}
+      />
 
       {/* Archived dialog */}
       <ArchivedItemsDialog
