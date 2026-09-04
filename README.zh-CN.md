@@ -60,9 +60,25 @@ Base URL 是由 Workavera 服务端发起请求的，不是浏览器。如果 Wo
 
 ![Workavera Board 展示中文社区上线计划](./screenShot/zh-CN/board.png)
 
+### Board 公开时间线
+
+![Workavera Board 公开时间线展示项目进度、成员、流程状态与任务安排](./screenShot/zh-CN/shareBoard.png)
+
 ### Calendar 统一日程
 
 ![Workavera Calendar 汇总中文项目截止日期与日历事件](./screenShot/zh-CN/calendar.png)
+
+### Docs 文档编辑器
+
+![Workavera Docs 富文本编辑器展示文档列表、内容编辑与分享功能](./screenShot/zh-CN/edit-doc.png)
+
+### 文档公开分享
+
+![Workavera 公开文档展示格式化内容与可导航的目录](./screenShot/zh-CN/share-doc.png)
+
+### Discover 订阅发现与 AI 总结
+
+![Workavera Discover 获取订阅内容、生成中文 AI 总结并将条目保存到稍后读](./screenShot/zh-CN/discover.png)
 
 ### 本地模型配置
 

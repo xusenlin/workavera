@@ -60,9 +60,25 @@ The base URL is dialed by the Workavera server, not by your browser. If Workaver
 
 ![Workavera Board Kanban with workflow columns, priorities, and due dates](./screenShot/en/board.png)
 
+### Public Board timeline
+
+![Workavera public Board timeline showing project progress, members, workflow states, and scheduled tasks](./screenShot/en/shareBoard.png)
+
 ### Calendar
 
 ![Workavera Calendar combining personal events and Board task deadlines](./screenShot/en/calendar.png)
+
+### Docs editor
+
+![Workavera Docs rich-text editor with slash commands, document history, sharing, and export tools](./screenShot/en/edit-doc.png)
+
+### Public document sharing
+
+![A published Workavera document with formatted content and a navigable table of contents](./screenShot/en/share-doc.png)
+
+### Discover and summarize subscriptions
+
+![Workavera Discover fetching subscribed sources, generating AI summaries, and saving selected items to Reading](./screenShot/en/discover.png)
 
 ### Bring your own model
 
