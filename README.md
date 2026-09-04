@@ -107,6 +107,7 @@ enough to have the ones it queries. Upgrade the server first, then the apps.
 
 | Android / iOS | Requires server | Because |
 | --- | --- | --- |
+| 1.0.4 | 0.1.1 or newer | task start dates, public project links, and subscription discovery |
 | 1.0.2 | 0.0.10 or newer | task archiving reads `board_tasks.archived` |
 | 1.0.1 | 0.0.9 or newer | user-owned MCP servers read `mcp_servers` |
 
