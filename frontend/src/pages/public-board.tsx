@@ -339,9 +339,10 @@ function ProjectBody({
   return (
     <div className="flex flex-col gap-6">
       {range && (
-        // The span layer needs room for a date axis, so narrow screens keep
-        // only the day-by-day layer below it.
-        <div className="hidden md:block">
+        // The axis and bars live in one horizontally scrolling grid that
+        // lands on today, so narrow screens read the span layer by swiping
+        // it, the same way they read the day-by-day layer below.
+        <div>
           <ProjectTimeline
             range={range}
             states={preview.states}
