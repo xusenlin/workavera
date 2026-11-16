@@ -11,16 +11,19 @@ import {
   ArrowUpRightIcon,
   BookOpen01Icon,
   Delete02Icon,
+  Folder01Icon,
   MoreHorizontalIcon,
   Pin02Icon,
   Search02Icon,
   SparklesIcon,
+  Tag01Icon,
   Tick02Icon,
 } from "@hugeicons/core-free-icons"
 
 import { ReadingDiscoverDialog } from "@/components/reading/discover-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,6 +51,12 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
 import {
   Pagination,
   PaginationContent,
@@ -95,6 +104,7 @@ import {
 
 const NO_PROJECT = "__none__"
 const ALL = "all"
+const VISIBLE_CARD_TAGS = 2
 
 type ItemForm = {
   title: string
@@ -219,19 +229,28 @@ export function ReadingPage() {
         active = false
       }
     }
-    if (selectedId) return
-    const firstItem = items.find((item) => item.pinned) ?? items[0]
-    if (firstItem) {
-      void Promise.resolve().then(() => selectItem(firstItem))
+    let active = true
+    void Promise.resolve().then(() => {
+      if (
+        !active ||
+        requestedRecordId(new URLSearchParams(window.location.search))
+      ) {
+        return
+      }
+      setSelectedId(null)
+      rememberOpenedItem(null)
+    })
+    return () => {
+      active = false
     }
   }, [
-    items,
     loading,
     openItem,
     navigate,
     requestedReadingId,
     selectItem,
     selectedId,
+    rememberOpenedItem,
   ])
 
   const projectNames = useMemo(
@@ -239,8 +258,6 @@ export function ReadingPage() {
     [projects]
   )
 
-  const pinnedItems = items.filter((i) => i.pinned)
-  const recentItems = items.filter((i) => !i.pinned)
   const hasActiveFilters =
     Boolean(query.trim()) || statusFilter !== ALL || projectFilter !== ALL
 
@@ -307,264 +324,207 @@ export function ReadingPage() {
   }
 
   return (
-    <div className="-m-4 flex h-[calc(100vh-4rem)] overflow-hidden md:-m-6">
-      {/* Left sidebar */}
-      <aside className="flex h-full w-80 shrink-0 flex-col border-r bg-sidebar">
-        <div className="flex flex-col gap-2 border-b p-3">
-          <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <span className="text-sm font-semibold">Reading</span>
-              <p className="truncate text-xs text-muted-foreground">
-                {totalItems} {hasActiveFilters ? "matching" : "active"} ·{" "}
-                {unreadCount} unread
-              </p>
-            </div>
-            <div className="flex shrink-0 items-center gap-1">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Reading</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {totalItems} {hasActiveFilters ? "matching" : "active"} ·{" "}
+            {unreadCount} unread
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setDiscoverOpen(true)}>
+            <HugeiconsIcon icon={SparklesIcon} strokeWidth={2} />
+            Discover
+          </Button>
+          <Button onClick={() => setAddOpen(true)}>
+            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+            Add link
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setDiscoverOpen(true)}
-                aria-label="Discover"
+                variant="outline"
+                size="icon"
+                aria-label="More reading actions"
+              >
+                <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                disabled={unreadCount === 0 || markingAllRead}
+                onClick={() => void handleMarkAllRead()}
               >
                 <HugeiconsIcon
-                  icon={SparklesIcon}
+                  icon={Tick02Icon}
                   strokeWidth={2}
                   className="size-4"
                 />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setAddOpen(true)}
-                aria-label="Add link"
-              >
+                Mark all read
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setArchivedOpen(true)}>
                 <HugeiconsIcon
-                  icon={Add01Icon}
+                  icon={Archive02Icon}
                   strokeWidth={2}
                   className="size-4"
                 />
-              </Button>
-              {/* The occasional actions fold away so the header stays on one
-                  line at the sidebar's width. */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon-sm" aria-label="More">
-                    <HugeiconsIcon
-                      icon={MoreHorizontalIcon}
-                      strokeWidth={2}
-                      className="size-4"
-                    />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem
-                    disabled={unreadCount === 0 || markingAllRead}
-                    onClick={() => void handleMarkAllRead()}
-                  >
-                    <HugeiconsIcon
-                      icon={Tick02Icon}
-                      strokeWidth={2}
-                      className="size-4"
-                    />
-                    Mark all read
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setArchivedOpen(true)}>
-                    <HugeiconsIcon
-                      icon={Archive02Icon}
-                      strokeWidth={2}
-                      className="size-4"
-                    />
-                    Archived
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
-          <div className="relative">
-            <HugeiconsIcon
-              icon={Search02Icon}
-              strokeWidth={2}
-              className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
-            />
-            <Input
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search reading items..."
-              className="h-8 pl-8 text-sm"
-            />
-          </div>
-          <div className="flex gap-2">
-            <Select
-              value={statusFilter}
-              onValueChange={(value) =>
-                void setStatusFilter(value as ReadingStatusFilter)
+                Archived
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <div className="relative w-full max-w-sm">
+          <HugeiconsIcon
+            icon={Search02Icon}
+            strokeWidth={2}
+            className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+            placeholder="Search reading items..."
+            className="pl-9"
+          />
+        </div>
+        <Select
+          value={statusFilter}
+          onValueChange={(value) =>
+            void setStatusFilter(value as ReadingStatusFilter)
+          }
+        >
+          <SelectTrigger className="w-40" aria-label="Filter by status">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>All statuses</SelectItem>
+            <SelectItem value="unread">Unread</SelectItem>
+            <SelectItem value="read">Read</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select
+          value={projectFilter}
+          onValueChange={(value) => void setProjectFilter(value)}
+        >
+          <SelectTrigger className="w-40" aria-label="Filter by project">
+            <SelectValue placeholder="Project" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>All projects</SelectItem>
+            {projects.map((project) => (
+              <SelectItem key={project.id} value={project.id}>
+                {project.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {loading ? (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }, (_, index) => (
+            <Card key={index} className="h-48 animate-pulse bg-muted/50" />
+          ))}
+        </div>
+      ) : items.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed p-12 text-center">
+          <HugeiconsIcon
+            icon={BookOpen01Icon}
+            strokeWidth={2}
+            className="size-8 text-muted-foreground/50"
+          />
+          <p className="font-medium">
+            {hasActiveFilters
+              ? "No matching reading items"
+              : "No reading items yet"}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {hasActiveFilters
+              ? "Try a different search or filter."
+              : "Add a link to start collecting references."}
+          </p>
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {items.map((item) => (
+            <ReadingCard
+              key={item.id}
+              item={item}
+              projectName={
+                item.projectId ? projectNames[item.projectId] : undefined
               }
-            >
-              <SelectTrigger className="h-8 flex-1 text-xs">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>All statuses</SelectItem>
-                <SelectItem value="unread">Unread</SelectItem>
-                <SelectItem value="read">Read</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select
-              value={projectFilter}
-              onValueChange={(value) => void setProjectFilter(value)}
-            >
-              <SelectTrigger className="h-8 flex-1 text-xs">
-                <SelectValue placeholder="Project" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>All projects</SelectItem>
-                {projects.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+              onSelect={selectItem}
+              onTogglePin={handleTogglePin}
+              onArchive={handleArchive}
+              onDelete={setDeleteTarget}
+            />
+          ))}
         </div>
+      )}
 
-        <div className="flex-1 overflow-y-auto p-2">
-          {loading ? (
-            <div className="space-y-2 p-2">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="flex flex-col gap-2 rounded-lg px-3 py-2.5"
-                >
-                  <div className="h-3.5 w-2/3 animate-pulse rounded bg-muted" />
-                  <div className="h-2.5 w-full animate-pulse rounded bg-muted" />
-                </div>
-              ))}
-            </div>
-          ) : pinnedItems.length === 0 && recentItems.length === 0 ? (
-            <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center text-sm text-muted-foreground">
-              <HugeiconsIcon
-                icon={BookOpen01Icon}
-                strokeWidth={2}
-                className="size-8 opacity-40"
+      {!loading && totalPages > 1 && (
+        <Pagination className="justify-end">
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious
+                href="#"
+                onClick={(event) => {
+                  event.preventDefault()
+                  void fetchItems(page - 1)
+                }}
+                className={
+                  page <= 1
+                    ? "pointer-events-none opacity-50"
+                    : "cursor-pointer"
+                }
+                aria-disabled={page <= 1}
               />
-              <div>
-                <p className="font-medium text-foreground">
-                  No reading items yet
-                </p>
-                <p className="mt-1 text-xs">
-                  Add a link to start collecting references.
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {pinnedItems.length > 0 && (
-                <div className="flex flex-col gap-1">
-                  <span className="px-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                    Pinned
-                  </span>
-                  {pinnedItems.map((item) => (
-                    <ReadingListItem
-                      key={item.id}
-                      item={item}
-                      selected={selectedId === item.id}
-                      onSelect={selectItem}
-                      onTogglePin={handleTogglePin}
-                      onArchive={handleArchive}
-                      onDelete={setDeleteTarget}
-                    />
-                  ))}
-                </div>
-              )}
-              {recentItems.length > 0 && (
-                <div className="flex flex-col gap-1">
-                  {pinnedItems.length > 0 && (
-                    <span className="px-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                      Recent
-                    </span>
-                  )}
-                  {recentItems.map((item) => (
-                    <ReadingListItem
-                      key={item.id}
-                      item={item}
-                      selected={selectedId === item.id}
-                      onSelect={selectItem}
-                      onTogglePin={handleTogglePin}
-                      onArchive={handleArchive}
-                      onDelete={setDeleteTarget}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-        {!loading && totalPages > 0 && (
-          <Pagination className="justify-end px-2 py-1">
-            <PaginationContent>
-              <PaginationItem>
-                <PaginationPrevious
-                  text="Prev"
-                  onClick={() => void fetchItems(Math.max(1, page - 1))}
-                  className={
-                    page <= 1 || loading
-                      ? "pointer-events-none opacity-50"
-                      : "cursor-pointer"
-                  }
-                />
-              </PaginationItem>
-              <span className="flex items-center px-2 text-xs text-muted-foreground">
-                {page} / {Math.max(1, totalPages)}
-              </span>
-              <PaginationItem>
-                <PaginationNext
-                  text="Next"
-                  onClick={() =>
-                    void fetchItems(Math.min(totalPages, page + 1))
-                  }
-                  className={
-                    page >= totalPages || loading
-                      ? "pointer-events-none opacity-50"
-                      : "cursor-pointer"
-                  }
-                />
-              </PaginationItem>
-            </PaginationContent>
-          </Pagination>
-        )}
-      </aside>
+            </PaginationItem>
+            <span className="px-2 text-sm text-muted-foreground">
+              {page} / {totalPages}
+            </span>
+            <PaginationItem>
+              <PaginationNext
+                href="#"
+                onClick={(event) => {
+                  event.preventDefault()
+                  void fetchItems(page + 1)
+                }}
+                className={
+                  page >= totalPages
+                    ? "pointer-events-none opacity-50"
+                    : "cursor-pointer"
+                }
+                aria-disabled={page >= totalPages}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      )}
 
-      {/* Right panel */}
-      <main className="flex min-w-0 flex-1 flex-col bg-background">
-        {selectedItem ? (
-          <>
-            <div className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-4">
-              <div className="flex min-w-0 flex-1 items-center gap-2">
-                <span className="truncate text-sm font-semibold">
-                  {selectedItem.title}
-                </span>
-                <Badge
-                  variant="secondary"
-                  className="hidden cursor-default gap-1 sm:flex"
-                >
-                  <span className="text-muted-foreground">ID</span>
-                  <code className="text-[11px] text-foreground">
-                    {selectedItem.id.slice(-8)}
-                  </code>
-                </Badge>
-                <Badge variant="secondary" className="cursor-default">
+      <Sheet
+        open={selectedItem !== null}
+        onOpenChange={(open) => !open && selectItem(null)}
+      >
+        {selectedItem && (
+          <SheetContent side="right" className="w-full sm:max-w-2xl!">
+            <SheetHeader className="border-b pr-14">
+              <SheetTitle className="line-clamp-2">
+                {selectedItem.title}
+              </SheetTitle>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <Badge variant="secondary">
                   {READING_STATUS_META[selectedItem.status].label}
                 </Badge>
-                <span className="hidden text-xs text-muted-foreground sm:inline">
-                  {formatRelativeTime(selectedItem.updatedAt)}
-                </span>
-              </div>
-              <div className="flex shrink-0 items-center gap-1">
+                <span>{formatRelativeTime(selectedItem.updatedAt)}</span>
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  onClick={() => handleTogglePin(selectedItem)}
+                  onClick={() => void handleTogglePin(selectedItem)}
                   aria-label={selectedItem.pinned ? "Unpin" : "Pin"}
                 >
                   <HugeiconsIcon
@@ -591,8 +551,7 @@ export function ReadingPage() {
                   </a>
                 </Button>
               </div>
-            </div>
-
+            </SheetHeader>
             <div className="min-h-0 flex-1 overflow-y-auto p-6">
               <ItemFormFields
                 form={detailForm}
@@ -601,8 +560,7 @@ export function ReadingPage() {
                 summarizeError={summarizeError}
               />
             </div>
-
-            <div className="flex shrink-0 items-center justify-between gap-2 border-t bg-popover px-4 py-3">
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t px-6 py-4">
               <Button
                 variant="ghost"
                 className="text-destructive hover:text-destructive"
@@ -630,18 +588,9 @@ export function ReadingPage() {
                 </Button>
               </div>
             </div>
-          </>
-        ) : (
-          <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center text-sm text-muted-foreground">
-            <HugeiconsIcon
-              icon={BookOpen01Icon}
-              strokeWidth={2}
-              className="size-8 opacity-40"
-            />
-            <p className="text-xs">Select an item to view details</p>
-          </div>
+          </SheetContent>
         )}
-      </main>
+      </Sheet>
 
       {/* Add dialog */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
@@ -742,58 +691,118 @@ export function ReadingPage() {
   )
 }
 
-function ReadingListItem({
+function ReadingCard({
   item,
-  selected,
+  projectName,
   onSelect,
   onTogglePin,
   onArchive,
   onDelete,
 }: {
   item: ReadingItem
-  selected: boolean
+  projectName?: string
   onSelect: (item: ReadingItem) => void
   onTogglePin: (item: ReadingItem) => void
   onArchive: (item: ReadingItem) => void
   onDelete: (item: ReadingItem) => void
 }) {
+  const visibleTagCount = projectName ? 1 : VISIBLE_CARD_TAGS
+
   return (
-    <div className="group relative">
+    <Card
+      size="sm"
+      className="relative h-full transition-shadow hover:shadow-sm"
+    >
       <button
         type="button"
         onClick={() => onSelect(item)}
-        className={cn(
-          "flex w-full cursor-pointer flex-col gap-1 rounded-lg px-3 py-2.5 text-left transition-colors",
-          selected ? "bg-muted" : "hover:bg-muted/60"
-        )}
+        className="flex min-h-48 w-full flex-1 cursor-pointer flex-col gap-3 px-4 text-left focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
       >
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-start gap-2 pr-7">
           {item.pinned && (
             <HugeiconsIcon
               icon={Pin02Icon}
               strokeWidth={2}
-              className="size-3 shrink-0 text-primary"
+              className="mt-1 size-3.5 shrink-0 text-primary"
             />
           )}
           {item.status === "unread" && (
-            <span className="size-2 shrink-0 animate-pulse rounded-full bg-blue-500" />
+            <span className="mt-1.5 size-2 shrink-0 rounded-full bg-blue-500" />
           )}
-          <span className="line-clamp-1 text-sm font-medium text-foreground/90">
+          <span className="line-clamp-2 text-base leading-snug font-medium text-foreground">
             {item.title}
           </span>
         </div>
-        {(item.description || item.summary) && (
-          <span className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-            {item.description || item.summary}
+        <span className="line-clamp-3 min-h-12 text-sm leading-relaxed text-muted-foreground">
+          {item.description || item.summary || item.url}
+        </span>
+        <span className="mt-auto flex w-full min-w-0 flex-col gap-2">
+          {(projectName || item.tags.length > 0) && (
+            <span className="flex w-full min-w-0 items-center gap-2">
+              {projectName && (
+                <Badge
+                  variant="outline"
+                  className={
+                    item.tags.length > 0 ? "max-w-[65%] shrink-0" : "max-w-full"
+                  }
+                  title={projectName}
+                >
+                  <HugeiconsIcon
+                    icon={Folder01Icon}
+                    strokeWidth={2}
+                    data-icon="inline-start"
+                  />
+                  <span className="truncate">{projectName}</span>
+                </Badge>
+              )}
+              {item.tags.length > 0 && (
+                <span className="ml-auto flex min-w-0 items-center justify-end gap-1.5 overflow-hidden">
+                  <HugeiconsIcon
+                    icon={Tag01Icon}
+                    strokeWidth={2}
+                    className="size-3.5 shrink-0 text-muted-foreground"
+                  />
+                  {item.tags.slice(0, visibleTagCount).map((tag, index) => (
+                    <Badge
+                      key={`${tag}-${index}`}
+                      variant="secondary"
+                      className="max-w-24 min-w-0 shrink"
+                      title={tag}
+                    >
+                      <span className="truncate">{tag}</span>
+                    </Badge>
+                  ))}
+                  {item.tags.length > visibleTagCount && (
+                    <Badge
+                      variant="outline"
+                      className="shrink-0"
+                      title={item.tags.slice(visibleTagCount).join(", ")}
+                      aria-label={`${item.tags.length - visibleTagCount} more tags`}
+                    >
+                      +{item.tags.length - visibleTagCount}
+                    </Badge>
+                  )}
+                </span>
+              )}
+            </span>
+          )}
+          <span className="flex w-full items-center gap-2 text-xs text-muted-foreground">
+            <Badge variant="secondary">
+              {READING_STATUS_META[item.status].label}
+            </Badge>
+            <span className="ml-auto">
+              {formatRelativeTime(item.updatedAt)}
+            </span>
           </span>
-        )}
+        </span>
       </button>
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="absolute top-2 right-2 flex size-6 cursor-pointer items-center justify-center rounded-md opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted data-[state=open]:opacity-100"
+            aria-label={`Actions for ${item.title}`}
+            className="absolute top-3 right-3 flex size-7 cursor-pointer items-center justify-center rounded-md hover:bg-muted"
           >
             <HugeiconsIcon
               icon={MoreHorizontalIcon}
@@ -833,7 +842,7 @@ function ReadingListItem({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-    </div>
+    </Card>
   )
 }
 

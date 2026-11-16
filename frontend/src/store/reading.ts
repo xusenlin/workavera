@@ -335,6 +335,9 @@ export const useReadingStore = create<ReadingState>((set, get) => ({
         openedItem: state.openedItem?.id === id ? item : state.openedItem,
       }))
       await get().fetchItems()
+      if (get().items.length === 0 && get().page > 1 && get().totalItems > 0) {
+        await get().fetchItems(get().page - 1)
+      }
       set({ saving: false })
       toast.success("Reading item updated")
     } catch (error) {

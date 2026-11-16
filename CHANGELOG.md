@@ -7,6 +7,13 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Reading now shows its saved links in a paginated card grid. Opening a card
+  brings up its details in a side panel, while search, filters, and item
+  actions remain available from the list. Cards show the project and tags on
+  one line, prioritizing the project and counting additional tags.
+
 ## [0.2.0] - 2026-10-29
 
 ### Added
