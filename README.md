@@ -65,9 +65,9 @@ Workavera is a workspace for freelancers and small teams: plan projects, write d
 
 ![A published Workavera document with formatted content and a navigable table of contents](./screenShot/en/share-doc.png)
 
-### Discover and summarize subscriptions
+### Reading and subscription summaries
 
-![Workavera Discover fetching subscribed sources, generating AI summaries, and saving selected items to Reading](./screenShot/en/discover.png)
+![Workavera Reading organizing saved links, AI summaries, tags, and reading statuses](./screenShot/zh-CN/reading.png)
 
 ### Bring your own model
 

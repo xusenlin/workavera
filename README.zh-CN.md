@@ -65,9 +65,9 @@ Workavera 是为自由职业者和小团队打造的工作区：规划项目、�
 
 ![Workavera 公开文档展示格式化内容与可导航的目录](./screenShot/zh-CN/share-doc.png)
 
-### Discover 订阅发现与 AI 总结
+### Reading 稍后读与订阅总结
 
-![Workavera Discover 获取订阅内容、生成中文 AI 总结并将条目保存到稍后读](./screenShot/zh-CN/discover.png)
+![Workavera Reading 展示收藏的技术文章与项目卡片、标签分类及阅读状态](./screenShot/zh-CN/reading.png)
 
 ### 本地模型配置
 

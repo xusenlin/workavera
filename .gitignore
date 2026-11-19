@@ -5,6 +5,7 @@
 .idea/
 .vscode/
 .zcode/
+.claude/
 
 # Frontend dependencies and generated files
 frontend/node_modules/
@@ -33,3 +34,6 @@ bin/
 coverage.out
 *.test
 /website/
+/promo/
+.remotion/
+.cache/
