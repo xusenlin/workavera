@@ -14,6 +14,9 @@ func TestBinaryResourcesMigration(t *testing.T) {
 	}
 	defer app.Cleanup()
 
+	if err := restoreResourceConversion(app); err != nil {
+		t.Fatal(err)
+	}
 	resources, err := app.FindCollectionByNameOrId(userResourcesCollection)
 	if err != nil {
 		t.Fatal(err)

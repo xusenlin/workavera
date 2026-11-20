@@ -73,9 +73,6 @@ func (m submittedUserMessage) canonicalParts(app core.App, ownerID string) ([]wo
 			"mediaType":  snapshot.MediaType,
 			"size":       snapshot.Size,
 		}
-		if snapshot.NoTextReason != "" {
-			data["noText"] = resources.NoTextDescription(snapshot.NoTextReason)
-		}
 		parts = append(parts, workagent.Part{"type": "data-resource", "id": snapshot.ResourceID, "data": data})
 	}
 	return append(parts, m.texts...), nil

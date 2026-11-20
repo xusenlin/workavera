@@ -19,7 +19,7 @@ const (
 	SandboxLimitsKey      = "sandbox.limits"
 	SandboxIdleTimeoutKey = "sandbox.idle_timeout_minutes"
 
-	DefaultSandboxImage = "ghcr.io/xusenlin/workavera-sandbox:3"
+	DefaultSandboxImage = "ghcr.io/xusenlin/workavera-sandbox:4"
 )
 
 // SandboxLimits are the resource limits of every sandbox container. Memory

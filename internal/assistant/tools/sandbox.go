@@ -88,7 +88,7 @@ func sandboxTools(app core.App, manager *sandbox.Manager, scope workagent.ToolSc
 		),
 		fantasy.NewAgentTool(
 			"sandbox_import",
-			"Copy one of the user's resources or a document they can see into the sandbox on the server, without passing its content through the conversation. Resources go to /workspace/resources/ as the original file plus, when it has text, a <name>.md with the Markdown converted at upload; that Markdown is lossy, so work on the original file when exact content matters. Documents go to /workspace/docs/ as .md or .html. Existing files are never overwritten; a numbered name is used instead.",
+			"Copy one of the user's resources or a document they can see into the sandbox on the server, without passing its content through the conversation. Resources go to the conversation's resources/ folder as the original file. Documents go to the conversation's docs/ folder as .md or .html. Existing files are never overwritten; a numbered name is used instead.",
 			func(ctx context.Context, input sandboxImportInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
 				result, err := manager.Import(ctx, actorID, conversationID, input.Source, input.ID)
 				return sandboxToolResponse(app, actorID, "sandbox_import", result, err)
@@ -96,7 +96,7 @@ func sandboxTools(app core.App, manager *sandbox.Manager, scope workagent.ToolSc
 		),
 		fantasy.NewAgentTool(
 			"sandbox_export",
-			"Save a file from the user's sandbox to Workavera: target=resource adds it to Resources under the rules of an upload (the size limit the administrator sets, 10 MB by default, and the supported document, text, code, image, and archive types); target=doc creates a new document from a .md, .markdown, .html, or .htm file. Never overwrites existing resources or documents; update documents with docs_replace or docs_upsert.",
+			"Save a file from the user's sandbox to Workavera: target=resource adds it to Resources under the rules of an upload (the size limit the administrator sets, 10 MB by default, and the supported document, text, code, SQLite, image, and archive types); target=doc creates a new document from a .md, .markdown, .html, or .htm file. Never overwrites existing resources or documents; update documents with docs_replace or docs_upsert.",
 			func(ctx context.Context, input sandboxExportInput, _ fantasy.ToolCall) (fantasy.ToolResponse, error) {
 				result, err := manager.Export(ctx, actorID, conversationID, sandbox.ExportInput{
 					Path:      input.Path,

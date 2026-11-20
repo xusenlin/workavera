@@ -22,7 +22,7 @@ func TestSandboxMigration(t *testing.T) {
 
 	expected := map[string]string{
 		"sandbox.enabled":              `true`,
-		"sandbox.image":                `"ghcr.io/xusenlin/workavera-sandbox:3"`,
+		"sandbox.image":                `"ghcr.io/xusenlin/workavera-sandbox:4"`,
 		"sandbox.network":              `true`,
 		"sandbox.limits":               `{"cpus":2,"memory":"1g","pids":512}`,
 		"sandbox.idle_timeout_minutes": `60`,

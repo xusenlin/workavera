@@ -33,8 +33,8 @@ ENV APP_VERSION="${VERSION}"
 RUN apk add --no-cache ca-certificates tzdata \
     && addgroup -S workavera \
     && adduser -S -G workavera workavera \
-    && mkdir -p /app/pb_data /app/anydoc_cache \
-    && chown workavera:workavera /app/pb_data /app/anydoc_cache
+    && mkdir -p /app/pb_data \
+    && chown workavera:workavera /app/pb_data
 
 WORKDIR /app
 

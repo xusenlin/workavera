@@ -41,8 +41,6 @@ func createChatTestResource(t *testing.T, app core.App, ownerID, name string) st
 	record.Set("media_type", "application/pdf")
 	record.Set("size", 2516582)
 	record.Set("sha256", strings.Repeat("a", 64))
-	record.Set("converted_markdown", "report body")
-	record.Set("converted_size", 11)
 	if err := app.Save(record); err != nil {
 		t.Fatal(err)
 	}

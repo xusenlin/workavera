@@ -34,7 +34,6 @@ type ResourcesState = ResourceListParams & {
   upload: (file: File) => Promise<Resource>
   rename: (id: string, displayName: string) => Promise<void>
   remove: (id: string) => Promise<void>
-  fetchMarkdown: (id: string) => Promise<string>
   fetchLeases: (resourceId: string) => Promise<ResourceLease[]>
   revokeLease: (leaseId: string) => Promise<void>
 }
@@ -118,16 +117,6 @@ export const useResourcesStore = create<ResourcesState>((set, get) => ({
     })
     forgetResourceState(id)
     await get().fetchResources()
-  },
-
-  fetchMarkdown: async (id) => {
-    const record = await pb
-      .collection(RESOURCES_COLLECTION)
-      .getOne<{ converted_markdown: string }>(id, {
-        fields: "converted_markdown",
-        requestKey: null,
-      })
-    return record.converted_markdown
   },
 
   fetchLeases: async (resourceId) =>

@@ -23,7 +23,11 @@ function iconFor(mediaType: string) {
     return FileZipIcon
   if (mediaType.startsWith("text/x-") || mediaType === "text/javascript")
     return SourceCodeIcon
-  if (mediaType === "text/html" || mediaType.includes("json"))
+  if (
+    mediaType === "text/html" ||
+    mediaType.includes("json") ||
+    mediaType === "application/vnd.sqlite3"
+  )
     return SourceCodeIcon
   if (mediaType.startsWith("text/")) return File02Icon
   return FileAttachmentIcon

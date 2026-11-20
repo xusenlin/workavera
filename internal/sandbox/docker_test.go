@@ -145,7 +145,7 @@ plt.savefig('chart.png')
 		t.Fatal(err)
 	}
 	imported, err := m.Import(ctx, userID, conv, "resource", source.ID)
-	if err != nil || imported.Path != dir+"/resources/data.txt" || imported.MarkdownPath != dir+"/resources/data.txt.md" {
+	if err != nil || imported.Path != dir+"/resources/data.txt" {
 		t.Fatalf("import resource: %#v %v", imported, err)
 	}
 	again, err := m.Import(ctx, userID, conv, "resource", source.ID)

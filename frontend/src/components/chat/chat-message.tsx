@@ -212,6 +212,7 @@ function ToolCard({
   if (part.toolName === "resources_list") {
     return <ResourcesListToolCard part={part} />
   }
+  // Legacy read-only renderers kept for v0.2.x conversation history.
   if (part.toolName === "resources_search") {
     return <ResourcesSearchToolCard part={part} />
   }

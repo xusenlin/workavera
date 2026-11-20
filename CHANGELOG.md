@@ -7,6 +7,43 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Chat now includes a toggleable right-side panel (open by default, with its
+  open/closed state saved locally) showing conversation stats (messages, tool
+  calls, and token usage) along with live switches for MCP servers, Chat
+  memory, and Sandbox.
+- Chat now supports fullscreen mode from a button at the far right of the
+  conversation header.
+- Resources now accepts SQLite database files (`.sqlite`, `.sqlite3`, `.db`),
+  grouped under Code & data.
+
+### Changed
+
+- Archiving a conversation from the Chat header now asks for confirmation
+  before archiving.
+- The default sandbox image moved from `ghcr.io/xusenlin/workavera-sandbox:3`
+  to `ghcr.io/xusenlin/workavera-sandbox:4`, which includes the `anydoc` CLI
+  for on-demand document conversion inside the sandbox.
+- `sandbox_import` now copies only the original resource file into the sandbox
+  (without a companion converted `.md` file), and `resources_list` matches
+  filenames only.
+
+### Removed
+
+- Built-in server-side document and HTML conversion (`go-anydoc`, `wazy`, and
+  `html-to-markdown`) has been removed, eliminating the ~550 MB startup WASM
+  compilation peak, the `anydoc_cache/` directory (safe to delete on upgraded
+  installations), and the `converted_markdown`, `converted_size`, and
+  `no_text_reason` fields on `user_resources`.
+- The `resources_read_markdown` and `resources_search` tools and the Resources
+  page's "View extracted text" preview and "No text" badge have been removed;
+  the assistant inspects and converts attached files on demand inside the
+  sandbox instead. Existing `v0.2.x` chat history continues to render prior
+  resource tool calls read-only.
+
+## [0.2.1] - 2026-11-16
+
 ### Changed
 
 - Reading now shows its saved links in a paginated card grid. Opening a card
@@ -628,7 +665,8 @@ First public release.
 - **AI Micro Apps** for self-contained HTML tools with sandboxed preview.
 - **Dashboard**, realtime **Notifications**, and **Settings** with per-user model configurations and model sharing.
 
-[Unreleased]: https://github.com/xusenlin/workavera/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/xusenlin/workavera/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/xusenlin/workavera/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/xusenlin/workavera/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/xusenlin/workavera/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/xusenlin/workavera/compare/v0.0.11...v0.1.0

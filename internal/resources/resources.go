@@ -1,6 +1,6 @@
-// Package resources owns the per-user resource library: uploaded source files,
-// their converted Markdown, and the short-lived download leases that can hand
-// a source file to an external service.
+// Package resources owns the per-user resource library: uploaded source files
+// and the short-lived download leases that can hand a source file to an
+// external service.
 package resources
 
 import (
@@ -23,11 +23,9 @@ const (
 	LeasesCollectionName = "resource_download_leases"
 
 	// MaxFileSizeCeiling is the largest source file any configuration
-	// allows, in bytes. The request body, the file field, and the converter
-	// are sized for it; MaxFileSize is the limit actually enforced.
+	// allows, in bytes. The request body and the file field are sized for it;
+	// MaxFileSize is the limit actually enforced.
 	MaxFileSizeCeiling = configs.MaxResourcesMaxFileSizeMB * 1024 * 1024
-	// MaxMarkdownSize is the upper bound of the converted Markdown, in bytes.
-	MaxMarkdownSize = 8 * 1024 * 1024
 	// MaxNameLength bounds original and display names, in characters.
 	MaxNameLength = 255
 )
@@ -38,26 +36,12 @@ const (
 	CodeFileEmpty                = "file_empty"
 	CodeFileTooLarge             = "file_too_large"
 	CodeUnsupportedMediaType     = "unsupported_media_type"
-	CodeUnsupportedEncoding      = "unsupported_encoding"
 	CodeInvalidFilename          = "invalid_filename"
-	CodeConversionFailed         = "conversion_failed"
-	CodeConversionTimeout        = "conversion_timeout"
-	CodeDocumentEncrypted        = "document_encrypted"
-	CodeDocumentMalformed        = "document_malformed"
-	CodeDocumentNeedsOCR         = "document_needs_ocr"
-	CodeConvertedContentEmpty    = "converted_content_empty"
-	CodeConvertedContentTooLarge = "converted_content_too_large"
 	CodeResourceNotFound         = "resource_not_found"
-	CodeInvalidResourceCursor    = "invalid_resource_cursor"
 	CodeDownloadLeaseExpired     = "download_lease_expired"
 	CodeInvalidInput             = "invalid_input"
 	CodeDownloadLinksUnavailable = "download_links_unavailable"
-	CodeResourceHasNoText        = "resource_has_no_text"
 )
-
-// converterStoreKey keeps the registered converter in the app store, so
-// server-side uploads share its warm-up and concurrency limit.
-const converterStoreKey = "resources.converter"
 
 // Error is a failure with a stable code and a description that is safe to
 // show to users and models. The wrapped cause, which may carry parser output
@@ -91,20 +75,15 @@ func IsNotFound(err error) bool {
 }
 
 type service struct {
-	app       core.App
-	converter *converter
+	app core.App
 }
 
 func Register(app core.App) {
-	register(app, &service{app: app, converter: newConverter(app)})
+	register(app, &service{app: app})
 }
 
 func register(app core.App, s *service) {
-	app.Store().Set(converterStoreKey, s.converter)
-
 	app.OnServe().BindFunc(func(event *core.ServeEvent) error {
-		s.converter.warmInBackground()
-
 		group := event.Router.Group("/api").Bind(apis.RequireAuth("users"))
 		// The multipart envelope adds a little to the file itself; the size
 		// limit that matters is enforced again on the bytes actually read.
@@ -144,7 +123,7 @@ func MaxFileSize(app core.App) int64 {
 }
 
 // immutableFields are fixed at upload; only display_name is editable.
-var immutableFields = []string{"owner", "original_name", "media_type", "size", "sha256", "converted_markdown", "converted_size", "no_text_reason"}
+var immutableFields = []string{"owner", "original_name", "media_type", "size", "sha256"}
 
 func guardResourceUpdate(event *core.RecordRequestEvent) error {
 	original := event.Record.Original()
@@ -172,34 +151,30 @@ func fileURL(record *core.Record) string {
 
 // Resource is the API projection of a user_resources record. It mirrors the
 // record's own field names so the frontend handles upload responses and
-// Records API responses alike, and never carries the Markdown or the hash.
+// Records API responses alike, and never carries the hash.
 type Resource struct {
-	ID            string `json:"id"`
-	DisplayName   string `json:"display_name"`
-	OriginalName  string `json:"original_name"`
-	MediaType     string `json:"media_type"`
-	Size          int64  `json:"size"`
-	ConvertedSize int64  `json:"converted_size"`
-	NoTextReason  string `json:"no_text_reason"`
-	File          string `json:"file"`
-	URL           string `json:"url"`
-	Created       string `json:"created"`
-	Updated       string `json:"updated"`
+	ID           string `json:"id"`
+	DisplayName  string `json:"display_name"`
+	OriginalName string `json:"original_name"`
+	MediaType    string `json:"media_type"`
+	Size         int64  `json:"size"`
+	File         string `json:"file"`
+	URL          string `json:"url"`
+	Created      string `json:"created"`
+	Updated      string `json:"updated"`
 }
 
 func resourceFromRecord(record *core.Record) Resource {
 	return Resource{
-		ID:            record.Id,
-		DisplayName:   record.GetString("display_name"),
-		OriginalName:  record.GetString("original_name"),
-		MediaType:     record.GetString("media_type"),
-		Size:          int64(record.GetInt("size")),
-		ConvertedSize: int64(record.GetInt("converted_size")),
-		NoTextReason:  record.GetString("no_text_reason"),
-		File:          record.GetString("file"),
-		URL:           fileURL(record),
-		Created:       record.GetDateTime("created").String(),
-		Updated:       record.GetDateTime("updated").String(),
+		ID:           record.Id,
+		DisplayName:  record.GetString("display_name"),
+		OriginalName: record.GetString("original_name"),
+		MediaType:    record.GetString("media_type"),
+		Size:         int64(record.GetInt("size")),
+		File:         record.GetString("file"),
+		URL:          fileURL(record),
+		Created:      record.GetDateTime("created").String(),
+		Updated:      record.GetDateTime("updated").String(),
 	}
 }
 
@@ -250,7 +225,7 @@ func (s *service) uploadResource(event *core.RequestEvent) error {
 	if err != nil {
 		return writeError(event, err)
 	}
-	resource, err := Upload(event.Request.Context(), s.app, s.converter, event.Auth.Id, name, data)
+	resource, err := Upload(event.Request.Context(), s.app, event.Auth.Id, name, data)
 	if err != nil {
 		return writeError(event, err)
 	}
@@ -288,8 +263,8 @@ func (s *service) revokeLease(event *core.RequestEvent) error {
 }
 
 // writeError responds with the stable code and safe message of a resource
-// error. Anything else is logged and reported generically, so parser output,
-// stacks, and paths never reach the client.
+// error. Anything else is logged and reported generically, so internal
+// details, stacks, and paths never reach the client.
 func writeError(event *core.RequestEvent, err error) error {
 	var resourceErr *Error
 	if !errors.As(err, &resourceErr) {
@@ -310,8 +285,8 @@ type errorBody struct {
 	Data    map[string]any `json:"data"`
 }
 
-// SourceFile is a resource's original bytes together with its stored
-// Markdown, which is empty for binary resources.
+// SourceFile is a resource's original bytes for server-side transfer, such as
+// copying it into the owner's sandbox.
 type SourceFile struct {
 	ID          string
 	DisplayName string
@@ -320,7 +295,6 @@ type SourceFile struct {
 	FileName  string
 	MediaType string
 	Data      []byte
-	Markdown  string
 }
 
 // Source reads one of the owner's resources for server-side use, such as
@@ -356,6 +330,5 @@ func Source(app core.App, ownerID, id string) (SourceFile, error) {
 		FileName:    fileName,
 		MediaType:   record.GetString("media_type"),
 		Data:        data,
-		Markdown:    record.GetString("converted_markdown"),
 	}, nil
 }

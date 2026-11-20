@@ -36,10 +36,6 @@ func TestUserResourcesMigration(t *testing.T) {
 	if !ok || !hash.Hidden {
 		t.Fatalf("sha256 must be hidden: %#v", hash)
 	}
-	markdown, ok := resources.Fields.GetByName("converted_markdown").(*core.TextField)
-	if !ok || markdown.Max != userResourceMaxMarkdownSize {
-		t.Fatalf("unexpected converted_markdown field: %#v", markdown)
-	}
 	owner, ok := resources.Fields.GetByName("owner").(*core.RelationField)
 	if !ok || !owner.CascadeDelete || !owner.Required {
 		t.Fatalf("resources must be cascade-deleted with their owner: %#v", owner)

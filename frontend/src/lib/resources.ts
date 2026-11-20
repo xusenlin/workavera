@@ -53,6 +53,9 @@ export const RESOURCE_EXTENSIONS = [
   "gz",
   "tgz",
   "7z",
+  "sqlite",
+  "sqlite3",
+  "db",
   "tsv",
   "log",
   "ipynb",
@@ -108,16 +111,6 @@ export function isPreviewableImage(mediaType: string) {
   return PREVIEWABLE_IMAGES.has(mediaType)
 }
 
-/** Why a resource has no extracted text, for the Resources page. */
-export const NO_TEXT_LABELS: Record<string, string> = {
-  binary: "Not a text format; it can be downloaded.",
-  needs_ocr:
-    "Scanned PDF: no text was extracted. OCR in the sandbox can add it.",
-  encrypted: "Password-protected: no text was extracted.",
-  empty: "No text could be extracted; the file may contain only images.",
-  too_complex: "Too large or complex for text extraction.",
-}
-
 let maxSizeRequest: Promise<number> | null = null
 
 /** The largest resource file the server accepts, read once per session. */
@@ -157,9 +150,9 @@ export const RESOURCE_ACCEPT = RESOURCE_EXTENSIONS.map((ext) => `.${ext}`).join(
   ","
 )
 
-/** Fields a listing needs; converted_markdown can be 8 MB and is never listed. */
+/** Fields a listing needs. */
 export const RESOURCE_LIST_FIELDS =
-  "id,display_name,original_name,media_type,size,no_text_reason,file,url,created,updated"
+  "id,display_name,original_name,media_type,size,file,url,created,updated"
 
 function mediaTypeIn(...mediaTypes: string[]) {
   return mediaTypes.map((type) => `media_type = "${type}"`)
@@ -216,7 +209,8 @@ export const RESOURCE_TYPE_FILTERS = [
         "application/yaml",
         "application/toml",
         "application/sql",
-        "application/x-sh"
+        "application/x-sh",
+        "application/vnd.sqlite3"
       ),
     ],
   },
@@ -247,7 +241,6 @@ export type Resource = {
   original_name: string
   media_type: string
   size: number
-  no_text_reason: string
   file: string
   url: string
   created: string
@@ -269,30 +262,18 @@ const ERROR_MESSAGES: Record<string, string> = {
   file_empty: "The file is empty.",
   file_too_large: "The file is larger than the server allows.",
   unsupported_media_type:
-    "This file type is not supported. Upload documents (PDF, Office, OpenDocument, RTF, EPUB, HTML), text, Markdown, code, or data files, images, or ZIP, TAR, GZIP, and 7z archives.",
-  unsupported_encoding: "The file's text encoding is not supported.",
+    "This file type is not supported. Upload documents (PDF, Office, OpenDocument, RTF, EPUB, HTML), text, Markdown, code, data, SQLite databases, images, or ZIP, TAR, GZIP, and 7z archives.",
   invalid_filename: "The file name is missing or invalid.",
-  conversion_failed: "The document could not be converted to text.",
-  conversion_timeout: "Converting the document took too long.",
-  document_encrypted: "The document is password-protected.",
-  document_malformed: "The document is damaged or incomplete.",
-  document_needs_ocr:
-    "This PDF contains scanned pages without extractable text.",
-  converted_content_empty: "No text could be extracted from this file.",
-  converted_content_too_large: "The converted text is larger than 8 MB.",
   resource_not_found: "This resource no longer exists.",
 }
 
 /** Explains a failed resource request from its stable error code. The
  * server's own message is preferred when it is more specific, such as the
- * pages of a PDF that need OCR. */
+ * configured file size limit. */
 export function resourceErrorMessage(error: unknown, fallback: string) {
   if (error instanceof ClientResponseError) {
     const code = error.response?.code as string | undefined
-    if (
-      (code === "document_needs_ocr" || code === "file_too_large") &&
-      error.response?.message
-    ) {
+    if (code === "file_too_large" && error.response?.message) {
       return error.response.message as string
     }
     if (code && ERROR_MESSAGES[code]) return ERROR_MESSAGES[code]
@@ -350,7 +331,7 @@ export function resourceTypeTone(mediaType: string, name: string) {
     mediaType.startsWith("text/x-") ||
     mediaType === "text/javascript" ||
     mediaType === "text/css" ||
-    ["xml", "yaml", "toml", "sql", "x-sh", "x-ipynb+json"].some(
+    ["xml", "yaml", "toml", "sql", "x-sh", "x-ipynb+json", "vnd.sqlite3"].some(
       (subtype) => mediaType === `application/${subtype}`
     )
   )
@@ -402,6 +383,7 @@ const FORMAT_LABELS: Record<string, string> = {
   "text/tab-separated-values": "TSV",
   "application/x-ipynb+json": "Notebook",
   "application/x-sh": "Shell",
+  "application/vnd.sqlite3": "SQLite",
   "application/gzip": "GZIP",
   "application/x-7z-compressed": "7z",
   "text/javascript": "JavaScript",

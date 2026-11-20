@@ -123,9 +123,9 @@ export function DeleteResourceDialog({ resource, onOpenChange }: DialogProps) {
             Delete “{resource?.display_name}”?
           </AlertDialogTitle>
           <AlertDialogDescription>
-            The file and its extracted text are deleted permanently, and every
-            download link for it stops working. Messages that attached it stay,
-            but their attachment cards will show it as unavailable.
+            The file is deleted permanently, and every download link for it
+            stops working. Messages that attached it stay, but their attachment
+            cards will show it as unavailable.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -242,51 +242,6 @@ export function ResourceLinksDialog({ resource, onOpenChange }: DialogProps) {
               </li>
             ))}
           </ul>
-        )}
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-export function ResourcePreviewDialog({ resource, onOpenChange }: DialogProps) {
-  const fetchMarkdown = useResourcesStore((state) => state.fetchMarkdown)
-  const [markdown, setMarkdown] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!resource) return
-    let cancelled = false
-    fetchMarkdown(resource.id)
-      .then((text) => {
-        if (!cancelled) setMarkdown(text)
-      })
-      .catch((error: unknown) => {
-        if (cancelled) return
-        setMarkdown("")
-        toast.error(resourceErrorMessage(error, "Could not load the text."))
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [fetchMarkdown, resource])
-
-  return (
-    <Dialog open={resource !== null} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>Extracted text</DialogTitle>
-          <DialogDescription>
-            The read-only Markdown the assistant reads for “
-            {resource?.display_name}”. The original file is unchanged.
-          </DialogDescription>
-        </DialogHeader>
-        {markdown === null ? (
-          <div className="flex justify-center py-6">
-            <Spinner />
-          </div>
-        ) : (
-          <pre className="max-h-[60vh] overflow-auto rounded-lg border bg-muted/30 p-3 text-xs break-words whitespace-pre-wrap">
-            {markdown}
-          </pre>
         )}
       </DialogContent>
     </Dialog>

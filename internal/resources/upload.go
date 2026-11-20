@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,96 +15,86 @@ import (
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
-	anydoc "github.com/xusenlin/go-anydoc"
 )
 
-// conversionPath is how an accepted format becomes Markdown.
-type conversionPath int
-
-const (
-	pathText conversionPath = iota
-	pathAnydoc
-	pathHTML
-	// pathBinary stores the file as it is, without any Markdown.
-	pathBinary
-)
-
-// format describes one accepted extension: the media type stored for it, the
-// detected media types that may sit behind it, and its conversion path. The
-// extension is only a hint; the detected type must agree with it.
+// format describes one accepted extension: the media type stored for it and
+// the detected media types that may sit behind it. The extension is only a
+// hint; the detected type must agree with it.
 type format struct {
 	mediaType string
 	detected  []string
-	path      conversionPath
 }
 
 const (
-	mimeDocx = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-	mimePptx = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-	mimeXlsx = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-	mimeOLE  = "application/x-ole-storage"
-	mimeText = "text/plain"
+	mimeDocx   = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+	mimePptx   = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+	mimeXlsx   = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+	mimeOLE    = "application/x-ole-storage"
+	mimeText   = "text/plain"
+	mimeSQLite = "application/vnd.sqlite3"
 )
 
 var formats = map[string]format{
-	"txt":   {mediaType: "text/plain", detected: []string{mimeText}, path: pathText},
-	"md":    {mediaType: "text/markdown", detected: []string{mimeText}, path: pathText},
-	"json":  {mediaType: "application/json", detected: []string{mimeText}, path: pathText},
-	"jsonl": {mediaType: "application/x-ndjson", detected: []string{mimeText}, path: pathText},
+	"txt":   {mediaType: "text/plain", detected: []string{mimeText}},
+	"md":    {mediaType: "text/markdown", detected: []string{mimeText}},
+	"json":  {mediaType: "application/json", detected: []string{mimeText}},
+	"jsonl": {mediaType: "application/x-ndjson", detected: []string{mimeText}},
 
-	"pdf":  {mediaType: "application/pdf", detected: []string{"application/pdf"}, path: pathAnydoc},
-	"docx": {mediaType: mimeDocx, detected: []string{mimeDocx}, path: pathAnydoc},
-	"docm": {mediaType: "application/vnd.ms-word.document.macroEnabled.12", detected: []string{mimeDocx}, path: pathAnydoc},
-	"doc":  {mediaType: "application/msword", detected: []string{"application/msword", mimeOLE}, path: pathAnydoc},
-	"pptx": {mediaType: mimePptx, detected: []string{mimePptx}, path: pathAnydoc},
-	"pptm": {mediaType: "application/vnd.ms-powerpoint.presentation.macroEnabled.12", detected: []string{mimePptx}, path: pathAnydoc},
-	"ppsx": {mediaType: "application/vnd.openxmlformats-officedocument.presentationml.slideshow", detected: []string{mimePptx}, path: pathAnydoc},
-	"ppsm": {mediaType: "application/vnd.ms-powerpoint.slideshow.macroEnabled.12", detected: []string{mimePptx}, path: pathAnydoc},
-	"ppt":  {mediaType: "application/vnd.ms-powerpoint", detected: []string{"application/vnd.ms-powerpoint", mimeOLE}, path: pathAnydoc},
-	"pps":  {mediaType: "application/vnd.ms-powerpoint", detected: []string{"application/vnd.ms-powerpoint", mimeOLE}, path: pathAnydoc},
-	"pot":  {mediaType: "application/vnd.ms-powerpoint", detected: []string{"application/vnd.ms-powerpoint", mimeOLE}, path: pathAnydoc},
-	"xlsx": {mediaType: mimeXlsx, detected: []string{mimeXlsx}, path: pathAnydoc},
-	"xlsm": {mediaType: "application/vnd.ms-excel.sheet.macroEnabled.12", detected: []string{mimeXlsx}, path: pathAnydoc},
-	"xlsb": {mediaType: "application/vnd.ms-excel.sheet.binary.macroEnabled.12", detected: []string{mimeXlsx}, path: pathAnydoc},
-	"xls":  {mediaType: "application/vnd.ms-excel", detected: []string{"application/vnd.ms-excel", mimeOLE}, path: pathAnydoc},
-	"odt":  {mediaType: "application/vnd.oasis.opendocument.text", detected: []string{"application/vnd.oasis.opendocument.text"}, path: pathAnydoc},
-	"ods":  {mediaType: "application/vnd.oasis.opendocument.spreadsheet", detected: []string{"application/vnd.oasis.opendocument.spreadsheet"}, path: pathAnydoc},
-	"odp":  {mediaType: "application/vnd.oasis.opendocument.presentation", detected: []string{"application/vnd.oasis.opendocument.presentation"}, path: pathAnydoc},
-	"rtf":  {mediaType: "application/rtf", detected: []string{"text/rtf"}, path: pathAnydoc},
-	"epub": {mediaType: "application/epub+zip", detected: []string{"application/epub+zip"}, path: pathAnydoc},
+	"pdf":  {mediaType: "application/pdf", detected: []string{"application/pdf"}},
+	"docx": {mediaType: mimeDocx, detected: []string{mimeDocx}},
+	"docm": {mediaType: "application/vnd.ms-word.document.macroEnabled.12", detected: []string{mimeDocx}},
+	"doc":  {mediaType: "application/msword", detected: []string{"application/msword", mimeOLE}},
+	"pptx": {mediaType: mimePptx, detected: []string{mimePptx}},
+	"pptm": {mediaType: "application/vnd.ms-powerpoint.presentation.macroEnabled.12", detected: []string{mimePptx}},
+	"ppsx": {mediaType: "application/vnd.openxmlformats-officedocument.presentationml.slideshow", detected: []string{mimePptx}},
+	"ppsm": {mediaType: "application/vnd.ms-powerpoint.slideshow.macroEnabled.12", detected: []string{mimePptx}},
+	"ppt":  {mediaType: "application/vnd.ms-powerpoint", detected: []string{"application/vnd.ms-powerpoint", mimeOLE}},
+	"pps":  {mediaType: "application/vnd.ms-powerpoint", detected: []string{"application/vnd.ms-powerpoint", mimeOLE}},
+	"pot":  {mediaType: "application/vnd.ms-powerpoint", detected: []string{"application/vnd.ms-powerpoint", mimeOLE}},
+	"xlsx": {mediaType: mimeXlsx, detected: []string{mimeXlsx}},
+	"xlsm": {mediaType: "application/vnd.ms-excel.sheet.macroEnabled.12", detected: []string{mimeXlsx}},
+	"xlsb": {mediaType: "application/vnd.ms-excel.sheet.binary.macroEnabled.12", detected: []string{mimeXlsx}},
+	"xls":  {mediaType: "application/vnd.ms-excel", detected: []string{"application/vnd.ms-excel", mimeOLE}},
+	"odt":  {mediaType: "application/vnd.oasis.opendocument.text", detected: []string{"application/vnd.oasis.opendocument.text"}},
+	"ods":  {mediaType: "application/vnd.oasis.opendocument.spreadsheet", detected: []string{"application/vnd.oasis.opendocument.spreadsheet"}},
+	"odp":  {mediaType: "application/vnd.oasis.opendocument.presentation", detected: []string{"application/vnd.oasis.opendocument.presentation"}},
+	"rtf":  {mediaType: "application/rtf", detected: []string{"text/rtf"}},
+	"epub": {mediaType: "application/epub+zip", detected: []string{"application/epub+zip"}},
 	// CSV has no signature, so plain text is the honest detection result for
-	// most files; non-UTF-8 ones are decoded before conversion.
-	"csv": {mediaType: "text/csv", detected: []string{"text/csv", mimeText}, path: pathAnydoc},
+	// most files.
+	"csv": {mediaType: "text/csv", detected: []string{"text/csv", mimeText}},
 
-	"html": {mediaType: "text/html", detected: []string{"text/html", "application/xhtml+xml", mimeText}, path: pathHTML},
-	"htm":  {mediaType: "text/html", detected: []string{"text/html", "application/xhtml+xml", mimeText}, path: pathHTML},
+	"html": {mediaType: "text/html", detected: []string{"text/html", "application/xhtml+xml", mimeText}},
+	"htm":  {mediaType: "text/html", detected: []string{"text/html", "application/xhtml+xml", mimeText}},
 
-	// Binary resources are stored and downloaded, never converted. SVG is
-	// left out on purpose: it is XML that can run scripts when opened.
-	"png":  {mediaType: "image/png", detected: []string{"image/png"}, path: pathBinary},
-	"jpg":  {mediaType: "image/jpeg", detected: []string{"image/jpeg"}, path: pathBinary},
-	"jpeg": {mediaType: "image/jpeg", detected: []string{"image/jpeg"}, path: pathBinary},
-	"gif":  {mediaType: "image/gif", detected: []string{"image/gif"}, path: pathBinary},
-	"webp": {mediaType: "image/webp", detected: []string{"image/webp"}, path: pathBinary},
+	// SVG is left out on purpose: it is XML that can run scripts when opened.
+	"png":  {mediaType: "image/png", detected: []string{"image/png"}},
+	"jpg":  {mediaType: "image/jpeg", detected: []string{"image/jpeg"}},
+	"jpeg": {mediaType: "image/jpeg", detected: []string{"image/jpeg"}},
+	"gif":  {mediaType: "image/gif", detected: []string{"image/gif"}},
+	"webp": {mediaType: "image/webp", detected: []string{"image/webp"}},
 	// The ZIP signature also opens OOXML and EPUB files, which the detector
 	// names first; those are still ZIP archives and pass as one through the
 	// detected type's ancestors.
-	"zip": {mediaType: "application/zip", detected: []string{"application/zip"}, path: pathBinary},
+	"zip": {mediaType: "application/zip", detected: []string{"application/zip"}},
 	// TIFF is what most scanners write, and HEIC what iPhones photograph in;
 	// both can be OCRed in the sandbox.
-	"tif":  {mediaType: "image/tiff", detected: []string{"image/tiff"}, path: pathBinary},
-	"tiff": {mediaType: "image/tiff", detected: []string{"image/tiff"}, path: pathBinary},
-	"bmp":  {mediaType: "image/bmp", detected: []string{"image/bmp"}, path: pathBinary},
-	"heic": {mediaType: "image/heic", detected: []string{"image/heic", "image/heic-sequence", "image/heif"}, path: pathBinary},
-	"tar":  {mediaType: "application/x-tar", detected: []string{"application/x-tar"}, path: pathBinary},
-	"gz":   {mediaType: "application/gzip", detected: []string{"application/gzip"}, path: pathBinary},
-	"tgz":  {mediaType: "application/gzip", detected: []string{"application/gzip"}, path: pathBinary},
-	"7z":   {mediaType: "application/x-7z-compressed", detected: []string{"application/x-7z-compressed"}, path: pathBinary},
+	"tif":  {mediaType: "image/tiff", detected: []string{"image/tiff"}},
+	"tiff": {mediaType: "image/tiff", detected: []string{"image/tiff"}},
+	"bmp":  {mediaType: "image/bmp", detected: []string{"image/bmp"}},
+	"heic": {mediaType: "image/heic", detected: []string{"image/heic", "image/heic-sequence", "image/heif"}},
+	"tar":  {mediaType: "application/x-tar", detected: []string{"application/x-tar"}},
+	"gz":   {mediaType: "application/gzip", detected: []string{"application/gzip"}},
+	"tgz":  {mediaType: "application/gzip", detected: []string{"application/gzip"}},
+	"7z":   {mediaType: "application/x-7z-compressed", detected: []string{"application/x-7z-compressed"}},
+
+	"sqlite":  {mediaType: mimeSQLite, detected: []string{mimeSQLite}},
+	"sqlite3": {mediaType: mimeSQLite, detected: []string{mimeSQLite}},
+	"db":      {mediaType: mimeSQLite, detected: []string{mimeSQLite}},
 }
 
-// textFormats are code, configuration, and data files kept as text: their
-// Markdown is the file itself, like .txt. Each maps to the media type stored
-// for it.
+// textFormats are code, configuration, and data files detected as plain text.
+// Each maps to the media type stored for it.
 var textFormats = map[string]string{
 	"tsv": "text/tab-separated-values", "log": "text/plain", "ipynb": "application/x-ipynb+json",
 	"xml": "application/xml", "yaml": "application/yaml", "yml": "application/yaml", "toml": "application/toml",
@@ -121,54 +110,8 @@ var textFormats = map[string]string{
 
 func init() {
 	for ext, mediaType := range textFormats {
-		formats[ext] = format{mediaType: mediaType, detected: []string{mimeText}, path: pathText}
+		formats[ext] = format{mediaType: mediaType, detected: []string{mimeText}}
 	}
-}
-
-// IsBinary reports whether resources of the stored media type are binary:
-// they have no Markdown and can only be downloaded or copied.
-func IsBinary(mediaType string) bool {
-	for _, spec := range formats {
-		if spec.mediaType == mediaType {
-			return spec.path == pathBinary
-		}
-	}
-	return false
-}
-
-// Reasons a resource is stored without Markdown. A file whose text cannot be
-// extracted is still kept, so it can be downloaded or processed in the
-// sandbox, for example to OCR a scanned PDF.
-const (
-	NoTextBinary    = "binary"
-	NoTextNeedsOCR  = "needs_ocr"
-	NoTextEncrypted = "encrypted"
-	NoTextEmpty     = "empty"
-	NoTextTooLarge  = "too_complex"
-)
-
-// noTextReason maps a conversion failure to the reason a file is kept
-// without text, or "" when the upload must fail: a damaged file, which may
-// be a broken upload, or a transient failure worth retrying.
-func noTextReason(err error) string {
-	var resourceErr *Error
-	if !errors.As(err, &resourceErr) {
-		return ""
-	}
-	if errors.Is(err, anydoc.ErrResourceLimit) {
-		return NoTextTooLarge
-	}
-	switch resourceErr.Code {
-	case CodeDocumentNeedsOCR:
-		return NoTextNeedsOCR
-	case CodeDocumentEncrypted:
-		return NoTextEncrypted
-	case CodeConvertedContentEmpty:
-		return NoTextEmpty
-	case CodeConvertedContentTooLarge:
-		return NoTextTooLarge
-	}
-	return ""
 }
 
 // readUploadedFile returns the single multipart "file" of the request and its
@@ -208,14 +151,11 @@ func checkSize(app core.App, size int64) error {
 	return nil
 }
 
-// Upload stores a new resource for the owner, converting it to Markdown in
-// the same request. A damaged file or a failed conversion leaves neither a
-// record nor a file behind; binary formats and documents whose text cannot be
-// extracted, such as scanned PDFs, are stored without Markdown and with the
-// reason. Uploading the same content under the same original name returns
-// the existing resource.
-func Upload(ctx context.Context, app core.App, conv *converter, ownerID, name string, data []byte) (Resource, error) {
-	return upload(ctx, app, conv, ownerID, name, "", data)
+// Upload stores a new resource for the owner as-is after validating its size,
+// filename, and detected media type. Uploading the same content under the same
+// original name returns the existing resource.
+func Upload(ctx context.Context, app core.App, ownerID, name string, data []byte) (Resource, error) {
+	return upload(ctx, app, ownerID, name, "", data)
 }
 
 // Save stores bytes produced on the server, such as a file exported from the
@@ -223,14 +163,13 @@ func Upload(ctx context.Context, app core.App, conv *converter, ownerID, name st
 // extension; displayName, when not empty, names a newly created resource
 // instead of it.
 func Save(ctx context.Context, app core.App, ownerID, name, displayName string, data []byte) (Resource, error) {
-	conv, _ := app.Store().Get(converterStoreKey).(*converter)
-	if conv == nil {
-		return Resource{}, newError(CodeConversionFailed, http.StatusServiceUnavailable, "Document conversion is unavailable on this server.")
-	}
-	return upload(ctx, app, conv, ownerID, name, displayName, data)
+	return upload(ctx, app, ownerID, name, displayName, data)
 }
 
-func upload(ctx context.Context, app core.App, conv *converter, ownerID, name, displayName string, data []byte) (Resource, error) {
+func upload(ctx context.Context, app core.App, ownerID, name, displayName string, data []byte) (Resource, error) {
+	if err := ctx.Err(); err != nil {
+		return Resource{}, err
+	}
 	if err := checkSize(app, int64(len(data))); err != nil {
 		return Resource{}, err
 	}
@@ -259,18 +198,6 @@ func upload(ctx context.Context, app core.App, conv *converter, ownerID, name, d
 		return resourceFromRecord(existing), nil
 	}
 
-	reason := ""
-	markdown, err := conv.toMarkdown(ctx, spec.path, ext, data)
-	switch {
-	case spec.path == pathBinary:
-		reason = NoTextBinary
-	case err != nil:
-		if reason = noTextReason(err); reason == "" {
-			return Resource{}, err
-		}
-		markdown = ""
-	}
-
 	collection, err := app.FindCollectionByNameOrId(CollectionName)
 	if err != nil {
 		return Resource{}, err
@@ -287,9 +214,6 @@ func upload(ctx context.Context, app core.App, conv *converter, ownerID, name, d
 	record.Set("media_type", spec.mediaType)
 	record.Set("size", len(data))
 	record.Set("sha256", contentHash)
-	record.Set("converted_markdown", markdown)
-	record.Set("converted_size", len(markdown))
-	record.Set("no_text_reason", reason)
 	if err := app.Save(record); err != nil {
 		// A concurrent upload of the same file may have won the unique index
 		// between the lookup above and this save; reuse its record.

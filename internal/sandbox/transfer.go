@@ -47,14 +47,13 @@ func sanitizeFileName(name string) string {
 }
 
 // importScript writes stdin to a free name in directory $1: "$2$3", or
-// "$2 (2)$3" and so on when it is taken. With $4 = 1 the name must also be
-// free with ".md" appended. It prints the path it wrote.
+// "$2 (2)$3" and so on when it is taken. It prints the path it wrote.
 const importScript = `
 dir=$1 base=$2 ext=$3
 mkdir -p -- "$dir" 2> /dev/null || exit 13
 name="$base$ext"
 n=1
-while [ -e "$dir/$name" ] || { [ "$4" = 1 ] && [ -e "$dir/$name.md" ]; }; do
+while [ -e "$dir/$name" ]; do
 	n=$((n + 1))
 	name="$base ($n)$ext"
 done
@@ -64,19 +63,17 @@ printf '%s' "$dir/$name"
 
 // ImportResult is the outcome of sandbox_import.
 type ImportResult struct {
-	Path         string `json:"path"`
-	Size         int    `json:"size"`
-	MarkdownPath string `json:"markdownPath,omitempty"`
-	MarkdownSize int    `json:"markdownSize,omitempty"`
-	Notice       string `json:"notice"`
+	Path   string `json:"path"`
+	Size   int    `json:"size"`
+	Notice string `json:"notice"`
 }
 
 // Import copies one of the user's resources or a document visible to them
 // into the conversation's folder on the server, so the content never passes
-// through the model. A resource with text also gets its stored Markdown as "<name>.md".
+// through the model.
 func (m *Manager) Import(ctx context.Context, userID, conversationID, source, id string) (ImportResult, error) {
 	base := ConversationDir(conversationID)
-	var dir, fileName, markdown string
+	var dir, fileName string
 	var data []byte
 	switch source {
 	case "resource":
@@ -84,7 +81,7 @@ func (m *Manager) Import(ctx context.Context, userID, conversationID, source, id
 		if err != nil {
 			return ImportResult{}, err
 		}
-		dir, fileName, data, markdown = base+"/resources", file.FileName, file.Data, file.Markdown
+		dir, fileName, data = base+"/resources", file.FileName, file.Data
 	case "doc":
 		doc, err := workdocs.Get(ctx, m.app, userID, strings.TrimSpace(id))
 		if err != nil {
@@ -105,26 +102,14 @@ func (m *Manager) Import(ctx context.Context, userID, conversationID, source, id
 	}
 	fileName = sanitizeFileName(fileName)
 	ext := path.Ext(fileName)
-	withMarkdown := "0"
-	if markdown != "" {
-		withMarkdown = "1"
-	}
 	writeCtx, cancel := context.WithTimeout(ctx, fileOpTimeout)
 	defer cancel()
-	output, err := m.docker.script(writeCtx, name, bytes.NewReader(data), importScript, dir, strings.TrimSuffix(fileName, ext), ext, withMarkdown)
+	output, err := m.docker.script(writeCtx, name, bytes.NewReader(data), importScript, dir, strings.TrimSuffix(fileName, ext), ext)
 	m.touch(userID)
 	if err != nil {
 		return ImportResult{}, fileError(err, dir, 0)
 	}
-	result := ImportResult{Path: string(output), Size: len(data), Notice: untrustedNotice}
-	if markdown != "" {
-		result.MarkdownPath = result.Path + ".md"
-		result.MarkdownSize = len(markdown)
-		if _, err := m.writeBytes(writeCtx, name, result.MarkdownPath, []byte(markdown)); err != nil {
-			return ImportResult{}, err
-		}
-	}
-	return result, nil
+	return ImportResult{Path: string(output), Size: len(data), Notice: untrustedNotice}, nil
 }
 
 // ExportInput describes a sandbox_export call.
@@ -141,10 +126,7 @@ type ExportInput struct {
 type ExportResult struct {
 	Resource *resources.Resource `json:"resource,omitempty"`
 	Document *workdocs.Document  `json:"document,omitempty"`
-	Notice   string              `json:"notice,omitempty"`
 }
-
-const resourceExportNotice = "The user downloads this original file. The Markdown converted from it only serves search and reading and can be lossy, so to check the exported result, inspect the original file in the sandbox rather than calling resources_read_markdown."
 
 const maxDocBytes = 1024 * 1024
 
@@ -187,11 +169,11 @@ func (m *Manager) Export(ctx context.Context, userID, conversationID string, inp
 		if err != nil {
 			var resourceErr *resources.Error
 			if errors.As(err, &resourceErr) && resourceErr.Code == resources.CodeUnsupportedMediaType {
-				return ExportResult{}, newError(CodeExportTypeUnsupport, http.StatusUnsupportedMediaType, "This file type cannot be saved as a resource. Resources accept PDF, Office, OpenDocument, RTF, EPUB, CSV, HTML, text, Markdown, JSON, PNG, JPEG, GIF, WebP, and ZIP files.")
+				return ExportResult{}, newError(CodeExportTypeUnsupport, http.StatusUnsupportedMediaType, "This file type cannot be saved as a resource. Resources accept PDF, Office, OpenDocument, RTF, EPUB, CSV, HTML, text, Markdown, code, data, SQLite, image, and archive files.")
 			}
 			return ExportResult{}, err
 		}
-		return ExportResult{Resource: &resource, Notice: resourceExportNotice}, nil
+		return ExportResult{Resource: &resource}, nil
 	}
 
 	if !looksLikeText(data, false) {

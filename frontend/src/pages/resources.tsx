@@ -11,17 +11,14 @@ import {
   MoreHorizontalIcon,
   PencilEdit02Icon,
   Search02Icon,
-  ViewIcon,
 } from "@hugeicons/core-free-icons"
 
 import {
   DeleteResourceDialog,
   RenameResourceDialog,
   ResourceLinksDialog,
-  ResourcePreviewDialog,
 } from "@/components/resources/resource-dialogs"
 import { ResourceIcon } from "@/components/resources/resource-icon"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -59,7 +56,6 @@ import {
   formatBytes,
   formatLabel,
   formatSizeLimit,
-  NO_TEXT_LABELS,
   openResourceFile,
   RESOURCE_ACCEPT,
   RESOURCE_TYPE_FILTERS,
@@ -71,7 +67,7 @@ import {
 } from "@/lib/resources"
 import { RESOURCES_PER_PAGE, useResourcesStore } from "@/store/resources"
 
-type DialogKind = "rename" | "delete" | "links" | "preview"
+type DialogKind = "rename" | "delete" | "links"
 
 function formatCreated(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, {
@@ -280,18 +276,7 @@ export function ResourcesPage() {
                     </button>
                   </TableCell>
                   <TableCell className="hidden text-muted-foreground sm:table-cell">
-                    <span className="flex items-center gap-2">
-                      {formatLabel(resource.media_type)}
-                      {resource.no_text_reason &&
-                        resource.no_text_reason !== "binary" && (
-                          <Badge
-                            variant="outline"
-                            title={NO_TEXT_LABELS[resource.no_text_reason]}
-                          >
-                            No text
-                          </Badge>
-                        )}
-                    </span>
+                    {formatLabel(resource.media_type)}
                   </TableCell>
                   <TableCell className="hidden text-muted-foreground tabular-nums sm:table-cell">
                     {formatBytes(resource.size)}
@@ -338,16 +323,6 @@ export function ResourcesPage() {
                           <HugeiconsIcon icon={Link04Icon} strokeWidth={2} />
                           Download links
                         </DropdownMenuItem>
-                        {!resource.no_text_reason && (
-                          <DropdownMenuItem
-                            onClick={() =>
-                              setDialog({ kind: "preview", resource })
-                            }
-                          >
-                            <HugeiconsIcon icon={ViewIcon} strokeWidth={2} />
-                            View extracted text
-                          </DropdownMenuItem>
-                        )}
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           variant="destructive"
@@ -416,11 +391,6 @@ export function ResourcesPage() {
       <ResourceLinksDialog
         key={`links-${dialogFor("links")?.id}`}
         resource={dialogFor("links")}
-        onOpenChange={closeDialog}
-      />
-      <ResourcePreviewDialog
-        key={`preview-${dialogFor("preview")?.id}`}
-        resource={dialogFor("preview")}
         onOpenChange={closeDialog}
       />
     </div>

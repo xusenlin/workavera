@@ -26,7 +26,7 @@ func newAPITestServer(t *testing.T, appURL string) *apiTestServer {
 	t.Helper()
 	app := newTestApp(t)
 	app.Settings().Meta.AppURL = appURL
-	register(app, &service{app: app, converter: newTestConverter(app, nil)})
+	Register(app)
 	router, err := apis.NewRouter(app)
 	if err != nil {
 		t.Fatal(err)
@@ -123,8 +123,8 @@ func TestResourceAPIUploadRecordsRulesAndDelete(t *testing.T) {
 	if uploaded.Code != http.StatusOK {
 		t.Fatalf("upload: %d %s", uploaded.Code, uploaded.Body.String())
 	}
-	if body := uploaded.Body.String(); strings.Contains(body, "converted_markdown") || strings.Contains(body, "sha256") {
-		t.Fatalf("upload response leaked stored content: %s", body)
+	if body := uploaded.Body.String(); strings.Contains(body, "sha256") {
+		t.Fatalf("upload response leaked the hash: %s", body)
 	}
 	resource := decodeJSON[Resource](t, uploaded)
 
@@ -144,7 +144,7 @@ func TestResourceAPIUploadRecordsRulesAndDelete(t *testing.T) {
 	if renamed.Code != http.StatusOK || decodeJSON[map[string]any](t, renamed)["display_name"] != "Meeting notes" {
 		t.Fatalf("rename: %d %s", renamed.Code, renamed.Body.String())
 	}
-	for field, value := range map[string]any{"original_name": "x.txt", "converted_markdown": "forged", "size": 1, "media_type": "text/html", "owner": other.Id} {
+	for field, value := range map[string]any{"original_name": "x.txt", "size": 1, "media_type": "text/html", "owner": other.Id} {
 		response := server.request(t, ownerToken, http.MethodPatch, "/api/collections/user_resources/records/"+resource.ID, map[string]any{field: value})
 		if response.Code == http.StatusOK {
 			t.Fatalf("changing %s must be rejected: %s", field, response.Body.String())

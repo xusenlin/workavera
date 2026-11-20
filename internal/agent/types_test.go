@@ -315,14 +315,10 @@ func TestMultiStepToolCallRebuild(t *testing.T) {
 	}
 }
 
-func TestResourceAttachmentTextMarksBinaryFiles(t *testing.T) {
-	part := Part{"type": "data-resource", "data": map[string]any{"resourceId": "r1", "name": "chart.png", "mediaType": "image/png", "size": float64(10), "binary": true}}
+func TestResourceAttachmentTextPointsToSandboxAndIgnoresLegacyFields(t *testing.T) {
+	part := Part{"type": "data-resource", "data": map[string]any{"resourceId": "r1", "name": "chart.png", "mediaType": "image/png", "size": float64(10), "binary": true, "noText": "legacy"}}
 	text := ResourceAttachmentText(part)
-	if !strings.Contains(text, "no text representation") || strings.Contains(text, "call the Resources tools") {
-		t.Fatalf("a binary attachment must say it has no text: %s", text)
-	}
-	delete(part["data"].(map[string]any), "binary")
-	if text := ResourceAttachmentText(part); !strings.Contains(text, "call the Resources tools") {
-		t.Fatalf("a text attachment must point to the Resources tools: %s", text)
+	if !strings.Contains(text, "sandbox_import") || strings.Contains(text, "legacy") || strings.Contains(text, "Resources tools") {
+		t.Fatalf("unexpected attachment description: %s", text)
 	}
 }
