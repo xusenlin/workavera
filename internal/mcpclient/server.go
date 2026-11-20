@@ -1,7 +1,7 @@
 // Package mcpclient lets each user connect their own third-party MCP servers
 // and use those servers' tools inside Chat.
 //
-// The integration rests on two decisions documented in doc/mcp-client-prd.md:
+// The integration rests on two decisions documented in doc/v0.0.1-v0.2.x/mcp-client-prd.md:
 // tool definitions are a snapshot the user has explicitly accepted (they are
 // never a live view of the upstream server), and no upstream connection
 // outlives the call that opened it. Together they mean assembling tools for a

@@ -19,7 +19,7 @@ Discover is a panel inside [Reading](./reading-prd.md) that fetches what the use
 
 ## 3. Non-goals
 
-- Background or scheduled fetching; Discover fetches only when the user asks. The [scheduled tasks proposal](./scheduled-tasks-prd.md) covers that direction.
+- Background or scheduled fetching; Discover fetches only when the user asks. The [scheduled tasks proposal](../planned/scheduled-tasks-prd.md) covers that direction.
 - Storing candidates on the server, or keeping a history of what was fetched.
 - Notifications about new entries.
 - Feeds behind authentication, and sources other than RSS, Atom, and GitHub trending.

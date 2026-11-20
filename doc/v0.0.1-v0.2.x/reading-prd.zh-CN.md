@@ -97,4 +97,4 @@ Reading 是 Workavera 的稍后读模块。它保存用户想回头再看的链�
 
 - [Discover PRD](./discover-prd.zh-CN.md)：Reading 中的订阅发现面板，`0.1.1` 新增。
 - [MCP 接入 PRD](./mcp-server-prd.zh-CN.md)：从外部客户端使用 Reading 工具。
-- [定时任务 PRD](./scheduled-tasks-prd.zh-CN.md)：一份关于定时抓取订阅的提案。
+- [定时任务 PRD](../planned/scheduled-tasks-prd.zh-CN.md)：一份关于定时抓取订阅的提案。

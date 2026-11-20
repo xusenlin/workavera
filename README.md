@@ -118,21 +118,21 @@ The roadmap below lists each feature with the server version that first shipped 
 
 | | Feature | Version | Product docs |
 | --- | --- | --- | --- |
-| ✅ | Board | 0.0.1 | [PRD](./doc/board-prd.md) · [中文](./doc/board-prd.zh-CN.md) |
-| ✅ | Calendar | 0.0.1 | [PRD](./doc/calendar-prd.md) · [中文](./doc/calendar-prd.zh-CN.md) |
-| ✅ | Chat | 0.0.1 | [PRD](./doc/chat-fantasy-plan.md) · [中文](./doc/chat-fantasy-plan.zh-CN.md) |
-| ✅ | Docs | 0.0.1 | [PRD](./doc/docs-prd.md) · [中文](./doc/docs-prd.zh-CN.md) |
-| ✅ | Reading | 0.0.1 | [PRD](./doc/reading-prd.md) · [中文](./doc/reading-prd.zh-CN.md) |
-| ✅ | Contacts | 0.0.1 | [PRD](./doc/contacts-prd.md) · [中文](./doc/contacts-prd.zh-CN.md) |
-| ✅ | MCP access for Claude Code, Cursor, and other clients | 0.0.7 | [PRD](./doc/mcp-server-prd.md) · [中文](./doc/mcp-server-prd.zh-CN.md) |
-| ✅ | Chat memory | 0.0.8 | [PRD](./doc/chat-memory-prd.md) · [中文](./doc/chat-memory-prd.zh-CN.md) |
-| ✅ | Connect your own MCP servers to Chat | 0.0.9 | [PRD](./doc/mcp-client-prd.md) · [中文](./doc/mcp-client-prd.zh-CN.md) |
-| ✅ | Public document links | 0.1.0 | [PRD](./doc/docs-public-links-prd.md) · [中文](./doc/docs-public-links-prd.zh-CN.md) |
-| ✅ | Public project timeline | 0.1.1 | [PRD](./doc/board-public-preview-prd.md) · [中文](./doc/board-public-preview-prd.zh-CN.md) |
-| ✅ | Discover subscriptions and AI summaries | 0.1.1 | [PRD](./doc/discover-prd.md) · [中文](./doc/discover-prd.zh-CN.md) |
-| ✅ | Resources | 0.2.0 | [PRD](./doc/resources-prd.md) · [中文](./doc/resources-prd.zh-CN.md) |
-| ✅ | Sandbox | 0.2.0 | [PRD](./doc/sandbox-prd.md) · [中文](./doc/sandbox-prd.zh-CN.md) |
-| ⬜ | Scheduled tasks | Planned | [PRD](./doc/scheduled-tasks-prd.md) · [中文](./doc/scheduled-tasks-prd.zh-CN.md) — pending review, outdated |
+| ✅ | Board | 0.0.1 | [PRD](./doc/v0.0.1-v0.2.x/board-prd.md) · [中文](./doc/v0.0.1-v0.2.x/board-prd.zh-CN.md) |
+| ✅ | Calendar | 0.0.1 | [PRD](./doc/v0.0.1-v0.2.x/calendar-prd.md) · [中文](./doc/v0.0.1-v0.2.x/calendar-prd.zh-CN.md) |
+| ✅ | Chat | 0.0.1 | [PRD](./doc/v0.0.1-v0.2.x/chat-fantasy-plan.md) · [中文](./doc/v0.0.1-v0.2.x/chat-fantasy-plan.zh-CN.md) |
+| ✅ | Docs | 0.0.1 | [PRD](./doc/v0.0.1-v0.2.x/docs-prd.md) · [中文](./doc/v0.0.1-v0.2.x/docs-prd.zh-CN.md) |
+| ✅ | Reading | 0.0.1 | [PRD](./doc/v0.0.1-v0.2.x/reading-prd.md) · [中文](./doc/v0.0.1-v0.2.x/reading-prd.zh-CN.md) |
+| ✅ | Contacts | 0.0.1 | [PRD](./doc/v0.0.1-v0.2.x/contacts-prd.md) · [中文](./doc/v0.0.1-v0.2.x/contacts-prd.zh-CN.md) |
+| ✅ | MCP access for Claude Code, Cursor, and other clients | 0.0.7 | [PRD](./doc/v0.0.1-v0.2.x/mcp-server-prd.md) · [中文](./doc/v0.0.1-v0.2.x/mcp-server-prd.zh-CN.md) |
+| ✅ | Chat memory | 0.0.8 | [PRD](./doc/v0.0.1-v0.2.x/chat-memory-prd.md) · [中文](./doc/v0.0.1-v0.2.x/chat-memory-prd.zh-CN.md) |
+| ✅ | Connect your own MCP servers to Chat | 0.0.9 | [PRD](./doc/v0.0.1-v0.2.x/mcp-client-prd.md) · [中文](./doc/v0.0.1-v0.2.x/mcp-client-prd.zh-CN.md) |
+| ✅ | Public document links | 0.1.0 | [PRD](./doc/v0.0.1-v0.2.x/docs-public-links-prd.md) · [中文](./doc/v0.0.1-v0.2.x/docs-public-links-prd.zh-CN.md) |
+| ✅ | Public project timeline | 0.1.1 | [PRD](./doc/v0.0.1-v0.2.x/board-public-preview-prd.md) · [中文](./doc/v0.0.1-v0.2.x/board-public-preview-prd.zh-CN.md) |
+| ✅ | Discover subscriptions and AI summaries | 0.1.1 | [PRD](./doc/v0.0.1-v0.2.x/discover-prd.md) · [中文](./doc/v0.0.1-v0.2.x/discover-prd.zh-CN.md) |
+| ✅ | Resources | 0.2.0 | [PRD](./doc/v0.0.1-v0.2.x/resources-prd.md) · [中文](./doc/v0.0.1-v0.2.x/resources-prd.zh-CN.md) |
+| ✅ | Sandbox | 0.2.0 | [PRD](./doc/v0.0.1-v0.2.x/sandbox-prd.md) · [中文](./doc/v0.0.1-v0.2.x/sandbox-prd.zh-CN.md) |
+| ⬜ | Scheduled tasks | Planned | [PRD](./doc/planned/scheduled-tasks-prd.md) · [中文](./doc/planned/scheduled-tasks-prd.zh-CN.md) — pending review, outdated |
 
 ## Changelog
 

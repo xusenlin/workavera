@@ -170,7 +170,7 @@ At most 10 tasks per account.
 
 ## 7. Execution
 
-Reuse the existing `app.Cron()` loop ([notifications/scheduler.go](../internal/notifications/scheduler.go) already runs at `*/6 * * * *`) and check for due tasks inside it. **No second cron job** — multiple schedulers only make failures harder to trace. The timezone comes from `configs.SystemLocation`.
+Reuse the existing `app.Cron()` loop ([notifications/scheduler.go](../../internal/notifications/scheduler.go) already runs at `*/6 * * * *`) and check for due tasks inside it. **No second cron job** — multiple schedulers only make failures harder to trace. The timezone comes from `configs.SystemLocation`.
 
 Each run:
 

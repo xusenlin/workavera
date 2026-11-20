@@ -170,7 +170,7 @@ Workavera 的安全模型建立在交互式审批之上——`RequireApproval` �
 
 ## 7. 执行
 
-复用现有的 `app.Cron()` 循环（[notifications/scheduler.go](../internal/notifications/scheduler.go) 已在 `*/6 * * * *` 上运行），在其中检查到期任务，**不新增 cron 作业**——多个调度器只会让排查变难。时区取 `configs.SystemLocation`。
+复用现有的 `app.Cron()` 循环（[notifications/scheduler.go](../../internal/notifications/scheduler.go) 已在 `*/6 * * * *` 上运行），在其中检查到期任务，**不新增 cron 作业**——多个调度器只会让排查变难。时区取 `configs.SystemLocation`。
 
 每次运行：
 

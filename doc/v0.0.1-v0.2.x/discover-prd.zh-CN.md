@@ -19,7 +19,7 @@ Discover 是 [Reading](./reading-prd.zh-CN.md) 里的一个面板，用来抓取
 
 ## 3. 非目标
 
-- 后台或定时抓取；Discover 只在用户要求时抓取。这个方向见[定时任务提案](./scheduled-tasks-prd.zh-CN.md)。
+- 后台或定时抓取；Discover 只在用户要求时抓取。这个方向见[定时任务提案](../planned/scheduled-tasks-prd.zh-CN.md)。
 - 在服务端保存候选项，或记录抓取历史。
 - 新条目通知。
 - 需要鉴权的订阅源，以及 RSS、Atom、GitHub Trending 以外的来源。

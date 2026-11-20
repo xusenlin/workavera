@@ -97,4 +97,4 @@ The same tools are available to MCP clients through API keys; see the [MCP acces
 
 - [Discover PRD](./discover-prd.md) for the subscription panel inside Reading, added in `0.1.1`.
 - [MCP access PRD](./mcp-server-prd.md) for using the Reading tools from external clients.
-- [Scheduled tasks PRD](./scheduled-tasks-prd.md), a proposal that would fetch subscriptions on a schedule.
+- [Scheduled tasks PRD](../planned/scheduled-tasks-prd.md), a proposal that would fetch subscriptions on a schedule.

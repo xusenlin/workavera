@@ -2,7 +2,7 @@
 
 [简体中文](./self-hosting.zh-CN.md) · [Back to README](../README.md)
 
-Everything an administrator needs to install, configure, and run Workavera: installation, first-run setup, instance settings, privacy and local models, the memory that file conversion needs, the sandbox, and building from source.
+Everything an administrator needs to install, configure, and run Workavera: installation, first-run setup, instance settings, privacy and local models, the sandbox, and building from source.
 
 ## Install
 
@@ -40,7 +40,7 @@ Instance-wide settings live in the `configs` collection, which only superusers c
 
 ## Data privacy and local models
 
-Self-hosting settles most of it: projects, tasks, docs, calendar, reading list, contacts, uploaded files, and the full chat history live in `pb_data` on your own machine—records in its SQLite database, files in its `storage` directory—and sandbox files stay in a Docker volume on the same host. Workavera has no telemetry and no vendor backend. The only traffic that leaves the server is traffic you configured—calls to the model provider you added in Settings, any external MCP servers you connected, and, once the sandbox is on, its image pull from `ghcr.io` and whatever its commands reach while `sandbox.network` allows it. The model only sees the text extracted from a resource when the assistant reads it, never the original file, which leaves the server only through a download link you approve (valid for five minutes) or a command run in a sandbox with network access.
+Self-hosting settles most of it: projects, tasks, docs, calendar, reading list, contacts, uploaded files, and the full chat history live in `pb_data` on your own machine—records in its SQLite database, files in its `storage` directory—and sandbox files stay in a Docker volume on the same host. Workavera has no telemetry and no vendor backend. The only traffic that leaves the server is traffic you configured—calls to the model provider you added in Settings, any external MCP servers you connected, and, once the sandbox is on, its image pull from `ghcr.io` and whatever its commands reach while `sandbox.network` allows it. Uploaded resources stay as original files on disk; the model never receives an original file directly—it only sees output from sandbox commands you let it run after importing a file, and an original file leaves the server only through a download link you approve (valid for five minutes) or a command run in a sandbox with network access.
 
 The model call is usually the last piece of data that goes to a third party, and you can keep that in-house too. A local server is added in Settings exactly like a hosted provider, and all four protocols are available for it—OpenAI, OpenAI-compatible, Anthropic Messages, and Google—so LM Studio, Ollama, vLLM, and llama.cpp all fit; pick the protocol matching the endpoint your server exposes.
 
@@ -60,9 +60,7 @@ Two things worth knowing before you rely on it:
 
 The base URL is dialed by the Workavera server, not by your browser. If Workavera runs in a container whose network mode cannot see the host's `127.0.0.1`, point it at `http://host.docker.internal:1234` instead.
 
-## Memory for file conversion
-
-Resources converts uploaded documents with an embedded WebAssembly module that is compiled to native code once and cached in `anydoc_cache/` next to `pb_data`. That compilation briefly needs about **550 MB** of memory and runs in the background right after startup: on first deployment, after an upgrade, on a new CPU, and after a container is rebuilt. Size the host for that peak, not for the near-zero usage while idle; each conversion in progress then needs up to about 100 MB. If the compilation cannot run, the rest of Workavera still works and only resource uploads are unavailable. The cache holds no user data and is safe to delete, which only costs one recompilation.
+## Resource download links
 
 Download links the assistant creates for resources are only issued when the server's Application URL (PocketBase settings) uses HTTPS.
 
@@ -78,7 +76,7 @@ The image `ghcr.io/xusenlin/workavera-sandbox` (from [xusenlin/workavera-sandbox
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `sandbox.enabled` | `true` | Master switch; `false` stops every sandbox container |
-| `sandbox.image` | `"ghcr.io/xusenlin/workavera-sandbox:3"` | Image for new and rebuilt containers, e.g. a mirror |
+| `sandbox.image` | `"ghcr.io/xusenlin/workavera-sandbox:4"` | Image for new and rebuilt containers, e.g. a mirror |
 | `sandbox.network` | `true` | Network master switch; `false` takes every sandbox offline |
 | `sandbox.limits` | `{"memory": "1g", "cpus": 2, "pids": 512}` | Per-container limits, applied to existing containers at once |
 | `sandbox.idle_timeout_minutes` | `60` | Stop a container after this long without use; `0` never stops it |

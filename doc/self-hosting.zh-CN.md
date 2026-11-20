@@ -2,7 +2,7 @@
 
 [English](./self-hosting.md) · [返回 README](../README.zh-CN.md)
 
-管理员安装、配置和运行 Workavera 需要的全部内容：安装、首次运行、实例设置、隐私与本地模型、文件转换的内存需求、沙箱，以及从源码构建。
+管理员安装、配置和运行 Workavera 需要的全部内容：安装、首次运行、实例设置、隐私与本地模型、沙箱，以及从源码构建。
 
 ## 安装
 
@@ -40,7 +40,7 @@ docker run -p 8090:8090 -v workavera-data:/app/pb_data ghcr.io/xusenlin/workaver
 
 ## 数据隐私与本地模型
 
-自托管本身已经解决了大半：项目、任务、文档、日历、稍后读、联系人、上传的文件以及完整的对话记录，全部存在你自己机器上的 `pb_data` 里——记录在 SQLite 数据库中，文件在 `storage` 目录中；沙箱里的文件也留在同一台主机的 Docker 数据卷里。Workavera 没有任何遥测，也没有厂商后端。唯一会离开这台服务器的流量，都是你自己配置出来的——你在 Settings 里添加的模型服务商、你自己接入的外部 MCP 服务，以及开启沙箱后从 `ghcr.io` 拉取镜像、和 `sandbox.network` 允许时沙箱里命令访问的地址。助手阅读资源时，模型只会看到提取出的文字，看不到原文件；原文件只会通过你批准的下载链接（五分钟内有效），或在联网沙箱中执行的命令离开服务器。
+自托管本身已经解决了大半：项目、任务、文档、日历、稍后读、联系人、上传的文件以及完整的对话记录，全部存在你自己机器上的 `pb_data` 里——记录在 SQLite 数据库中，文件在 `storage` 目录中；沙箱里的文件也留在同一台主机的 Docker 数据卷里。Workavera 没有任何遥测，也没有厂商后端。唯一会离开这台服务器的流量，都是你自己配置出来的——你在 Settings 里添加的模型服务商、你自己接入的外部 MCP 服务，以及开启沙箱后从 `ghcr.io` 拉取镜像、和 `sandbox.network` 允许时沙箱里命令访问的地址。上传的资源以原文件保存在磁盘上，模型不会直接拿到原文件，只会看到助手将文件导入沙箱后运行命令返回的输出；原文件只会通过你批准的下载链接（五分钟内有效），或在联网沙箱中执行的命令离开服务器。
 
 模型调用通常是最后一份交给第三方的数据，而这一份同样可以留在本地。本地推理服务在 Settings 里的添加方式和在线服务商完全一样，且四种协议都可以用于本地——OpenAI、OpenAI 兼容、Anthropic Messages、Google——所以 LM Studio、Ollama、vLLM、llama.cpp 都能接；按你的推理服务实际暴露的端点选协议即可。
 
@@ -60,9 +60,7 @@ docker run -p 8090:8090 -v workavera-data:/app/pb_data ghcr.io/xusenlin/workaver
 
 Base URL 是由 Workavera 服务端发起请求的，不是浏览器。如果 Workavera 跑在容器里、且容器的网络模式看不到宿主机的 `127.0.0.1`，把地址换成 `http://host.docker.internal:1234` 即可。
 
-## 文件转换的内存需求
-
-Resources 用内嵌的 WebAssembly 模块转换上传的文档，该模块会被编译成本机代码一次，并缓存在 `pb_data` 旁边的 `anydoc_cache/` 中。编译会短暂占用约 **550 MB** 内存，在服务启动后于后台进行：首次部署、升级之后、更换 CPU 以及重建容器之后都会发生。请按这个峰值而不是空闲时接近零的占用来规划主机内存；之后每个进行中的转换最多约占 100 MB。编译失败时 Workavera 其余功能照常可用，只有资源上传不可用。该缓存不含用户数据，可以安全删除，代价只是重新编译一次。
+## 资源下载链接
 
 助手为资源创建的下载链接，只在服务端 Application URL（PocketBase 设置）使用 HTTPS 时才会签发。
 
@@ -78,7 +76,7 @@ Resources 用内嵌的 WebAssembly 模块转换上传的文档，该模块会被
 | key | 默认值 | 说明 |
 | --- | --- | --- |
 | `sandbox.enabled` | `true` | 总开关；设为 `false` 会停止所有沙箱容器 |
-| `sandbox.image` | `"ghcr.io/xusenlin/workavera-sandbox:3"` | 新建和重建容器使用的镜像，例如镜像加速地址 |
+| `sandbox.image` | `"ghcr.io/xusenlin/workavera-sandbox:4"` | 新建和重建容器使用的镜像，例如镜像加速地址 |
 | `sandbox.network` | `true` | 网络总开关；设为 `false` 会让所有沙箱离线 |
 | `sandbox.limits` | `{"memory": "1g", "cpus": 2, "pids": 512}` | 每个容器的资源上限，立即作用于已有容器 |
 | `sandbox.idle_timeout_minutes` | `60` | 空闲多少分钟后停止容器；`0` 表示不自动停止 |
