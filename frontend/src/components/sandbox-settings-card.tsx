@@ -29,6 +29,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
 import { extractErrorMessage } from "@/lib/error"
 import { pb } from "@/lib/pocketbase"
+import { useSandboxStore } from "@/store/sandbox"
 
 const README_SANDBOX_URL =
   "https://github.com/xusenlin/workavera/blob/main/README.md#sandbox"
@@ -100,6 +101,7 @@ export function SandboxSettingsCard() {
         requestKey: null,
       })
       setStatus(next)
+      useSandboxStore.getState().setStatus(next)
       setLoadError(null)
     } catch (error) {
       setLoadError(extractErrorMessage(error, "Could not load the sandbox"))
@@ -131,6 +133,7 @@ export function SandboxSettingsCard() {
         requestKey: null,
       })
       setStatus(next)
+      useSandboxStore.getState().setStatus(next)
       return true
     } catch (error) {
       toast.error(extractErrorMessage(error, failure))

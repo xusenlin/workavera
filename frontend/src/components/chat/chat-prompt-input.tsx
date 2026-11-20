@@ -64,6 +64,8 @@ type Props = {
   conversationId: string
   modelConfigId?: string
   disabled?: boolean
+  fullscreen?: boolean
+  compactPadding?: boolean
   sendMessage: UseChatHelpers<ChatUIMessage>["sendMessage"]
   status: ChatStatus
   stop: UseChatHelpers<ChatUIMessage>["stop"]
@@ -77,6 +79,8 @@ export function ChatPromptInput({
   conversationId,
   modelConfigId: initialModelConfigId,
   disabled = false,
+  fullscreen = false,
+  compactPadding = false,
   sendMessage,
   status,
   stop,
@@ -204,7 +208,14 @@ export function ChatPromptInput({
 
   return (
     <div
-      className="relative p-3 px-4 md:px-16 lg:px-24"
+      className={cn(
+        "relative p-3",
+        fullscreen
+          ? "mx-auto w-full px-4 md:w-[60%] md:px-0"
+          : compactPadding
+            ? "px-4 md:px-8"
+            : "px-4 md:px-16 lg:px-24"
+      )}
       // Capture-phase handlers run before PromptInput's own drop listener,
       // which would otherwise keep the file as an inline attachment.
       onDragOverCapture={(event) => {
@@ -238,7 +249,16 @@ export function ChatPromptInput({
         }}
       />
       {picker.open && trigger && (
-        <div className="absolute inset-x-4 bottom-full md:inset-x-16 lg:inset-x-24">
+        <div
+          className={cn(
+            "absolute bottom-full",
+            fullscreen
+              ? "inset-x-4 md:inset-x-0"
+              : compactPadding
+                ? "inset-x-4 md:inset-x-8"
+                : "inset-x-4 md:inset-x-16 lg:inset-x-24"
+          )}
+        >
           <ResourcePickerList
             query={trigger.query}
             results={picker.results}

@@ -7,8 +7,10 @@ import { clearChatRuntimes } from "@/lib/chat-runtime"
 import { AppRouter } from "@/router"
 import { useAuthStore } from "@/store/auth"
 import { useChatRunsStore } from "@/store/chat-runs"
+import { useMcpServersStore } from "@/store/mcp-servers"
 import { useMemoriesStore } from "@/store/memories"
 import { usePreferencesStore } from "@/store/preferences"
+import { useSandboxStore } from "@/store/sandbox"
 
 export function App() {
   const initialized = useAuthStore((state) => state.initialized)
@@ -44,6 +46,8 @@ export function App() {
         useChatRunsStore.getState().clear()
       }
       useMemoriesStore.getState().clear()
+      useMcpServersStore.getState().clear()
+      useSandboxStore.getState().clear()
       previousUserId.current = userId
     }
   }, [userId])

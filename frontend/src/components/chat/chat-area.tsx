@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 import { Chat01Icon, SparklesIcon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
@@ -13,6 +13,7 @@ import {
 import { Message, MessageContent } from "@/components/ai-elements/message"
 import { Button } from "@/components/ui/button"
 import { useChatRuntime } from "@/lib/chat-runtime"
+import { cn } from "@/lib/utils"
 import { useChatStore } from "@/store/chat"
 import type {
   ChatUIMessage,
@@ -22,6 +23,20 @@ import type {
 import { ChatHeader } from "./chat-header"
 import { ChatMessageItem, ThinkingIndicator } from "./chat-message"
 import { ChatPromptInput, type ChatContextInfo } from "./chat-prompt-input"
+import { ChatSidePanel } from "./chat-side-panel"
+
+const SIDE_PANEL_STORAGE_KEY = "workavera.chat.sidePanelOpen"
+
+function readStoredSidePanelOpen(): boolean {
+  if (typeof window === "undefined") return true
+  try {
+    const stored = window.localStorage.getItem(SIDE_PANEL_STORAGE_KEY)
+    if (stored === null) return true
+    return stored !== "false"
+  } catch {
+    return true
+  }
+}
 
 /**
  * Derives the current context-window occupancy from the newest assistant
@@ -77,7 +92,19 @@ function ChatEmptyState({ onCreate }: { onCreate: () => void }) {
   )
 }
 
-function ActiveChat({ conversation }: { conversation: ChatConversation }) {
+function ActiveChat({
+  conversation,
+  sidePanelOpen,
+  onToggleSidePanel,
+  fullscreen,
+  onToggleFullscreen,
+}: {
+  conversation: ChatConversation
+  sidePanelOpen: boolean
+  onToggleSidePanel: () => void
+  fullscreen: boolean
+  onToggleFullscreen: () => void
+}) {
   const renameConversation = useChatStore((state) => state.renameConversation)
   const { runtime, state: runtimeState } = useChatRuntime(conversation.id)
 
@@ -102,72 +129,100 @@ function ActiveChat({ conversation }: { conversation: ChatConversation }) {
     messages[messages.length - 1].role !== "assistant"
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col">
-      <ChatHeader conversation={conversation} />
-      <Conversation>
-        <ConversationContent className="w-full px-4 md:px-16 lg:px-24">
-          {!loadingMessages && messages.length === 0 ? (
-            <ConversationEmptyState
-              title="No messages yet"
-              description="Send a message below to start the conversation."
-            />
-          ) : (
-            messages.map((message) => (
-              <ChatMessageItem
-                key={message.id}
-                message={message}
-                runActive={
-                  message.metadata?.runId === runtimeState.activeRunId &&
-                  runtimeState.activeRunId !== null
-                }
-              />
-            ))
-          )}
-          {awaitingReply && (
-            <Message from="assistant">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span className="font-medium">Assistant</span>
-              </div>
-              <MessageContent>
-                <ThinkingIndicator />
-              </MessageContent>
-            </Message>
-          )}
-          {(error || runtimeState.recoveryError) && (
-            <div className="flex items-center gap-2 text-sm text-destructive">
-              <span>{error?.message ?? runtimeState.recoveryError}</span>
-              {runtimeState.activeRunId && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void runtime.retry()}
-                >
-                  Retry
-                </Button>
-              )}
-            </div>
-          )}
-        </ConversationContent>
-        <ConversationScrollButton />
-      </Conversation>
-      <ChatPromptInput
-        conversationId={conversation.id}
-        modelConfigId={conversation.model_config}
-        disabled={loadingMessages}
-        sendMessage={sendMessage}
-        status={effectiveStatus}
-        stop={stop}
-        activeRunId={runtimeState.activeRunId}
-        onRunStarted={runtime.setActiveRunId}
-        contextInfo={deriveContextInfo(messages, conversation)}
-        onMessageSubmitted={(content) => {
-          if (conversation.title !== "New conversation") return
-          void renameConversation(conversation.id, content.slice(0, 16)).catch(
-            () => {}
-          )
-        }}
+    <div
+      className={cn(
+        "flex min-w-0 flex-1 flex-col bg-background",
+        fullscreen && "fixed inset-0 z-40"
+      )}
+    >
+      <ChatHeader
+        conversation={conversation}
+        sidePanelOpen={sidePanelOpen}
+        onToggleSidePanel={onToggleSidePanel}
+        fullscreen={fullscreen}
+        onToggleFullscreen={onToggleFullscreen}
       />
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <Conversation>
+            <ConversationContent
+              className={cn(
+                "w-full",
+                fullscreen
+                  ? "mx-auto px-4 md:w-[60%] md:px-0"
+                  : sidePanelOpen
+                    ? "px-4 md:px-8"
+                    : "px-4 md:px-16 lg:px-24"
+              )}
+            >
+              {!loadingMessages && messages.length === 0 ? (
+                <ConversationEmptyState
+                  title="No messages yet"
+                  description="Send a message below to start the conversation."
+                />
+              ) : (
+                messages.map((message) => (
+                  <ChatMessageItem
+                    key={message.id}
+                    message={message}
+                    runActive={
+                      message.metadata?.runId === runtimeState.activeRunId &&
+                      runtimeState.activeRunId !== null
+                    }
+                  />
+                ))
+              )}
+              {awaitingReply && (
+                <Message from="assistant">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="font-medium">Assistant</span>
+                  </div>
+                  <MessageContent>
+                    <ThinkingIndicator />
+                  </MessageContent>
+                </Message>
+              )}
+              {(error || runtimeState.recoveryError) && (
+                <div className="flex items-center gap-2 text-sm text-destructive">
+                  <span>{error?.message ?? runtimeState.recoveryError}</span>
+                  {runtimeState.activeRunId && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void runtime.retry()}
+                    >
+                      Retry
+                    </Button>
+                  )}
+                </div>
+              )}
+            </ConversationContent>
+            <ConversationScrollButton />
+          </Conversation>
+          <ChatPromptInput
+            conversationId={conversation.id}
+            modelConfigId={conversation.model_config}
+            disabled={loadingMessages}
+            fullscreen={fullscreen}
+            compactPadding={!fullscreen && sidePanelOpen}
+            sendMessage={sendMessage}
+            status={effectiveStatus}
+            stop={stop}
+            activeRunId={runtimeState.activeRunId}
+            onRunStarted={runtime.setActiveRunId}
+            contextInfo={deriveContextInfo(messages, conversation)}
+            onMessageSubmitted={(content) => {
+              if (conversation.title !== "New conversation") return
+              void renameConversation(
+                conversation.id,
+                content.slice(0, 16)
+              ).catch(() => {})
+            }}
+          />
+        </div>
+        {sidePanelOpen && <ChatSidePanel conversation={conversation} />}
+      </div>
     </div>
   )
 }
@@ -179,6 +234,10 @@ export function ChatArea() {
     (state) => state.activeConversationId
   )
   const createConversation = useChatStore((state) => state.createConversation)
+  const [sidePanelOpen, setSidePanelOpen] = useState(readStoredSidePanelOpen)
+  const [fullscreen, setFullscreen] = useState(false)
+  const enteredNativeFullscreenRef = useRef(false)
+
   const activeConversation =
     conversations.find(
       (conversation) => conversation.id === activeConversationId
@@ -186,6 +245,70 @@ export function ChatArea() {
     (openedConversation?.id === activeConversationId
       ? openedConversation
       : null)
+
+  const isFullscreen = fullscreen && activeConversation !== null
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      if (enteredNativeFullscreenRef.current && !document.fullscreenElement) {
+        enteredNativeFullscreenRef.current = false
+        setFullscreen(false)
+      }
+    }
+    document.addEventListener("fullscreenchange", handleFullscreenChange)
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange)
+      if (enteredNativeFullscreenRef.current && document.fullscreenElement) {
+        enteredNativeFullscreenRef.current = false
+        void document.exitFullscreen().catch(() => {})
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (
+      !isFullscreen &&
+      enteredNativeFullscreenRef.current &&
+      document.fullscreenElement
+    ) {
+      enteredNativeFullscreenRef.current = false
+      void document.exitFullscreen().catch(() => {})
+    }
+  }, [isFullscreen])
+
+  const toggleFullscreen = useCallback(() => {
+    if (isFullscreen) {
+      setFullscreen(false)
+      if (enteredNativeFullscreenRef.current && document.fullscreenElement) {
+        enteredNativeFullscreenRef.current = false
+        void document.exitFullscreen().catch(() => {})
+      }
+      return
+    }
+    setFullscreen(true)
+    if (document.documentElement.requestFullscreen) {
+      void document.documentElement
+        .requestFullscreen()
+        .then(() => {
+          enteredNativeFullscreenRef.current = true
+        })
+        .catch(() => {
+          // Keep in-window fullscreen when native fullscreen is unavailable.
+        })
+    }
+  }, [isFullscreen])
+
+  const toggleSidePanel = () => {
+    setSidePanelOpen((current) => {
+      const next = !current
+      try {
+        window.localStorage.setItem(SIDE_PANEL_STORAGE_KEY, String(next))
+      } catch {
+        // Ignore storage write errors in restricted browsing modes.
+      }
+      return next
+    })
+  }
 
   if (!activeConversation) {
     return (
@@ -197,6 +320,13 @@ export function ChatArea() {
     )
   }
   return (
-    <ActiveChat key={activeConversation.id} conversation={activeConversation} />
+    <ActiveChat
+      key={activeConversation.id}
+      conversation={activeConversation}
+      sidePanelOpen={sidePanelOpen}
+      onToggleSidePanel={toggleSidePanel}
+      fullscreen={isFullscreen}
+      onToggleFullscreen={toggleFullscreen}
+    />
   )
 }
