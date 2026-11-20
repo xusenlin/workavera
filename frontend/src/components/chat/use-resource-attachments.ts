@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 
 import { isRequestAbort } from "@/lib/error"
@@ -159,69 +159,92 @@ export function useResourceAttachments() {
   }
 }
 
-/** The `#` token being typed right before the caret, if any. */
-export type ResourceTrigger = { start: number; end: number; query: string }
+/** The resource or conversation token immediately before the caret. */
+export type MentionTrigger = {
+  kind: "#" | "@"
+  start: number
+  end: number
+  query: string
+}
 
 const triggerPattern = /(?:^|\s)#([^\s#]{0,64})$/
 
-export function findResourceTrigger(
+export function findMentionTrigger(
   value: string,
   caret: number
-): ResourceTrigger | null {
-  const match = triggerPattern.exec(value.slice(0, caret))
+): MentionTrigger | null {
+  const prefix = value.slice(0, caret)
+  const mention = /(?:^|[\s，。；：、！？（「【])@([^\r\n@#]{0,200})$/.exec(
+    prefix
+  )
+  const match = mention ?? triggerPattern.exec(prefix)
   if (!match) return null
-  return { start: caret - match[1].length - 1, end: caret, query: match[1] }
+  return {
+    kind: mention ? "@" : "#",
+    start: caret - match[1].length - 1,
+    end: caret,
+    query: match[1],
+  }
 }
 
-/**
- * Lists the user's resources while a `#` token is being typed. Navigation
- * keys are handled by the textarea through `onKeyDown`, which this hook
- * returns, so focus never leaves the input.
- */
-export function useResourcePicker({
+export async function loadPickerResources(query: string) {
+  const page = await pb
+    .collection(RESOURCES_COLLECTION)
+    .getList<Resource>(1, 8, {
+      filter: resourceNameFilter(query),
+      sort: "-updated",
+      fields: RESOURCE_LIST_FIELDS,
+      requestKey: "chat-resource-picker",
+    })
+  return page.items
+}
+
+// Both pickers leave keyboard focus in the textarea. Only results from the
+// current query can be selected, including during the debounce interval.
+export function useMentionPicker<T>({
   trigger,
   disabled,
+  load,
   onSelect,
   onDismiss,
 }: {
-  trigger: ResourceTrigger | null
-  /** True when no more resources can be attached; only Escape works. */
+  trigger: MentionTrigger | null
   disabled: boolean
-  onSelect: (resource: Resource) => void
+  load: (query: string) => Promise<T[]>
+  onSelect: (item: T) => void
   onDismiss: () => void
 }) {
-  const [results, setResults] = useState<Resource[]>([])
-  const [loading, setLoading] = useState(false)
+  const [page, setPage] = useState<{
+    query: string
+    load: typeof load
+    rows: T[]
+    failed: boolean
+  } | null>(null)
   const [highlighted, setHighlighted] = useState(0)
   const query = trigger?.query ?? null
-  const latestQuery = useRef(query)
-
+  const current = page?.query === query && page.load === load ? page : null
+  const results = current?.rows ?? []
+  const loading = query !== null && !current
   useEffect(() => {
-    latestQuery.current = query
     if (query === null) return
+    let active = true
     const timer = window.setTimeout(() => {
-      setLoading(true)
-      pb.collection(RESOURCES_COLLECTION)
-        .getList<Resource>(1, 8, {
-          filter: resourceNameFilter(query),
-          sort: "-updated",
-          fields: RESOURCE_LIST_FIELDS,
-          requestKey: "chat-resource-picker",
-        })
-        .then((page) => {
-          if (latestQuery.current !== query) return
-          setResults(page.items)
+      void load(query)
+        .then((rows) => {
+          if (!active) return
+          setPage({ query, load, rows, failed: false })
           setHighlighted(0)
-          setLoading(false)
         })
-        .catch((error: unknown) => {
-          if (isRequestAbort(error)) return
-          setResults([])
-          setLoading(false)
+        .catch((err: unknown) => {
+          if (!active || isRequestAbort(err)) return
+          setPage({ query, load, rows: [], failed: true })
         })
     }, 120)
-    return () => window.clearTimeout(timer)
-  }, [query])
+    return () => {
+      active = false
+      window.clearTimeout(timer)
+    }
+  }, [query, load])
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (!trigger) return
@@ -230,7 +253,12 @@ export function useResourcePicker({
       onDismiss()
       return
     }
-    if (disabled || results.length === 0) return
+    if (event.nativeEvent.isComposing) return
+    if (disabled || results.length === 0) {
+      if (trigger.kind === "@" && event.key === "Enter" && !event.shiftKey)
+        event.preventDefault()
+      return
+    }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault()
       const step = event.key === "ArrowDown" ? 1 : -1
@@ -251,6 +279,7 @@ export function useResourcePicker({
 
   return {
     open: trigger !== null,
+    failed: current?.failed ?? false,
     results,
     loading,
     highlighted,

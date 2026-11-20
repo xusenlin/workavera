@@ -1,7 +1,9 @@
 package chat
 
 import (
+	"database/sql"
 	"errors"
+	"slices"
 	"strings"
 
 	"github.com/pocketbase/pocketbase/core"
@@ -13,19 +15,22 @@ import (
 // descriptions of the resources enter the model context, so it is not a
 // context budget.
 const maxMessageResources = 6
+const maxMessageConversations = 6
 
 var (
-	errEmptyUserMessage     = errors.New("a user message needs text or an attached resource")
-	errTooManyResources     = errors.New("a message can attach at most 6 resources")
-	errInvalidResourceParts = errors.New("each attached resource must be named once by its resourceId")
+	errUnavailableConversation = errors.New("A referenced conversation is unavailable. Remove it and send again.")
+	errEmptyUserMessage        = errors.New("A user message needs text, a resource or a conversation reference.")
+	errTooManyResources        = errors.New("a message can attach at most 6 resources")
+	errInvalidResourceParts    = errors.New("each attached resource must be named once by its resourceId")
 )
 
 // submittedUserMessage is what the server keeps from a client submission:
-// non-empty text parts and the referenced resource IDs. Anything else the
+// non-empty text parts and the referenced resource and conversation IDs. Anything else the
 // client sent, including resource names, types, and sizes, is discarded.
 type submittedUserMessage struct {
-	texts       []workagent.Part
-	resourceIDs []string
+	texts           []workagent.Part
+	resourceIDs     []string
+	conversationIDs []string
 }
 
 func parseUserParts(parts []workagent.Part) (submittedUserMessage, error) {
@@ -37,6 +42,14 @@ func parseUserParts(parts []workagent.Part) (submittedUserMessage, error) {
 			if text, _ := part["text"].(string); strings.TrimSpace(text) != "" {
 				message.texts = append(message.texts, workagent.Part{"type": "text", "text": text})
 			}
+		case "data-conversation":
+			data, _ := part["data"].(map[string]any)
+			id, _ := data["conversationId"].(string)
+			id = strings.TrimSpace(id)
+			if id == "" || slices.Contains(message.conversationIDs, id) || len(message.conversationIDs) >= maxMessageConversations {
+				return submittedUserMessage{}, errors.New("Use up to six distinct conversation references.")
+			}
+			message.conversationIDs = append(message.conversationIDs, id)
 		case "data-resource":
 			data, _ := part["data"].(map[string]any)
 			resourceID, _ := data["resourceId"].(string)
@@ -51,16 +64,15 @@ func parseUserParts(parts []workagent.Part) (submittedUserMessage, error) {
 	if len(message.resourceIDs) > maxMessageResources {
 		return submittedUserMessage{}, errTooManyResources
 	}
-	if len(message.texts) == 0 && len(message.resourceIDs) == 0 {
+	if len(message.texts) == 0 && len(message.resourceIDs) == 0 && len(message.conversationIDs) == 0 {
 		return submittedUserMessage{}, errEmptyUserMessage
 	}
 	return message, nil
 }
 
-// canonicalParts rebuilds the message from the owner's current resource
-// records, in a fixed order: every resource first, then the text. It fails if
-// any referenced resource is missing or belongs to someone else.
-func (m submittedUserMessage) canonicalParts(app core.App, ownerID string) ([]workagent.Part, error) {
+// canonicalParts resolves the owner’s resources and conversations before the
+// message is saved. Only their server-verified snapshots precede the text.
+func (m submittedUserMessage) canonicalParts(app core.App, ownerID, currentID string) ([]workagent.Part, error) {
 	snapshots, err := resources.Snapshots(app, ownerID, m.resourceIDs)
 	if err != nil {
 		return nil, err
@@ -74,6 +86,19 @@ func (m submittedUserMessage) canonicalParts(app core.App, ownerID string) ([]wo
 			"size":       snapshot.Size,
 		}
 		parts = append(parts, workagent.Part{"type": "data-resource", "id": snapshot.ResourceID, "data": data})
+	}
+	for _, id := range m.conversationIDs {
+		if id == currentID {
+			return nil, errUnavailableConversation
+		}
+		record, err := findOwnedConversation(app, id, ownerID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, errUnavailableConversation
+		}
+		if err != nil {
+			return nil, err
+		}
+		parts = append(parts, workagent.Part{"type": "data-conversation", "id": id, "data": map[string]any{"conversationId": id, "title": record.GetString("title")}})
 	}
 	return append(parts, m.texts...), nil
 }

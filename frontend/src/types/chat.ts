@@ -103,7 +103,10 @@ export type ResourceAttachmentData = {
   size?: number
 }
 
+export type ConversationReference = { conversationId: string; title: string }
+
 export type ChatDataParts = {
+  conversation: ConversationReference
   compaction: CompactionData
   approval: ToolApprovalData
   resource: ResourceAttachmentData

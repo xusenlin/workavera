@@ -1,4 +1,11 @@
-import { useMemo, useRef, useState } from "react"
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 
 import type { UseChatHelpers } from "@ai-sdk/react"
 import type { ChatStatus } from "ai"
@@ -34,18 +41,25 @@ import {
   PromptInputTools,
 } from "@/components/ai-elements/prompt-input"
 import { AttachmentGroup } from "@/components/ui/attachment"
+import {
+  ConversationChip,
+  type ConversationOption,
+} from "./conversation-reference"
+import { ConversationPickerList } from "./conversation-picker"
+import { getChatRuntime } from "@/lib/chat-runtime"
 import { pb } from "@/lib/pocketbase"
 import { RESOURCE_ACCEPT, type Resource } from "@/lib/resources"
 import { cn } from "@/lib/utils"
 import { useLlmSettingsStore } from "@/store/llm-settings"
-import type { ChatUIMessage } from "@/types/chat"
+import type { ChatUIMessage, ConversationReference } from "@/types/chat"
 
 import { AttachmentChip, ResourcePickerList } from "./resource-attachments"
 import {
-  findResourceTrigger,
+  findMentionTrigger,
   useResourceAttachments,
-  useResourcePicker,
-  type ResourceTrigger,
+  loadPickerResources,
+  useMentionPicker,
+  type MentionTrigger,
 } from "./use-resource-attachments"
 
 export type ChatContextInfo = {
@@ -102,6 +116,9 @@ export function ChatPromptInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
+  const [references, setReferences] = useState<ConversationReference[]>([])
+  const [includeArchived, setIncludeArchived] = useState(false)
+  const pendingReferences = useRef(false)
   const {
     attachments,
     ready,
@@ -114,42 +131,114 @@ export function ChatPromptInput({
     clear,
   } = useResourceAttachments()
 
-  // The `#` token right before the caret opens the resource list. Escape
+  // The token before the caret selects the open picker. Escape
   // dismisses it for that token only, leaving what was typed as plain text.
-  const [trigger, setTrigger] = useState<ResourceTrigger | null>(null)
+  const [trigger, setTrigger] = useState<MentionTrigger | null>(null)
   const [dismissedStart, setDismissedStart] = useState<number | null>(null)
   const updateTrigger = (value: string, caret: number | null) => {
-    const next = caret === null ? null : findResourceTrigger(value, caret)
+    const next = caret === null ? null : findMentionTrigger(value, caret)
     if (next?.start !== dismissedStart) setDismissedStart(null)
     setTrigger(next && next.start !== dismissedStart ? next : null)
   }
 
-  const selectResource = (resource: Resource) => {
-    if (!trigger || full) return
-    // The trigger and query select a resource; they are not message text.
+  const caretAfterPick = useRef<number | null>(null)
+  useLayoutEffect(() => {
+    if (caretAfterPick.current === null) return
+    const caret = caretAfterPick.current
+    caretAfterPick.current = null
+    textareaRef.current?.focus()
+    textareaRef.current?.setSelectionRange(caret, caret)
+  }, [text])
+
+  const finishSelection = () => {
+    if (!trigger) return
+    // Replace the query with a chip and retain the surrounding message text.
     const value = text.slice(0, trigger.start) + text.slice(trigger.end)
+    caretAfterPick.current = trigger.start
     setText(value)
     setTrigger(null)
-    addResource(resource)
-    requestAnimationFrame(() => {
-      textareaRef.current?.focus()
-      textareaRef.current?.setSelectionRange(trigger.start, trigger.start)
-    })
   }
-  const picker = useResourcePicker({
-    trigger,
+  const selectResource = (resource: Resource) => {
+    if (full) return
+    finishSelection()
+    addResource(resource)
+  }
+  const dismiss = () => {
+    setDismissedStart(trigger?.start ?? null)
+    setTrigger(null)
+  }
+  const filePicker = useMentionPicker({
+    trigger: trigger?.kind === "#" ? trigger : null,
     disabled: full,
+    load: loadPickerResources,
     onSelect: selectResource,
-    onDismiss: () => {
-      setDismissedStart(trigger?.start ?? null)
-      setTrigger(null)
-    },
+    onDismiss: dismiss,
   })
-
+  const loadConversations = useCallback(
+    async (query: string) => {
+      const collection = pb.collection("chat_conversations")
+      if (/^[a-z0-9]{15}$/.test(query) && query !== conversationId) {
+        const exact = await collection.getList<ConversationOption>(1, 1, {
+          fields: "id,title,status,last_message_at",
+          filter: pb.filter("id = {:id}", { id: query }),
+          requestKey: "chat-conversation-picker-exact",
+        })
+        if (exact.items.length) return exact.items
+      }
+      const filters = [pb.filter("id != {:id}", { id: conversationId })]
+      if (!includeArchived)
+        filters.push(
+          pb.filter("(status = 'active' || id = {:q})", { q: query })
+        )
+      if (query)
+        filters.push(pb.filter("(title ~ {:q} || id = {:q})", { q: query }))
+      const filter = filters.join(" && ")
+      const page = await pb
+        .collection("chat_conversations")
+        .getList<ConversationOption>(1, 8, {
+          filter,
+          sort: "-last_message_at,-updated",
+          fields: "id,title,status,last_message_at",
+          requestKey: "chat-conversation-picker",
+        })
+      return page.items
+    },
+    [conversationId, includeArchived]
+  )
+  const selectConversation = (item: ConversationOption) => {
+    if (references.length >= 6) return
+    finishSelection()
+    setReferences((refs) =>
+      refs.some((r) => r.conversationId === item.id)
+        ? refs
+        : [...refs, { conversationId: item.id, title: item.title }]
+    )
+  }
+  const conversationPicker = useMentionPicker({
+    trigger: trigger?.kind === "@" ? trigger : null,
+    disabled: references.length >= 6,
+    load: loadConversations,
+    onSelect: selectConversation,
+    onDismiss: dismiss,
+  })
+  const picker = trigger?.kind === "@" ? conversationPicker : filePicker
+  const clearDraft = useCallback(() => {
+    setText("")
+    setReferences([])
+    setTrigger(null)
+    clear()
+  }, [clear, setReferences, setTrigger])
+  // Keep a reference-bearing draft until the server accepts the snapshot.
+  useEffect(() => {
+    if (status === "streaming" && pendingReferences.current) {
+      pendingReferences.current = false
+      clearDraft()
+    }
+  }, [status, clearDraft])
   const handleSubmit = async (message: PromptInputMessage) => {
     const content = message.text.trim()
     if (
-      (!content && ready.length === 0) ||
+      (!content && ready.length === 0 && references.length === 0) ||
       uploading ||
       !modelConfigId ||
       status === "submitted" ||
@@ -170,15 +259,35 @@ export function ChatPromptInput({
         size: attachment.size,
       },
     }))
+    for (const ref of references)
+      parts.push({
+        type: "data-conversation",
+        id: ref.conversationId,
+        data: ref,
+      })
     if (content) parts.push({ type: "text", text: content })
-    setText("")
-    setTrigger(null)
-    clear()
-    onMessageSubmitted?.(content || ready[0].name)
+    const chat = getChatRuntime(conversationId).chat
+    const localId = crypto.randomUUID()
+    const firstLine = content || ready[0]?.name || references[0]?.title
+    pendingReferences.current = references.length > 0
+    if (!pendingReferences.current) {
+      clearDraft()
+      if (firstLine) onMessageSubmitted?.(firstLine)
+    }
     await sendMessage(
-      { parts },
+      { id: localId, parts },
       { body: { runId, conversationId, modelConfigId } }
     )
+    if (pendingReferences.current) {
+      pendingReferences.current = false
+      if (chat.status === "error") {
+        chat.messages = chat.messages.filter((m) => m.id !== localId)
+        return
+      }
+      clearDraft()
+    }
+    if (references.length && firstLine && chat.status !== "error")
+      onMessageSubmitted?.(firstLine)
   }
 
   const handleStop = async () => {
@@ -198,12 +307,15 @@ export function ChatPromptInput({
   const canSend =
     !disabled &&
     !uploading &&
-    (!!text.trim() || ready.length > 0) &&
+    (!!text.trim() || ready.length > 0 || references.length > 0) &&
     !!modelConfigId &&
     models.length > 0
   const selectedModel = models.find((model) => model.id === modelConfigId)
 
-  const inputDisabled = disabled || models.length === 0
+  const inputDisabled =
+    disabled ||
+    models.length === 0 ||
+    (references.length > 0 && status === "submitted")
   const acceptsFiles = !inputDisabled && !full
 
   return (
@@ -259,18 +371,28 @@ export function ChatPromptInput({
                 : "inset-x-4 md:inset-x-16 lg:inset-x-24"
           )}
         >
-          <ResourcePickerList
-            query={trigger.query}
-            results={picker.results}
-            loading={picker.loading}
-            highlighted={picker.highlighted}
-            full={full}
-            attachedIds={
-              new Set(attachments.map((item) => item.resourceId ?? ""))
-            }
-            onHighlight={picker.setHighlighted}
-            onSelect={selectResource}
-          />
+          {trigger.kind === "@" ? (
+            <ConversationPickerList
+              picker={conversationPicker}
+              full={references.length >= 6}
+              includeArchived={includeArchived}
+              onIncludeArchived={setIncludeArchived}
+              onSelect={selectConversation}
+            />
+          ) : (
+            <ResourcePickerList
+              query={trigger.query}
+              results={filePicker.results}
+              loading={picker.loading}
+              highlighted={picker.highlighted}
+              full={full}
+              attachedIds={
+                new Set(attachments.map((item) => item.resourceId ?? ""))
+              }
+              onHighlight={picker.setHighlighted}
+              onSelect={selectResource}
+            />
+          )}
         </div>
       )}
       <PromptInput
@@ -280,7 +402,7 @@ export function ChatPromptInput({
           dragging && "rounded-xl ring-2 ring-primary/40"
         )}
       >
-        {attachments.length > 0 && (
+        {(attachments.length > 0 || references.length > 0) && (
           <PromptInputHeader className="px-3 pt-2.5 pb-0">
             <AttachmentGroup className="w-full gap-2">
               {attachments.map((attachment) => (
@@ -289,6 +411,19 @@ export function ChatPromptInput({
                   attachment={attachment}
                   onRemove={() => remove(attachment.key)}
                   onRetry={() => retry(attachment.key)}
+                />
+              ))}
+              {references.map((source) => (
+                <ConversationChip
+                  key={source.conversationId}
+                  source={source}
+                  onRemove={() =>
+                    setReferences((refs) =>
+                      refs.filter(
+                        (r) => r.conversationId !== source.conversationId
+                      )
+                    )
+                  }
                 />
               ))}
             </AttachmentGroup>
@@ -300,7 +435,7 @@ export function ChatPromptInput({
             placeholder={
               models.length === 0
                 ? "Configure a model to start chatting"
-                : "Send a message, or type # to attach a resource..."
+                : "Message, # resource, or @ conversation…"
             }
             value={text}
             onChange={(event) => {

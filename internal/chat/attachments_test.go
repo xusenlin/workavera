@@ -154,3 +154,42 @@ func TestUserMessagesAcceptResourcesWithoutTextAndRejectInvalidReferences(t *tes
 		t.Fatalf("rejected messages must not create records, found %d", count)
 	}
 }
+
+func TestConversationReferenceSnapshots(t *testing.T) {
+	server := newChatTestServer(t)
+	dest, source := server.createConversation(t), server.createConversation(t)
+	ref := func(id string) map[string]any {
+		return map[string]any{"type": "data-conversation", "data": map[string]any{"conversationId": id, "title": "Forged"}}
+	}
+	for _, invalid := range [][]map[string]any{{ref(dest)}, {ref("missing")}, {ref(source), ref(source)}} {
+		r := streamParts(server, t, dest, "bad-reference", invalid)
+		if r.Code != 400 {
+			t.Fatalf("%d %s", r.Code, r.Body)
+		}
+	}
+	record, err := server.app.FindRecordById(conversationsCollection, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record.Set("status", "archived")
+	record.Set("title", "Source title")
+	if err := server.app.Save(record); err != nil {
+		t.Fatal(err)
+	}
+	r := streamParts(server, t, dest, "valid-reference", []map[string]any{ref(source)})
+	if r.Code != 200 {
+		t.Fatalf("%d %s", r.Code, r.Body)
+	}
+	messages := server.request(t, http.MethodGet, "/api/chat/conversations/"+dest+"/messages", "")
+	var saved []workagent.Message
+	if err := json.Unmarshal(messages.Body.Bytes(), &saved); err != nil {
+		t.Fatal(err)
+	}
+	if len(saved) != 2 || len(saved[0].Parts) != 1 {
+		t.Fatalf("unexpected history: %v", saved)
+	}
+	text := workagent.ConversationReferenceText(saved[0].Parts[0])
+	if !strings.Contains(text, source) || !strings.Contains(text, "Source title") || strings.Contains(text, "Forged") {
+		t.Fatal(text)
+	}
+}

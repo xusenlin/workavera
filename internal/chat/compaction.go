@@ -183,6 +183,8 @@ func renderTranscriptMessage(message workagent.Message) string {
 				b.WriteString(truncateForTranscript(text))
 				b.WriteString("\n")
 			}
+		case "data-conversation":
+			b.WriteString(workagent.ConversationReferenceText(part) + "\n")
 		case "data-resource":
 			data, _ := part["data"].(map[string]any)
 			resourceID, _ := data["resourceId"].(string)

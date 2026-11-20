@@ -1,3 +1,4 @@
+import { parseSentConversation } from "@/lib/conversation-history"
 import {
   Message,
   MessageContent,
@@ -52,6 +53,10 @@ import {
   ResourcesRevokeToolCard,
   ResourcesSearchToolCard,
 } from "./resources-tool-output"
+import {
+  ConversationChip,
+  SentConversationCard,
+} from "./conversation-reference"
 import { SentFiles } from "./sent-files"
 import { ToolInput } from "./tool-input"
 
@@ -209,6 +214,13 @@ function ToolCard({
   ) {
     return <SentFiles part={part} />
   }
+  if (
+    part.toolName === "chat_send_conversation" &&
+    part.state === "output-available"
+  ) {
+    const source = parseSentConversation(part.output)
+    if (source) return <SentConversationCard source={source} />
+  }
   if (part.toolName === "resources_list") {
     return <ResourcesListToolCard part={part} />
   }
@@ -341,6 +353,7 @@ function MessageParts({
   return message.parts.map((part, index) => {
     switch (part.type) {
       // Rendered above the bubble by ChatMessageItem.
+      case "data-conversation":
       case "data-resource":
         return null
       case "text":
@@ -362,7 +375,7 @@ function MessageParts({
             <ReasoningContent>{part.text}</ReasoningContent>
           </Reasoning>
         )
-      case "dynamic-tool":
+      case "dynamic-tool": {
         return (
           <MemoizedToolCard
             key={part.toolCallId}
@@ -374,6 +387,7 @@ function MessageParts({
             runActive={runActive}
           />
         )
+      }
       case "source-url":
         return (
           <a
@@ -428,12 +442,15 @@ function ChatMessageItemComponent({
   const attachments = message.parts.flatMap((part) =>
     part.type === "data-resource" ? [part.data] : []
   )
+  const references = message.parts.flatMap((part) =>
+    part.type === "data-conversation" ? [part.data] : []
+  )
   const hasBubbleContent = message.parts.some(
-    (part) => part.type !== "data-resource"
+    (part) => part.type !== "data-resource" && part.type !== "data-conversation"
   )
 
   return (
-    <Message from={message.role}>
+    <Message id={`chat-message-${message.id}`} from={message.role}>
       <div
         className={cn(
           "flex items-center gap-2 text-xs text-muted-foreground",
@@ -467,8 +484,15 @@ function ChatMessageItemComponent({
         <ResourceAttachmentGroup attachments={attachments} />
       )}
 
+      {references.length > 0 && (
+        <div className="flex flex-wrap justify-end gap-2">
+          {references.map((source) => (
+            <ConversationChip key={source.conversationId} source={source} />
+          ))}
+        </div>
+      )}
       {(!isUser || hasBubbleContent) && (
-        <MessageContent>
+        <MessageContent className={cn(!isUser && "w-full")}>
           <MessageParts message={message} runActive={runActive} />
           {!isUser && runActive && !message.parts.some(isPartPending) && (
             <ThinkingIndicator />

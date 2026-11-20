@@ -37,8 +37,8 @@ func IsDestructive(name string) bool {
 	return destructiveTools[name]
 }
 
-func (f *Factory) ForActor(actorID string) []fantasy.AgentTool {
-	return []fantasy.AgentTool{
+func (f *Factory) actorTools(actorID, currentConversationID string) []fantasy.AgentTool {
+	tools := []fantasy.AgentTool{
 		newContactsSearchTool(f.app, actorID),
 		newBoardSearchProjectsTool(f.app, actorID),
 		newBoardGetProjectTool(f.app, actorID),
@@ -73,14 +73,21 @@ func (f *Factory) ForActor(actorID string) []fantasy.AgentTool {
 		newResourcesListTool(f.app, actorID),
 		newResourcesRenameTool(f.app, actorID),
 	}
+	return append(tools, conversationLookupTools(f.app, actorID, currentConversationID)...)
 }
 
-// ForChat returns the normal actor tools plus the Chat-only tools: the
-// resource download link tools, chat_send_files, which shows files as cards in
-// the reply and means nothing outside Chat, memory tools when the user's memory preference
-// is enabled, sandbox tools when the user's sandbox is on and available, and
-// the tools their own MCP servers contribute. MCP deliberately continues to
-// call ForActor, so none of them is ever exposed through API keys.
+func (f *Factory) ForActor(actorID string) []fantasy.AgentTool {
+	return f.actorTools(actorID, "")
+}
+
+// ForChat returns the normal actor tools (with conversation lookups excluding
+// the current conversation) plus the Chat-only tools: the resource download
+// link tools, chat_send_files and chat_send_conversation, which render cards in
+// the reply and mean nothing outside Chat, memory tools when the user's memory
+// preference is enabled, sandbox tools when the user's sandbox is on and
+// available, and the tools their own MCP servers contribute. MCP deliberately
+// continues to call ForActor, so none of the Chat-only tools is ever exposed
+// through API keys.
 //
 // Download links stay in Chat because each one is a bearer credential whose
 // target and purpose the user approves per call, and an API key only has the
@@ -92,10 +99,11 @@ func (f *Factory) ForActor(actorID string) []fantasy.AgentTool {
 // third-party tool. Exporting them would silently widen what a read-only key
 // can do.
 func (f *Factory) ForChat(scope workagent.ToolScope) []fantasy.AgentTool {
-	tools := append(f.ForActor(scope.ActorID),
+	tools := append(f.actorTools(scope.ActorID, scope.ConversationID),
 		newResourcesCreateDownloadURLTool(f.app, scope.ActorID),
 		newResourcesRevokeDownloadURLTool(f.app, scope.ActorID),
 		newChatSendFilesTool(f.app, scope.ActorID),
+		newChatSendConversationTool(f.app, scope.ActorID, scope.ConversationID),
 	)
 	if f.app == nil {
 		return tools

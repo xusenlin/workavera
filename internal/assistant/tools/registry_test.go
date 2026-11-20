@@ -21,8 +21,8 @@ import (
 func TestFactoryRegistersOnlyProductionTools(t *testing.T) {
 	factory := NewFactory(nil)
 	registered := factory.ForActor("actor-1")
-	if len(registered) != 33 {
-		t.Fatalf("expected thirty-three production tools, got %d", len(registered))
+	if len(registered) != 36 {
+		t.Fatalf("expected thirty-six production tools, got %d", len(registered))
 	}
 	names := map[string]bool{}
 	for _, tool := range registered {
@@ -62,6 +62,9 @@ func TestFactoryRegistersOnlyProductionTools(t *testing.T) {
 		"docs_write_chunk",
 		"resources_list",
 		"resources_rename",
+		"chat_find_conversations",
+		"chat_search_messages",
+		"chat_read_conversation",
 	} {
 		if !names[name] {
 			t.Fatalf("missing production tool %q in registry: %#v", name, names)
@@ -76,10 +79,10 @@ func TestFactoryRegistersOnlyProductionTools(t *testing.T) {
 	if names["board_delete_project"] {
 		t.Fatalf("project deletion must not be registered: %#v", names)
 	}
-	// Download links are bearer credentials approved per call, so they must
-	// never reach the MCP surface that ForActor feeds.
-	if names["resources_create_download_url"] || names["resources_revoke_download_url"] {
-		t.Fatalf("resource download link tools must be Chat-only: %#v", names)
+	// Download links are bearer credentials approved per call, and card delivery
+	// tools only apply inside Chat, so they must never reach ForActor/MCP.
+	if names["resources_create_download_url"] || names["resources_revoke_download_url"] || names["chat_send_files"] || names["chat_send_conversation"] {
+		t.Fatalf("Chat-only tools must not be registered in ForActor: %#v", names)
 	}
 }
 
@@ -119,8 +122,16 @@ func TestMemoryToolsAreChatOnlyAndPreferenceGated(t *testing.T) {
 	if disabled["system_memory_upsert"] || disabled["system_memory_forget"] {
 		t.Fatalf("disabled Chat memory added memory tools: %v", disabled)
 	}
-	if len(disabled) != len(base)+3 || !disabled["resources_create_download_url"] || !disabled["resources_revoke_download_url"] || !disabled["chat_send_files"] {
-		t.Fatalf("Chat must add exactly the resource download link tools and chat_send_files: %v", disabled)
+	for _, name := range []string{"chat_find_conversations", "chat_search_messages", "chat_read_conversation"} {
+		if !base[name] || !disabled[name] {
+			t.Fatalf("%s must be available in both MCP/ForActor and Chat", name)
+		}
+	}
+	if base["chat_send_conversation"] || !disabled["chat_send_conversation"] {
+		t.Fatalf("chat_send_conversation must only be available in Chat")
+	}
+	if len(disabled) != len(base)+4 || !disabled["resources_create_download_url"] || !disabled["resources_revoke_download_url"] || !disabled["chat_send_files"] || !disabled["chat_send_conversation"] {
+		t.Fatalf("unexpected built-in Chat tools: %v", disabled)
 	}
 
 	preference, err := app.FindFirstRecordByFilter(preferences.CollectionName, "owner = {:owner}", dbx.Params{"owner": user.Id})

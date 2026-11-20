@@ -7,6 +7,14 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Web Chat can reference other conversations with `@`. The assistant can find
+  conversations by title, search message text by keyword, read the original
+  exchange, and send clickable source cards that jump to the matching message.
+  The three read-only conversation lookup tools are also exposed through the
+  MCP server.
+
 ## [0.3.0] - 2026-11-20
 
 ### Added

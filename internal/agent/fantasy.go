@@ -310,6 +310,10 @@ func toFantasyMessages(messages []Message) ([]fantasy.Message, error) {
 					if text, _ := part["text"].(string); text != "" {
 						parts = append(parts, fantasy.TextPart{Text: text})
 					}
+				case "data-conversation":
+					if text := ConversationReferenceText(part); text != "" {
+						parts = append(parts, fantasy.TextPart{Text: text})
+					}
 				case "data-resource":
 					if text := ResourceAttachmentText(part); text != "" {
 						parts = append(parts, fantasy.TextPart{Text: text})

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react"
 
 import { Chat01Icon, SparklesIcon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
+import { useSearchParams } from "react-router"
+import { useStickToBottomContext } from "use-stick-to-bottom"
 import { useChat } from "@ai-sdk/react"
 
 import {
@@ -92,6 +94,33 @@ function ChatEmptyState({ onCreate }: { onCreate: () => void }) {
   )
 }
 
+function SourceAnchor({ messageId }: { messageId: string }) {
+  const { stopScroll } = useStickToBottomContext()
+  useEffect(() => {
+    const el = document.getElementById("chat-message-" + messageId)
+    if (!el) return
+    stopScroll()
+    el.scrollIntoView({ block: "center" })
+    const highlight = el.animate(
+      [
+        {
+          backgroundColor: "var(--accent)",
+          boxShadow: "0 0 0 8px var(--accent)",
+          borderRadius: "12px",
+        },
+        {
+          backgroundColor: "transparent",
+          boxShadow: "0 0 0 8px transparent",
+          borderRadius: "12px",
+        },
+      ],
+      { duration: 2200, easing: "ease-out" }
+    )
+    return () => highlight.cancel()
+  }, [messageId, stopScroll])
+  return null
+}
+
 function ActiveChat({
   conversation,
   sidePanelOpen,
@@ -118,6 +147,11 @@ function ActiveChat({
     void runtime.hydrate()
   }, [runtime])
 
+  const [searchParams] = useSearchParams()
+  const anchor =
+    searchParams.get("open") === conversation.id
+      ? searchParams.get("message")
+      : null
   const loadingMessages = runtimeState.loading && !runtimeState.hydrated
   const effectiveStatus =
     runtimeState.activeRunId && status === "ready" ? "submitted" : status
@@ -144,7 +178,10 @@ function ActiveChat({
       />
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         <div className="flex min-w-0 flex-1 flex-col">
-          <Conversation>
+          <Conversation initial={anchor ? false : "smooth"}>
+            {anchor && messages.some((m) => m.id === anchor) && (
+              <SourceAnchor messageId={anchor} />
+            )}
             <ConversationContent
               className={cn(
                 "w-full",

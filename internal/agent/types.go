@@ -194,6 +194,17 @@ func ContextSize(protocol string, usage Usage) int64 {
 	return usage.InputTokens + usage.CacheCreationTokens + usage.CacheReadTokens + usage.OutputTokens
 }
 
+// ConversationReferenceText preserves the server-verified reference for both the model and compaction.
+func ConversationReferenceText(part Part) string {
+	data, _ := part["data"].(map[string]any)
+	id, _ := data["conversationId"].(string)
+	title, _ := data["title"].(string)
+	if id == "" {
+		return ""
+	}
+	return "[Referenced conversation] conversationId: " + strconv.Quote(id) + ", title: " + strconv.Quote(title)
+}
+
 // ResourceAttachmentText describes a server-normalized "data-resource" user
 // part to the model. A data part is UI data and never reaches the model on its
 // own, so the attachment would otherwise be invisible. The block says what the
