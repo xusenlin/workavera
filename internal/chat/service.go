@@ -12,8 +12,9 @@ import (
 const maxRunDuration = 10 * time.Minute
 
 type service struct {
-	app    core.App
-	runner workagent.Runner
+	app     core.App
+	runner  workagent.Runner
+	version string
 
 	mu   sync.Mutex
 	runs map[string]*activeRun

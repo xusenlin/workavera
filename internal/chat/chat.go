@@ -14,9 +14,10 @@ import (
 
 const maxPinnedConversations = 6
 
-func Register(app core.App) {
+func Register(app core.App, version string) {
 	toolFactory := assistanttools.NewFactory(app)
 	service := newService(app, workagent.NewFantasyRunner(toolFactory.ForChat))
+	service.version = strings.TrimSpace(version)
 	register(app, service)
 }
 

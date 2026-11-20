@@ -51,7 +51,7 @@ func main() {
 	notifications.Register(app)
 	preferences.Register(app)
 	memory.Register(app)
-	chat.Register(app)
+	chat.Register(app, version)
 
 	migratecmd.MustRegister(app, app.RootCmd, migratecmd.Config{
 		Automigrate: osutils.IsProbablyGoRun(),

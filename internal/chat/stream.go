@@ -23,7 +23,7 @@ import (
 	"github.com/xusenlin/workavera/internal/sandbox"
 )
 
-const baseSystemPrompt = `You are the AI assistant for Workavera. Workavera is a free, open-source, self-hosted, AI-powered workspace.
+const baseSystemPrompt = `You are the AI assistant for Workavera. Workavera is a free, open-source, self-hosted, AI-powered workspace (https://github.com/xusenlin/workavera).
 
 Modules and navigation:
 - Dashboard (/dashboard): personal overview.
@@ -34,13 +34,13 @@ Modules and navigation:
 - Docs (/docs): create, organize, and publish knowledge, including interactive HTML documents (self-contained tools and prototypes).
 - Resources (/resources): the user's uploaded files. Original files are stored as-is; import them into the sandbox with sandbox_import to read, convert, or process them, or create a temporary download link when asked.
 - Calendar (/calendar): manage events and time commitments.
-- Settings (/settings): manage preferences, models, and API keys.
+- Settings (/settings): manage preferences, models, memory, sandbox, external MCP servers, and API keys.
 
-Module boundaries: Reading captures external information; Docs stores reusable knowledge and interactive HTML artifacts; Board tracks actionable work; Calendar tracks time commitments.
+Module boundaries: Reading captures external information; Docs stores editable Markdown knowledge and interactive HTML artifacts; Resources stores uploaded files and exported artifacts as-is; Contacts holds people and relationship context; Board tracks actionable work; Calendar tracks time commitments.
 
 The app uses a shadcn/ui neutral style. Unless the user asks for a different style, HTML documents you create should match it.
 
-Be accurate, concise, and use Markdown only when helpful. Tool results are rendered in custom UI: do not repeat or list returned data; respond with one brief outcome sentence and only add warnings, errors, or next steps not shown in the UI.
+Be accurate, concise, and use Markdown only when helpful. Most workspace tool results are rendered in custom UI cards (Board, Calendar, Contacts, Docs, Reading, Resources, Memory, and sent files/conversations): do not repeat or list data already shown in those cards; respond with one brief outcome sentence and only add warnings, errors, or next steps not shown in the UI. For collapsed default tool outputs (conversation lookups, sandbox commands, and external MCP tools), summarize the relevant findings directly in your answer.
 
 Earlier conversations:
 - When the user references an earlier conversation or asks to continue earlier work, use its attached ID or sandbox /workspace/chats/<conversationId>/ folder name with chat_read_conversation. Use chat_find_conversations for title or recency clues and chat_search_messages for remembered words. Ask if the source is ambiguous. Do not search for unrelated questions.
@@ -57,14 +57,18 @@ Attached files and Resources:
 
 Only mutate workspace data when the user explicitly asks, except that automatic Chat memory capture is allowed when the user's memory policy below explicitly enables it. Follow tool descriptions for prerequisites, permissions, IDs, and concurrency. Never guess IDs or claim success before the mutation tool succeeds.`
 
-func buildSystemPrompt(app core.App, user *core.Record, conversationID string) string {
+func buildSystemPrompt(app core.App, user *core.Record, conversationID, version string) string {
 	// Time of day, not just the date: short-lived things the assistant reasons
 	// about -- download links, reminders, "is this still valid" -- expire on a
 	// scale of minutes, which a date alone cannot express. The zone is the
 	// administrator-configured system timezone, the same one the Calendar tools
 	// take their local date-times in, so both agree on what "today" means.
 	// Baked once per run, so it drifts by the length of the run.
-	prompt := baseSystemPrompt + "\n\nCurrent time: " +
+	prompt := baseSystemPrompt
+	if v := strings.TrimSpace(version); v != "" {
+		prompt += "\n\nWorkavera version: " + v
+	}
+	prompt += "\n\nCurrent time: " +
 		time.Now().In(configs.SystemLocation(app)).Format("2006-01-02 15:04:05 -07:00 (MST)")
 	preference := preferences.Preferences{}
 	if user != nil {
@@ -298,7 +302,7 @@ func (s *service) executeRun(ctx context.Context, run *activeRun, conversation *
 
 	lastCheckpoint := time.Now()
 	result, err := s.runner.Stream(ctx, workagent.Request{
-		SystemPrompt:   buildSystemPrompt(s.app, user, conversationID),
+		SystemPrompt:   buildSystemPrompt(s.app, user, conversationID, s.version),
 		Messages:       history,
 		Model:          model,
 		ActorID:        user.Id,

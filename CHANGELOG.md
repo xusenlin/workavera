@@ -15,6 +15,13 @@ and versions follow [Semantic Versioning](https://semver.org/).
   The three read-only conversation lookup tools are also exposed through the
   MCP server.
 
+### Changed
+
+- Updated the built-in Chat system prompt with the repository URL, running
+  Workavera version, refreshed Settings and module boundaries (including
+  Resources and Contacts), and clearer output guidance for collapsed default
+  tool calls.
+
 ## [0.3.0] - 2026-11-20
 
 ### Added
